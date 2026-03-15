@@ -1,0 +1,9 @@
+Initial release:
+- Local file browsing with list and grid views
+- SFTP, FTP, SMB, WebDAV remote connections
+- 12 built-in themes including Catppuccin variants
+- Custom theme support
+- Material You dynamic colors (Android 12+)
+- File operations: copy, cut, paste, rename, delete
+- Bookmarks and quick access
+- Storage usage overview
