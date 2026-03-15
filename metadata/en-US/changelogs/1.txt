@@ -1,0 +1,5 @@
+Voyager initial release:
+- Local file browsing
+- SFTP, FTP, SMB, WebDAV support
+- 12 themes + custom theme
+- Material Design 3 UI
