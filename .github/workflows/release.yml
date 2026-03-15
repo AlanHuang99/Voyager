@@ -23,8 +23,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+
       - name: Build release APK
         run: ./gradlew assembleRelease
+        continue-on-error: true
 
       - name: Sign APK
         if: env.KEYSTORE_BASE64 != ''
@@ -43,12 +47,15 @@ jobs:
             --out app/build/outputs/apk/release/voyager-${GITHUB_REF_NAME}.apk \
             app/build/outputs/apk/release/app-release-unsigned.apk
 
+      - name: Rename debug APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/voyager-${GITHUB_REF_NAME}-debug.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/voyager-*-debug.apk
+            app/build/outputs/apk/release/voyager-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
