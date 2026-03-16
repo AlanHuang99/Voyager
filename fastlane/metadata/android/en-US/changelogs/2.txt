@@ -1,0 +1,2 @@
+Fix release build (R8/proguard rules for network protocol libraries)
+Fix xmlpull conflict with Sardine WebDAV library

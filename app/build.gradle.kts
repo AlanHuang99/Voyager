@@ -13,8 +13,8 @@ android {
         applicationId = "com.voyagerfiles"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -115,7 +115,10 @@ dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
 
     // WebDAV - Sardine (Apache 2.0)
-    implementation("com.github.thegrizzlylabs:sardine-android:0.8")
+    implementation("com.github.thegrizzlylabs:sardine-android:0.8") {
+        exclude(group = "xmlpull", module = "xmlpull")
+        exclude(group = "xpp3", module = "xpp3")
+    }
 
     // Image loading - Coil (Apache 2.0)
     implementation("io.coil-kt:coil-compose:2.7.0")
