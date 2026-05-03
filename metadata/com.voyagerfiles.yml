@@ -12,9 +12,9 @@ RepoType: git
 Repo: https://github.com/AlanHuang99/Voyager.git
 
 Builds:
-  - versionName: 1.0.2
-    versionCode: 3
-    commit: e5accfb3316d26cca47cdda407c9927854631321
+  - versionName: 1.0.3
+    versionCode: 4
+    commit: f3a4659c6eb9aa6b6b4bd2ba0b2fc687e1cbc6c3
     subdir: app
     gradle:
       - yes
@@ -23,5 +23,5 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.0.2
-CurrentVersionCode: 3
+CurrentVersion: 1.0.3
+CurrentVersionCode: 4
