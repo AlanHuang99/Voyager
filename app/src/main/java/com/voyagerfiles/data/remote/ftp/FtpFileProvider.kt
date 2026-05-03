@@ -36,6 +36,7 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             }
 
             if (!ftp.login(connection.username, connection.password)) {
+                ftp.disconnect()
                 throw IllegalStateException("FTP login failed")
             }
 
@@ -82,7 +83,9 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             runCatching {
                 ensureConnected()
                 val fullPath = if (path.endsWith("/")) "$path$name" else "$path/$name"
-                ftpClient!!.storeFile(fullPath, ByteArrayInputStream(ByteArray(0)))
+                if (!ftpClient!!.storeFile(fullPath, ByteArrayInputStream(ByteArray(0)))) {
+                    throw IllegalStateException("Failed to create file")
+                }
                 FileItem(name = name, path = fullPath, isDirectory = false, source = FileSource.FTP)
             }
         }
@@ -92,8 +95,7 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             runCatching {
                 ensureConnected()
                 val ftp = ftpClient!!
-                val files = ftp.listFiles(path)
-                if (files.isNotEmpty() && files[0].isDirectory) {
+                if (ftp.isDirectory(path)) {
                     deleteDirectoryRecursive(ftp, path)
                 } else {
                     if (!ftp.deleteFile(path)) {
@@ -135,12 +137,45 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
                 ensureConnected()
                 val ftp = ftpClient!!
                 val name = sourcePath.substringAfterLast("/")
+                val targetPath = joinPath(destPath, name)
+                if (ftp.isDirectory(sourcePath)) {
+                    copyDirectoryRecursive(ftp, sourcePath, targetPath)
+                    return@runCatching
+                }
+
                 val output = ByteArrayOutputStream()
-                ftp.retrieveFile(sourcePath, output)
-                ftp.storeFile("$destPath/$name", ByteArrayInputStream(output.toByteArray()))
+                if (!ftp.retrieveFile(sourcePath, output)) {
+                    throw IllegalStateException("Failed to read: $sourcePath")
+                }
+                if (!ftp.storeFile(targetPath, ByteArrayInputStream(output.toByteArray()))) {
+                    throw IllegalStateException("Failed to write: $targetPath")
+                }
                 Unit
             }
         }
+
+    private fun copyDirectoryRecursive(ftp: FTPClient, sourcePath: String, targetPath: String) {
+        if (!ftp.makeDirectory(targetPath) && !ftp.isDirectory(targetPath)) {
+            throw IllegalStateException("Failed to create directory: $targetPath")
+        }
+
+        for (file in ftp.listFiles(sourcePath)) {
+            if (file.name == "." || file.name == "..") continue
+            val sourceChild = joinPath(sourcePath, file.name)
+            val targetChild = joinPath(targetPath, file.name)
+            if (file.isDirectory) {
+                copyDirectoryRecursive(ftp, sourceChild, targetChild)
+            } else {
+                val output = ByteArrayOutputStream()
+                if (!ftp.retrieveFile(sourceChild, output)) {
+                    throw IllegalStateException("Failed to read: $sourceChild")
+                }
+                if (!ftp.storeFile(targetChild, ByteArrayInputStream(output.toByteArray()))) {
+                    throw IllegalStateException("Failed to write: $targetChild")
+                }
+            }
+        }
+    }
 
     override suspend fun move(sourcePath: String, destPath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -158,7 +193,9 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             runCatching {
                 ensureConnected()
                 val output = ByteArrayOutputStream()
-                ftpClient!!.retrieveFile(path, output)
+                if (!ftpClient!!.retrieveFile(path, output)) {
+                    throw IllegalStateException("Failed to read: $path")
+                }
                 ByteArrayInputStream(output.toByteArray()) as InputStream
             }
         }
@@ -166,10 +203,18 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
     override suspend fun getOutputStream(path: String): Result<OutputStream> =
         withContext(Dispatchers.IO) {
             runCatching {
+                ensureConnected()
+                val ftp = ftpClient!!
                 object : ByteArrayOutputStream() {
+                    private var closed = false
+
                     override fun close() {
+                        if (closed) return
+                        closed = true
                         super.close()
-                        ftpClient?.storeFile(path, ByteArrayInputStream(toByteArray()))
+                        if (!ftp.storeFile(path, ByteArrayInputStream(toByteArray()))) {
+                            throw IllegalStateException("Failed to write: $path")
+                        }
                     }
                 } as OutputStream
             }
@@ -217,5 +262,20 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             }
             ftpClient = null
         }
+    }
+
+    private fun FTPClient.isDirectory(path: String): Boolean {
+        val currentPath = printWorkingDirectory()
+        val changed = changeWorkingDirectory(path)
+        if (changed && currentPath != null) {
+            changeWorkingDirectory(currentPath)
+        }
+        return changed
+    }
+
+    private fun joinPath(parent: String, child: String): String = when {
+        parent.isBlank() || parent == "/" -> "/$child"
+        parent.endsWith("/") -> "$parent$child"
+        else -> "$parent/$child"
     }
 }

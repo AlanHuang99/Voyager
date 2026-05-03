@@ -1,58 +1,148 @@
-name: Release
+name: Android Release and Pages
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, for example v1.0.2"
+        required: true
+        type: string
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: android-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Build & Publish Release
+    name: Build Signed APKs and Publish
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy-pages.outputs.page_url }}
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+            git fetch --tags --force
+            git checkout "$tag"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          case "$tag" in
+            v[0-9]*)
+              ;;
+            *)
+              echo "::error::Release tag must start with v followed by a version number."
+              exit 1
+              ;;
+          esac
+
+          version_name="$(sed -nE 's/[[:space:]]*versionName = "([^"]+)"/\1/p' app/build.gradle.kts | head -n 1)"
+          version_code="$(sed -nE 's/[[:space:]]*versionCode = ([0-9]+)/\1/p' app/build.gradle.kts | head -n 1)"
+
+          if [ "$tag" != "v${version_name}" ]; then
+            echo "::error::Tag $tag does not match Gradle versionName $version_name."
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APKs (per-arch)
-        run: ./gradlew assembleDebug
-
-      - name: Build release APKs (per-arch)
-        run: ./gradlew assembleRelease
-        continue-on-error: true
-
-      - name: Rename APKs
+      - name: Validate release signing secrets
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          cd app/build/outputs/apk/debug
-          for f in *.apk; do
-            arch=$(echo "$f" | sed 's/app-//;s/-debug.apk//')
-            mv "$f" "voyager-${TAG}-${arch}-debug.apk" 2>/dev/null || true
+          set -euo pipefail
+          missing=0
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $name"
+              missing=1
+            fi
           done
-          if [ -d "../release" ]; then
-            cd ../release
-            for f in *.apk; do
-              arch=$(echo "$f" | sed 's/app-//;s/-release-unsigned.apk//;s/-release.apk//')
-              mv "$f" "voyager-${TAG}-${arch}-release.apk" 2>/dev/null || true
-            done
+          exit "$missing"
+
+      - name: Decode release keystore
+        run: |
+          set -euo pipefail
+          keystore_path="$RUNNER_TEMP/voyager-release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Run unit tests, lint, and signed release build
+        run: ./gradlew testDebugUnitTest lintDebug assembleRelease --stacktrace
+
+      - name: Prepare GitHub Pages release site
+        run: scripts/prepare-github-pages-release.sh "${{ steps.release.outputs.tag }}" app/build/outputs/apk/release public
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voyager-${{ steps.release.outputs.tag }}-signed-apks
+          path: public/downloads/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" public/downloads/* --clobber
+          else
+            gh release create "$RELEASE_TAG" public/downloads/* \
+              --title "Voyager $RELEASE_TAG" \
+              --generate-notes \
+              --verify-tag
           fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          generate_release_notes: true
-          files: |
-            app/build/outputs/apk/debug/voyager-*.apk
-            app/build/outputs/apk/release/voyager-*.apk
+          path: public
+
+      - name: Deploy GitHub Pages
+        id: deploy-pages
+        uses: actions/deploy-pages@v4

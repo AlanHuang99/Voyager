@@ -8,6 +8,7 @@ import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
+import com.hierynomus.smbj.share.DiskEntry
 import com.hierynomus.smbj.share.DiskShare
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
@@ -32,21 +33,34 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
     private suspend fun ensureConnected() {
         if (share != null) return
         withContext(Dispatchers.IO) {
-            val client = SMBClient()
-            val conn = client.connect(connection.host, connection.port)
-            val authContext = AuthenticationContext(
-                connection.username,
-                connection.password.toCharArray(),
-                connection.domain ?: "",
-            )
-            val sess = conn.authenticate(authContext)
             val shareName = connection.shareName ?: throw IllegalStateException("SMB share name is required")
-            val diskShare = sess.connectShare(shareName) as DiskShare
+            var client: SMBClient? = null
+            var conn: Connection? = null
+            var sess: Session? = null
+            var diskShare: DiskShare? = null
 
-            smbClient = client
-            smbConnection = conn
-            session = sess
-            share = diskShare
+            try {
+                client = SMBClient()
+                conn = client.connect(connection.host, connection.port)
+                val authContext = AuthenticationContext(
+                    connection.username,
+                    connection.password.toCharArray(),
+                    connection.domain ?: "",
+                )
+                sess = conn.authenticate(authContext)
+                diskShare = sess.connectShare(shareName) as DiskShare
+
+                smbClient = client
+                smbConnection = conn
+                session = sess
+                share = diskShare
+            } catch (error: Throwable) {
+                runCatching { diskShare?.close() }
+                runCatching { sess?.close() }
+                runCatching { conn?.close() }
+                runCatching { client?.close() }
+                throw error
+            }
         }
     }
 
@@ -133,6 +147,35 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
         diskShare.rmdir(smbPath, false)
     }
 
+    private fun DiskShare.openForRename(path: String, isDirectory: Boolean): DiskEntry =
+        if (isDirectory) {
+            openDirectory(
+                path,
+                EnumSet.of(
+                    AccessMask.DELETE,
+                    AccessMask.FILE_READ_ATTRIBUTES,
+                    AccessMask.FILE_WRITE_ATTRIBUTES,
+                ),
+                null,
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                null,
+            )
+        } else {
+            openFile(
+                path,
+                EnumSet.of(
+                    AccessMask.DELETE,
+                    AccessMask.FILE_READ_ATTRIBUTES,
+                    AccessMask.FILE_WRITE_ATTRIBUTES,
+                ),
+                null,
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                null,
+            )
+        }
+
     override suspend fun rename(oldPath: String, newName: String): Result<FileItem> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -142,18 +185,15 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                 val newSmb = if (parent.isEmpty()) newName else "$parent\\$newName"
                 val parentPath = oldPath.substringBeforeLast("/")
                 val newPath = "$parentPath/$newName"
+                val wasDirectory = share!!.folderExists(oldSmb)
 
-                val file = share!!.openFile(
-                    oldSmb,
-                    EnumSet.of(AccessMask.GENERIC_ALL),
-                    null,
-                    SMB2ShareAccess.ALL,
-                    SMB2CreateDisposition.FILE_OPEN,
-                    null,
-                )
-                file.rename(newSmb)
-                file.close()
-                FileItem(name = newName, path = newPath, isDirectory = false, source = FileSource.SMB)
+                val file = share!!.openForRename(oldSmb, wasDirectory)
+                try {
+                    file.rename(newSmb)
+                } finally {
+                    file.close()
+                }
+                FileItem(name = newName, path = newPath, isDirectory = wasDirectory, source = FileSource.SMB)
             }
         }
 
@@ -164,29 +204,47 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                 val name = sourcePath.substringAfterLast("/")
                 val sourceSmb = toSmbPath(sourcePath)
                 val destSmb = toSmbPath("$destPath/$name")
-
-                val srcFile = share!!.openFile(
-                    sourceSmb,
-                    EnumSet.of(AccessMask.GENERIC_READ),
-                    null,
-                    SMB2ShareAccess.ALL,
-                    SMB2CreateDisposition.FILE_OPEN,
-                    null,
-                )
-                val destFile = share!!.openFile(
-                    destSmb,
-                    EnumSet.of(AccessMask.GENERIC_WRITE),
-                    null,
-                    SMB2ShareAccess.ALL,
-                    SMB2CreateDisposition.FILE_CREATE,
-                    null,
-                )
-
-                srcFile.remoteCopyTo(destFile)
-                srcFile.close()
-                destFile.close()
+                copyPath(sourceSmb, destSmb)
             }
         }
+
+    private fun copyPath(sourceSmb: String, destSmb: String) {
+        val diskShare = share!!
+        if (diskShare.folderExists(sourceSmb)) {
+            diskShare.mkdir(destSmb)
+            for (info in diskShare.list(sourceSmb)) {
+                if (info.fileName == "." || info.fileName == "..") continue
+                val sourceChild = if (sourceSmb.isEmpty()) info.fileName else "$sourceSmb\\${info.fileName}"
+                val destChild = if (destSmb.isEmpty()) info.fileName else "$destSmb\\${info.fileName}"
+                copyPath(sourceChild, destChild)
+            }
+            return
+        }
+
+        val srcFile = diskShare.openFile(
+            sourceSmb,
+            EnumSet.of(AccessMask.GENERIC_READ),
+            null,
+            SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_OPEN,
+            null,
+        )
+        val destFile = diskShare.openFile(
+            destSmb,
+            EnumSet.of(AccessMask.GENERIC_WRITE),
+            null,
+            SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_CREATE,
+            null,
+        )
+
+        try {
+            srcFile.remoteCopyTo(destFile)
+        } finally {
+            runCatching { srcFile.close() }
+            destFile.close()
+        }
+    }
 
     override suspend fun move(sourcePath: String, destPath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -195,17 +253,14 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                 val name = sourcePath.substringAfterLast("/")
                 val sourceSmb = toSmbPath(sourcePath)
                 val destSmb = toSmbPath("$destPath/$name")
+                val isDirectory = share!!.folderExists(sourceSmb)
 
-                val file = share!!.openFile(
-                    sourceSmb,
-                    EnumSet.of(AccessMask.GENERIC_ALL),
-                    null,
-                    SMB2ShareAccess.ALL,
-                    SMB2CreateDisposition.FILE_OPEN,
-                    null,
-                )
-                file.rename(destSmb)
-                file.close()
+                val file = share!!.openForRename(sourceSmb, isDirectory)
+                try {
+                    file.rename(destSmb)
+                } finally {
+                    file.close()
+                }
             }
         }
 
@@ -222,8 +277,11 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                     null,
                 )
                 val output = ByteArrayOutputStream()
-                file.inputStream.use { it.copyTo(output) }
-                file.close()
+                try {
+                    file.inputStream.use { it.copyTo(output) }
+                } finally {
+                    file.close()
+                }
                 ByteArrayInputStream(output.toByteArray()) as InputStream
             }
         }
@@ -231,12 +289,16 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
     override suspend fun getOutputStream(path: String): Result<OutputStream> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val diskShare = share
+                ensureConnected()
+                val diskShare = share!!
                 object : ByteArrayOutputStream() {
+                    private var closed = false
+
                     override fun close() {
+                        if (closed) return
+                        closed = true
                         super.close()
-                        val ds = diskShare ?: return
-                        val file = ds.openFile(
+                        val file = diskShare.openFile(
                             toSmbPath(path),
                             EnumSet.of(AccessMask.GENERIC_WRITE),
                             null,
@@ -244,8 +306,11 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                             SMB2CreateDisposition.FILE_OVERWRITE_IF,
                             null,
                         )
-                        file.outputStream.use { it.write(toByteArray()) }
-                        file.close()
+                        try {
+                            file.outputStream.use { it.write(toByteArray()) }
+                        } finally {
+                            file.close()
+                        }
                     }
                 } as OutputStream
             }

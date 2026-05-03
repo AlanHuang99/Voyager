@@ -15,6 +15,14 @@ enum class AppTheme(val displayName: String) {
     MACCHIATO("Macchiato"),
     FRAPPE("Frappé"),
     LATTE("Latte"),
+    NORD("Nord"),
+    SOLARIZED_DARK("Solarized Dark"),
+    SOLARIZED_LIGHT("Solarized Light"),
+    GRUVBOX_DARK("Gruvbox Dark"),
+    GRUVBOX_LIGHT("Gruvbox Light"),
+    ROSE_PINE("Rosé Pine"),
+    TOKYO_NIGHT("Tokyo Night"),
+    HIGH_CONTRAST("High Contrast"),
     CUSTOM("Custom");
 
     companion object {

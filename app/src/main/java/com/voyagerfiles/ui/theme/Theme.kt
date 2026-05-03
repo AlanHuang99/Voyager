@@ -2,6 +2,7 @@ package com.voyagerfiles.ui.theme
 
 import android.app.Activity
 import android.os.Build
+import android.view.Window
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +16,68 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+private fun darkColorSchemeFrom(colors: AppColorTokens): ColorScheme = darkColorScheme(
+    primary = colors.primary,
+    onPrimary = colors.onPrimary,
+    primaryContainer = colors.primaryContainer,
+    onPrimaryContainer = colors.onPrimaryContainer,
+    secondary = colors.secondary,
+    onSecondary = colors.onSecondary,
+    secondaryContainer = colors.secondaryContainer,
+    onSecondaryContainer = colors.onSecondaryContainer,
+    tertiary = colors.tertiary,
+    onTertiary = colors.onTertiary,
+    tertiaryContainer = colors.tertiaryContainer,
+    onTertiaryContainer = colors.onTertiaryContainer,
+    background = colors.background,
+    onBackground = colors.onBackground,
+    surface = colors.surface,
+    onSurface = colors.onSurface,
+    surfaceVariant = colors.surfaceVariant,
+    onSurfaceVariant = colors.onSurfaceVariant,
+    error = colors.error,
+    onError = colors.onError,
+    errorContainer = colors.errorContainer,
+    onErrorContainer = colors.onErrorContainer,
+    outline = colors.outline,
+    outlineVariant = colors.outlineVariant,
+    inverseSurface = colors.inverseSurface,
+    inverseOnSurface = colors.inverseOnSurface,
+    inversePrimary = colors.inversePrimary,
+    surfaceTint = colors.surfaceTint,
+)
+
+private fun lightColorSchemeFrom(colors: AppColorTokens): ColorScheme = lightColorScheme(
+    primary = colors.primary,
+    onPrimary = colors.onPrimary,
+    primaryContainer = colors.primaryContainer,
+    onPrimaryContainer = colors.onPrimaryContainer,
+    secondary = colors.secondary,
+    onSecondary = colors.onSecondary,
+    secondaryContainer = colors.secondaryContainer,
+    onSecondaryContainer = colors.onSecondaryContainer,
+    tertiary = colors.tertiary,
+    onTertiary = colors.onTertiary,
+    tertiaryContainer = colors.tertiaryContainer,
+    onTertiaryContainer = colors.onTertiaryContainer,
+    background = colors.background,
+    onBackground = colors.onBackground,
+    surface = colors.surface,
+    onSurface = colors.onSurface,
+    surfaceVariant = colors.surfaceVariant,
+    onSurfaceVariant = colors.onSurfaceVariant,
+    error = colors.error,
+    onError = colors.onError,
+    errorContainer = colors.errorContainer,
+    onErrorContainer = colors.onErrorContainer,
+    outline = colors.outline,
+    outlineVariant = colors.outlineVariant,
+    inverseSurface = colors.inverseSurface,
+    inverseOnSurface = colors.inverseOnSurface,
+    inversePrimary = colors.inversePrimary,
+    surfaceTint = colors.surfaceTint,
+)
 
 private val BlackColorScheme = darkColorScheme(
     primary = BlackColors.primary,
@@ -326,6 +389,20 @@ private val LatteColorScheme = lightColorScheme(
     surfaceTint = LatteColors.surfaceTint,
 )
 
+private val NordColorScheme = darkColorSchemeFrom(NordColors)
+private val SolarizedDarkColorScheme = darkColorSchemeFrom(SolarizedDarkColors)
+private val SolarizedLightColorScheme = lightColorSchemeFrom(SolarizedLightColors)
+private val GruvboxDarkColorScheme = darkColorSchemeFrom(GruvboxDarkColors)
+private val GruvboxLightColorScheme = lightColorSchemeFrom(GruvboxLightColors)
+private val RosePineColorScheme = darkColorSchemeFrom(RosePineColors)
+private val TokyoNightColorScheme = darkColorSchemeFrom(TokyoNightColors)
+private val HighContrastColorScheme = darkColorSchemeFrom(HighContrastColors)
+
+@Suppress("DEPRECATION")
+private fun Window.setThemedStatusBarColor(colorScheme: ColorScheme) {
+    statusBarColor = colorScheme.surface.toArgb()
+}
+
 fun getColorScheme(
     theme: AppTheme,
     isDark: Boolean,
@@ -342,12 +419,20 @@ fun getColorScheme(
     AppTheme.MACCHIATO -> MacchiatoColorScheme
     AppTheme.FRAPPE -> FrappeColorScheme
     AppTheme.LATTE -> LatteColorScheme
+    AppTheme.NORD -> NordColorScheme
+    AppTheme.SOLARIZED_DARK -> SolarizedDarkColorScheme
+    AppTheme.SOLARIZED_LIGHT -> SolarizedLightColorScheme
+    AppTheme.GRUVBOX_DARK -> GruvboxDarkColorScheme
+    AppTheme.GRUVBOX_LIGHT -> GruvboxLightColorScheme
+    AppTheme.ROSE_PINE -> RosePineColorScheme
+    AppTheme.TOKYO_NIGHT -> TokyoNightColorScheme
+    AppTheme.HIGH_CONTRAST -> HighContrastColorScheme
     AppTheme.CUSTOM -> customColorScheme ?: if (isDark) DarkColorScheme else WhiteColorScheme
 }
 
 fun isDarkTheme(theme: AppTheme, systemIsDark: Boolean): Boolean = when (theme) {
     AppTheme.SYSTEM -> systemIsDark
-    AppTheme.WHITE, AppTheme.LATTE -> false
+    AppTheme.WHITE, AppTheme.LATTE, AppTheme.SOLARIZED_LIGHT, AppTheme.GRUVBOX_LIGHT -> false
     else -> true
 }
 
@@ -374,7 +459,7 @@ fun VoyagerTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.surface.toArgb()
+            window.setThemedStatusBarColor(colorScheme)
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

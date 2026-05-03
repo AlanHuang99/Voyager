@@ -22,6 +22,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -34,11 +37,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -193,13 +193,13 @@ fun BrowserScreen(
                         }) {
                             Icon(
                                 if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView
-                                else Icons.Filled.ViewList,
+                                else Icons.AutoMirrored.Filled.ViewList,
                                 "Toggle view",
                             )
                         }
                         Box {
                             IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.Filled.Sort, "Sort")
+                                Icon(Icons.AutoMirrored.Filled.Sort, "Sort")
                             }
                             DropdownMenu(
                                 expanded = showSortMenu,
@@ -324,7 +324,7 @@ fun BrowserScreen(
                         )
                         DropdownMenuItem(
                             text = { Text("New File") },
-                            leadingIcon = { Icon(Icons.Filled.NoteAdd, null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, null) },
                             onClick = {
                                 showCreateMenu = false
                                 showCreateFileDialog = true

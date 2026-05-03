@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -109,5 +109,5 @@ private fun getFileIcon(file: FileItem) = when {
     file.isText -> Icons.Filled.Description
     file.isArchive -> Icons.Filled.Archive
     file.isApk -> Icons.Filled.Android
-    else -> Icons.Filled.InsertDriveFile
+    else -> Icons.AutoMirrored.Filled.InsertDriveFile
 }

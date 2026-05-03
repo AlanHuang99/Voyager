@@ -73,12 +73,10 @@ class MainActivity : ComponentActivity() {
     private fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        } else {
             ContextCompat.checkSelfPermission(
                 this, Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
         }
     }
 

@@ -124,10 +124,16 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
     override suspend fun getOutputStream(path: String): Result<OutputStream> =
         withContext(Dispatchers.IO) {
             runCatching {
+                ensureConnected()
+                val client = sardine!!
                 object : ByteArrayOutputStream() {
+                    private var closed = false
+
                     override fun close() {
+                        if (closed) return
+                        closed = true
                         super.close()
-                        sardine?.put(toUrl(path), toByteArray())
+                        client.put(toUrl(path), toByteArray())
                     }
                 } as OutputStream
             }

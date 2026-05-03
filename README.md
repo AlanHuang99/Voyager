@@ -6,7 +6,7 @@ Yet another Android file manager — but with Material Design 3, Jetpack Compose
 
 - **Local file browsing** — list/grid views, sort, search, hidden files
 - **Remote connections** — SFTP, FTP, SMB, WebDAV
-- **12 themes** — System, Black (AMOLED), White, Dark, Ocean, Purple, Forest, Mocha, Macchiato, Frappé, Latte, Custom
+- **20 themes** — System, Black (AMOLED), White, Dark, Ocean, Purple, Forest, Catppuccin, Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, High Contrast, Custom
 - **Material You** — dynamic colors on Android 12+
 - **File operations** — copy, cut, paste, rename, delete, create
 - **Bookmarks** — save frequently accessed paths
@@ -30,6 +30,20 @@ Yet another Android file manager — but with Material Design 3, Jetpack Compose
 ```
 
 APK output: `app/build/outputs/apk/debug/app-debug.apk`
+
+## Verification
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
+```
+
+## Distribution
+
+- GitHub Actions runs unit tests, lint, debug builds, and unsigned release builds on pushes and pull requests.
+- Version tags such as `v1.0.2` can publish signed release APKs to GitHub Releases and GitHub Pages when release signing secrets are configured.
+- F-Droid metadata lives in `metadata/com.voyagerfiles.yml` and disables ABI splits through `gradleprops` so F-Droid builds one unsigned APK that F-Droid signs itself.
+
+Release setup details are in [docs/RELEASE.md](docs/RELEASE.md).
 
 ## License
 

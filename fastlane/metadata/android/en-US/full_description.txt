@@ -6,7 +6,7 @@ Features:
 • FTP remote file access
 • SMB/CIFS network share browsing
 • WebDAV remote file access
-• 12 built-in themes including Catppuccin (Mocha, Macchiato, Frappé, Latte)
+• 20 built-in themes including Catppuccin, Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, and High Contrast
 • Custom theme support
 • AMOLED black theme
 • List and grid view modes

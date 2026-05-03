@@ -1,0 +1,3 @@
+Voyager 1.0.1:
+- Fixed release build rules for network protocol libraries
+- Fixed WebDAV XML dependency conflict

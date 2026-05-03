@@ -2,6 +2,37 @@ package com.voyagerfiles.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+interface AppColorTokens {
+    val primary: Color
+    val onPrimary: Color
+    val primaryContainer: Color
+    val onPrimaryContainer: Color
+    val secondary: Color
+    val onSecondary: Color
+    val secondaryContainer: Color
+    val onSecondaryContainer: Color
+    val tertiary: Color
+    val onTertiary: Color
+    val tertiaryContainer: Color
+    val onTertiaryContainer: Color
+    val background: Color
+    val onBackground: Color
+    val surface: Color
+    val onSurface: Color
+    val surfaceVariant: Color
+    val onSurfaceVariant: Color
+    val error: Color
+    val onError: Color
+    val errorContainer: Color
+    val onErrorContainer: Color
+    val outline: Color
+    val outlineVariant: Color
+    val inverseSurface: Color
+    val inverseOnSurface: Color
+    val inversePrimary: Color
+    val surfaceTint: Color
+}
+
 // ── System (Material You dynamic defaults / fallback) ──
 object SystemColors {
     val primary = Color(0xFF6750A4)
@@ -352,4 +383,260 @@ object LatteColors {
     val inverseOnSurface = Color(0xFFEFF1F5)
     val inversePrimary = Color(0xFFBABBF1)
     val surfaceTint = Color(0xFF7287FD)
+}
+
+// ── Nord ──
+object NordColors : AppColorTokens {
+    override val primary = Color(0xFF88C0D0)
+    override val onPrimary = Color(0xFF102027)
+    override val primaryContainer = Color(0xFF5E81AC)
+    override val onPrimaryContainer = Color(0xFFE5F4FA)
+    override val secondary = Color(0xFFA3BE8C)
+    override val onSecondary = Color(0xFF18210F)
+    override val secondaryContainer = Color(0xFF4C6A3D)
+    override val onSecondaryContainer = Color(0xFFE7F2DD)
+    override val tertiary = Color(0xFFB48EAD)
+    override val onTertiary = Color(0xFF2A1832)
+    override val tertiaryContainer = Color(0xFF6D5974)
+    override val onTertiaryContainer = Color(0xFFF4E5F2)
+    override val background = Color(0xFF2E3440)
+    override val onBackground = Color(0xFFECEFF4)
+    override val surface = Color(0xFF3B4252)
+    override val onSurface = Color(0xFFECEFF4)
+    override val surfaceVariant = Color(0xFF434C5E)
+    override val onSurfaceVariant = Color(0xFFD8DEE9)
+    override val error = Color(0xFFBF616A)
+    override val onError = Color(0xFF2A090D)
+    override val errorContainer = Color(0xFF7D3038)
+    override val onErrorContainer = Color(0xFFFFDAD8)
+    override val outline = Color(0xFF6D788A)
+    override val outlineVariant = Color(0xFF4C566A)
+    override val inverseSurface = Color(0xFFECEFF4)
+    override val inverseOnSurface = Color(0xFF2E3440)
+    override val inversePrimary = Color(0xFF3B6B7A)
+    override val surfaceTint = Color(0xFF88C0D0)
+}
+
+// ── Solarized Dark ──
+object SolarizedDarkColors : AppColorTokens {
+    override val primary = Color(0xFF268BD2)
+    override val onPrimary = Color(0xFFFFFFFF)
+    override val primaryContainer = Color(0xFF0D4F75)
+    override val onPrimaryContainer = Color(0xFFD1ECFF)
+    override val secondary = Color(0xFF2AA198)
+    override val onSecondary = Color(0xFF002B28)
+    override val secondaryContainer = Color(0xFF11645E)
+    override val onSecondaryContainer = Color(0xFFC7F3EF)
+    override val tertiary = Color(0xFFB58900)
+    override val onTertiary = Color(0xFF2F2300)
+    override val tertiaryContainer = Color(0xFF6B5100)
+    override val onTertiaryContainer = Color(0xFFFFE6A6)
+    override val background = Color(0xFF002B36)
+    override val onBackground = Color(0xFFEEE8D5)
+    override val surface = Color(0xFF073642)
+    override val onSurface = Color(0xFFEEE8D5)
+    override val surfaceVariant = Color(0xFF0B3A42)
+    override val onSurfaceVariant = Color(0xFF93A1A1)
+    override val error = Color(0xFFDC322F)
+    override val onError = Color(0xFFFFFFFF)
+    override val errorContainer = Color(0xFF7B1716)
+    override val onErrorContainer = Color(0xFFFFDAD8)
+    override val outline = Color(0xFF586E75)
+    override val outlineVariant = Color(0xFF12414C)
+    override val inverseSurface = Color(0xFFEEE8D5)
+    override val inverseOnSurface = Color(0xFF002B36)
+    override val inversePrimary = Color(0xFF0066A0)
+    override val surfaceTint = Color(0xFF268BD2)
+}
+
+// ── Solarized Light ──
+object SolarizedLightColors : AppColorTokens {
+    override val primary = Color(0xFF268BD2)
+    override val onPrimary = Color(0xFFFFFFFF)
+    override val primaryContainer = Color(0xFFC9E6F8)
+    override val onPrimaryContainer = Color(0xFF00344F)
+    override val secondary = Color(0xFF2AA198)
+    override val onSecondary = Color(0xFFFFFFFF)
+    override val secondaryContainer = Color(0xFFCBEDEA)
+    override val onSecondaryContainer = Color(0xFF003B37)
+    override val tertiary = Color(0xFFB58900)
+    override val onTertiary = Color(0xFFFFFFFF)
+    override val tertiaryContainer = Color(0xFFFFE8A6)
+    override val onTertiaryContainer = Color(0xFF3D2C00)
+    override val background = Color(0xFFFDF6E3)
+    override val onBackground = Color(0xFF073642)
+    override val surface = Color(0xFFF6EFD6)
+    override val onSurface = Color(0xFF073642)
+    override val surfaceVariant = Color(0xFFEDE5C8)
+    override val onSurfaceVariant = Color(0xFF586E75)
+    override val error = Color(0xFFDC322F)
+    override val onError = Color(0xFFFFFFFF)
+    override val errorContainer = Color(0xFFFFDAD8)
+    override val onErrorContainer = Color(0xFF410003)
+    override val outline = Color(0xFF93A1A1)
+    override val outlineVariant = Color(0xFFD8CFB2)
+    override val inverseSurface = Color(0xFF073642)
+    override val inverseOnSurface = Color(0xFFFDF6E3)
+    override val inversePrimary = Color(0xFF85C8F2)
+    override val surfaceTint = Color(0xFF268BD2)
+}
+
+// ── Gruvbox Dark ──
+object GruvboxDarkColors : AppColorTokens {
+    override val primary = Color(0xFFFABD2F)
+    override val onPrimary = Color(0xFF3C2A00)
+    override val primaryContainer = Color(0xFF7C5A00)
+    override val onPrimaryContainer = Color(0xFFFFE8A6)
+    override val secondary = Color(0xFFB8BB26)
+    override val onSecondary = Color(0xFF292B00)
+    override val secondaryContainer = Color(0xFF5F6200)
+    override val onSecondaryContainer = Color(0xFFF3F5A4)
+    override val tertiary = Color(0xFF83A598)
+    override val onTertiary = Color(0xFF0D2A23)
+    override val tertiaryContainer = Color(0xFF3D675A)
+    override val onTertiaryContainer = Color(0xFFD6EEE6)
+    override val background = Color(0xFF282828)
+    override val onBackground = Color(0xFFEBDBB2)
+    override val surface = Color(0xFF32302F)
+    override val onSurface = Color(0xFFEBDBB2)
+    override val surfaceVariant = Color(0xFF3C3836)
+    override val onSurfaceVariant = Color(0xFFD5C4A1)
+    override val error = Color(0xFFFB4934)
+    override val onError = Color(0xFF3B0700)
+    override val errorContainer = Color(0xFF8F1D12)
+    override val onErrorContainer = Color(0xFFFFDAD5)
+    override val outline = Color(0xFF928374)
+    override val outlineVariant = Color(0xFF504945)
+    override val inverseSurface = Color(0xFFEBDBB2)
+    override val inverseOnSurface = Color(0xFF282828)
+    override val inversePrimary = Color(0xFFB57614)
+    override val surfaceTint = Color(0xFFFABD2F)
+}
+
+// ── Gruvbox Light ──
+object GruvboxLightColors : AppColorTokens {
+    override val primary = Color(0xFFB57614)
+    override val onPrimary = Color(0xFFFFFFFF)
+    override val primaryContainer = Color(0xFFFFDFA2)
+    override val onPrimaryContainer = Color(0xFF3A2400)
+    override val secondary = Color(0xFF79740E)
+    override val onSecondary = Color(0xFFFFFFFF)
+    override val secondaryContainer = Color(0xFFE7E2A3)
+    override val onSecondaryContainer = Color(0xFF262500)
+    override val tertiary = Color(0xFF076678)
+    override val onTertiary = Color(0xFFFFFFFF)
+    override val tertiaryContainer = Color(0xFFB8E7F0)
+    override val onTertiaryContainer = Color(0xFF002F38)
+    override val background = Color(0xFFFBF1C7)
+    override val onBackground = Color(0xFF3C3836)
+    override val surface = Color(0xFFF2E5BC)
+    override val onSurface = Color(0xFF3C3836)
+    override val surfaceVariant = Color(0xFFEBDCB2)
+    override val onSurfaceVariant = Color(0xFF665C54)
+    override val error = Color(0xFFCC241D)
+    override val onError = Color(0xFFFFFFFF)
+    override val errorContainer = Color(0xFFFFDAD5)
+    override val onErrorContainer = Color(0xFF410001)
+    override val outline = Color(0xFF928374)
+    override val outlineVariant = Color(0xFFD5C4A1)
+    override val inverseSurface = Color(0xFF3C3836)
+    override val inverseOnSurface = Color(0xFFFBF1C7)
+    override val inversePrimary = Color(0xFFFABD2F)
+    override val surfaceTint = Color(0xFFB57614)
+}
+
+// ── Rose Pine ──
+object RosePineColors : AppColorTokens {
+    override val primary = Color(0xFFC4A7E7)
+    override val onPrimary = Color(0xFF22122F)
+    override val primaryContainer = Color(0xFF5D4775)
+    override val onPrimaryContainer = Color(0xFFF1E4FF)
+    override val secondary = Color(0xFF9CCFD8)
+    override val onSecondary = Color(0xFF0A2B31)
+    override val secondaryContainer = Color(0xFF3E6D75)
+    override val onSecondaryContainer = Color(0xFFD6F4F8)
+    override val tertiary = Color(0xFFF6C177)
+    override val onTertiary = Color(0xFF3A2500)
+    override val tertiaryContainer = Color(0xFF7A5616)
+    override val onTertiaryContainer = Color(0xFFFFE4B8)
+    override val background = Color(0xFF191724)
+    override val onBackground = Color(0xFFE0DEF4)
+    override val surface = Color(0xFF1F1D2E)
+    override val onSurface = Color(0xFFE0DEF4)
+    override val surfaceVariant = Color(0xFF26233A)
+    override val onSurfaceVariant = Color(0xFF908CAA)
+    override val error = Color(0xFFEB6F92)
+    override val onError = Color(0xFF3A0717)
+    override val errorContainer = Color(0xFF7B2A42)
+    override val onErrorContainer = Color(0xFFFFD9E2)
+    override val outline = Color(0xFF6E6A86)
+    override val outlineVariant = Color(0xFF403D52)
+    override val inverseSurface = Color(0xFFE0DEF4)
+    override val inverseOnSurface = Color(0xFF191724)
+    override val inversePrimary = Color(0xFF8B62B3)
+    override val surfaceTint = Color(0xFFC4A7E7)
+}
+
+// ── Tokyo Night ──
+object TokyoNightColors : AppColorTokens {
+    override val primary = Color(0xFF7AA2F7)
+    override val onPrimary = Color(0xFF001E44)
+    override val primaryContainer = Color(0xFF2F5EBC)
+    override val onPrimaryContainer = Color(0xFFDCE7FF)
+    override val secondary = Color(0xFF9ECE6A)
+    override val onSecondary = Color(0xFF142500)
+    override val secondaryContainer = Color(0xFF4A6D20)
+    override val onSecondaryContainer = Color(0xFFE3F7C8)
+    override val tertiary = Color(0xFFE0AF68)
+    override val onTertiary = Color(0xFF332100)
+    override val tertiaryContainer = Color(0xFF7A5319)
+    override val onTertiaryContainer = Color(0xFFFFE2B9)
+    override val background = Color(0xFF1A1B26)
+    override val onBackground = Color(0xFFC0CAF5)
+    override val surface = Color(0xFF16161E)
+    override val onSurface = Color(0xFFC0CAF5)
+    override val surfaceVariant = Color(0xFF24283B)
+    override val onSurfaceVariant = Color(0xFFA9B1D6)
+    override val error = Color(0xFFF7768E)
+    override val onError = Color(0xFF3A0714)
+    override val errorContainer = Color(0xFF872B3C)
+    override val onErrorContainer = Color(0xFFFFD9DF)
+    override val outline = Color(0xFF565F89)
+    override val outlineVariant = Color(0xFF32344A)
+    override val inverseSurface = Color(0xFFC0CAF5)
+    override val inverseOnSurface = Color(0xFF1A1B26)
+    override val inversePrimary = Color(0xFF2F5EBC)
+    override val surfaceTint = Color(0xFF7AA2F7)
+}
+
+// ── High Contrast ──
+object HighContrastColors : AppColorTokens {
+    override val primary = Color(0xFFFFD400)
+    override val onPrimary = Color(0xFF000000)
+    override val primaryContainer = Color(0xFF4A3D00)
+    override val onPrimaryContainer = Color(0xFFFFF2A6)
+    override val secondary = Color(0xFF00E5FF)
+    override val onSecondary = Color(0xFF000000)
+    override val secondaryContainer = Color(0xFF004D57)
+    override val onSecondaryContainer = Color(0xFFC8F8FF)
+    override val tertiary = Color(0xFFFF4DFF)
+    override val onTertiary = Color(0xFF000000)
+    override val tertiaryContainer = Color(0xFF5C005C)
+    override val onTertiaryContainer = Color(0xFFFFD6FF)
+    override val background = Color(0xFF000000)
+    override val onBackground = Color(0xFFFFFFFF)
+    override val surface = Color(0xFF0B0B0B)
+    override val onSurface = Color(0xFFFFFFFF)
+    override val surfaceVariant = Color(0xFF202020)
+    override val onSurfaceVariant = Color(0xFFE6E6E6)
+    override val error = Color(0xFFFF453A)
+    override val onError = Color(0xFF000000)
+    override val errorContainer = Color(0xFF5D0A06)
+    override val onErrorContainer = Color(0xFFFFDAD7)
+    override val outline = Color(0xFFFFFFFF)
+    override val outlineVariant = Color(0xFF606060)
+    override val inverseSurface = Color(0xFFFFFFFF)
+    override val inverseOnSurface = Color(0xFF000000)
+    override val inversePrimary = Color(0xFF8A7200)
+    override val surfaceTint = Color(0xFFFFD400)
 }

@@ -44,12 +44,20 @@ import com.voyagerfiles.ui.theme.BlackColors
 import com.voyagerfiles.ui.theme.DarkColors
 import com.voyagerfiles.ui.theme.ForestColors
 import com.voyagerfiles.ui.theme.FrappeColors
+import com.voyagerfiles.ui.theme.GruvboxDarkColors
+import com.voyagerfiles.ui.theme.GruvboxLightColors
+import com.voyagerfiles.ui.theme.HighContrastColors
 import com.voyagerfiles.ui.theme.LatteColors
 import com.voyagerfiles.ui.theme.MacchiatoColors
 import com.voyagerfiles.ui.theme.MochaColors
+import com.voyagerfiles.ui.theme.NordColors
 import com.voyagerfiles.ui.theme.OceanColors
 import com.voyagerfiles.ui.theme.PurpleColors
+import com.voyagerfiles.ui.theme.RosePineColors
+import com.voyagerfiles.ui.theme.SolarizedDarkColors
+import com.voyagerfiles.ui.theme.SolarizedLightColors
 import com.voyagerfiles.ui.theme.SystemColors
+import com.voyagerfiles.ui.theme.TokyoNightColors
 import com.voyagerfiles.ui.theme.WhiteColors
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import androidx.compose.ui.graphics.Color
@@ -231,5 +239,13 @@ private fun getThemePreviewColors(theme: AppTheme): Pair<Color, Color> = when (t
     AppTheme.MACCHIATO -> MacchiatoColors.primary to MacchiatoColors.background
     AppTheme.FRAPPE -> FrappeColors.primary to FrappeColors.background
     AppTheme.LATTE -> LatteColors.primary to LatteColors.background
+    AppTheme.NORD -> NordColors.primary to NordColors.background
+    AppTheme.SOLARIZED_DARK -> SolarizedDarkColors.primary to SolarizedDarkColors.background
+    AppTheme.SOLARIZED_LIGHT -> SolarizedLightColors.primary to SolarizedLightColors.background
+    AppTheme.GRUVBOX_DARK -> GruvboxDarkColors.primary to GruvboxDarkColors.background
+    AppTheme.GRUVBOX_LIGHT -> GruvboxLightColors.primary to GruvboxLightColors.background
+    AppTheme.ROSE_PINE -> RosePineColors.primary to RosePineColors.background
+    AppTheme.TOKYO_NIGHT -> TokyoNightColors.primary to TokyoNightColors.background
+    AppTheme.HIGH_CONTRAST -> HighContrastColors.primary to HighContrastColors.background
     AppTheme.CUSTOM -> Color(0xFF6750A4) to Color(0xFF1C1B1F)
 }

@@ -5,6 +5,21 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val enableAbiSplits = providers.gradleProperty("voyager.enableAbiSplits")
+    .map(String::toBoolean)
+    .getOrElse(true)
+
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.voyagerfiles"
     compileSdk = 35
@@ -21,10 +36,21 @@ android {
 
     splits {
         abi {
-            isEnable = true
+            isEnable = enableAbiSplits
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             isUniversalApk = true
+        }
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(checkNotNull(releaseKeystorePath))
+                storePassword = checkNotNull(releaseKeystorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
         }
     }
 
@@ -32,6 +58,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -131,6 +160,8 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.apache.ftpserver:ftpserver-core:1.2.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
