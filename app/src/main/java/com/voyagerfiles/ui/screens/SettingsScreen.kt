@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.BuildConfig
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.theme.BlackColors
 import com.voyagerfiles.ui.theme.DarkColors
@@ -150,7 +151,7 @@ fun SettingsScreen(
 
             Text("Voyager", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Version 1.0.0",
+                "Version ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

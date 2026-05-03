@@ -1,0 +1,5 @@
+Voyager 1.0.2:
+- Fixed SFTP authentication and file transfer behavior
+- Hardened FTP, SMB, and WebDAV file operations
+- Added additional built-in themes
+- Added protocol regression tests and GitHub release automation

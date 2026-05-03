@@ -1,0 +1,6 @@
+Release 1.0.2:
+- Fixed SFTP authentication, stream handling, and recursive file operations
+- Hardened FTP, SMB, and WebDAV upload, copy, move, and delete behavior
+- Added protocol simulation tests for SFTP, FTP, WebDAV, and opt-in SMB
+- Added Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, and High Contrast themes
+- Added GitHub CI, signed release publishing, and GitHub Pages download support
