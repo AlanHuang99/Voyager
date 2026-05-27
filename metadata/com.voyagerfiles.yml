@@ -10,6 +10,7 @@ AutoName: Voyager
 
 RepoType: git
 Repo: https://github.com/AlanHuang99/Voyager.git
+Binaries: https://github.com/AlanHuang99/Voyager/releases/download/v%v/voyager-v%v-universal.apk
 
 Builds:
   - versionName: 1.1.0
@@ -20,6 +21,8 @@ Builds:
       - yes
     gradleprops:
       - voyager.enableAbiSplits=false
+
+AllowedAPKSigningKeys: db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
