@@ -14,9 +14,9 @@ Binaries:
   https://github.com/AlanHuang99/Voyager/releases/download/v%v/voyager-v%v-universal.apk
 
 Builds:
-  - versionName: 1.1.0
-    versionCode: 5
-    commit: 317df936ba2a17ce38dbabdc090c09143729a603
+  - versionName: 1.1.1
+    versionCode: 6
+    commit: f012d38a7a6db12647b15ec814e61dc54b628bb5
     subdir: app
     gradle:
       - yes
@@ -27,5 +27,5 @@ AllowedAPKSigningKeys: db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.1.0
-CurrentVersionCode: 5
+CurrentVersion: 1.1.1
+CurrentVersionCode: 6
