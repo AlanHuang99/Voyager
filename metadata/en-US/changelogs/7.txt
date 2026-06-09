@@ -1,0 +1,2 @@
+Voyager 1.1.2:
+- Added bitmap launcher icons so package listings on stores and older Android versions render the app icon correctly
