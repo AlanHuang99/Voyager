@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="fastlane/metadata/android/en-US/images/icon.png" width="96" alt="Voyager icon">
+<img src="fastlane/metadata/android/en-US/images/icon.png" width="120" alt="Voyager icon">
 
 # Voyager
 
