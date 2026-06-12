@@ -1,11 +1,15 @@
-Voyager is a beautiful, feature-rich file manager built with Material Design 3 and Jetpack Compose.
+Voyager is an open-source file manager for Android with built-in SFTP, FTP, SMB, and WebDAV access, built with Material Design 3 and Jetpack Compose.
 
 Features:
-• Local file browsing with full file management (copy, move, rename, delete)
-• SFTP/SSH remote file access
-• FTP remote file access
+• Local file browsing with file management (copy, move, rename, delete, create)
+• SFTP remote access, with password, keyboard-interactive, or private key authentication
+• FTP remote access
 • SMB/CIFS network share browsing
-• WebDAV remote file access
+• WebDAV remote access
+• Copy and move files between local storage and a remote server, in both directions
+• Download remote files and folders to the device
+• Multiple browser sessions for local and remote locations, with a session switcher
+• Mounted external storage volumes, such as SD cards and USB/OTG, listed alongside internal storage
 • 20 built-in themes including Catppuccin, Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, and High Contrast
 • Custom theme support
 • AMOLED black theme
