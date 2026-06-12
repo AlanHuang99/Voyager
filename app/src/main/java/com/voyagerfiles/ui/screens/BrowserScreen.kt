@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -56,6 +57,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -116,6 +118,7 @@ fun BrowserScreen(
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isRemote = state.source != FileSource.LOCAL
+    val toolbarModel = remember(isRemote) { BrowserToolbarModel.forState(isRemote) }
 
     fun leaveBrowser() {
         onNavigateBack()
@@ -188,119 +191,132 @@ fun BrowserScreen(
                     ),
                 )
             } else {
-                TopAppBar(
-                    title = {
-                        PathBreadcrumb(
-                            path = state.currentPath,
-                            onNavigate = { viewModel.navigateTo(it) },
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            if (!viewModel.navigateUp()) leaveBrowser()
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showSessionsSheet = true }) {
-                            Icon(Icons.Filled.Folder, "Sessions")
-                        }
-                        // Show disconnect button for remote connections
-                        if (state.source != FileSource.LOCAL) {
-                            TextButton(onClick = {
-                                val closesOnlyActiveSession = sessions.size <= 1
-                                viewModel.disconnectRemote()
-                                if (closesOnlyActiveSession) onNavigateBack()
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconButton(onClick = {
+                                if (!viewModel.navigateUp()) leaveBrowser()
                             }) {
-                                Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                             }
-                        }
-                        IconButton(onClick = { viewModel.refresh() }) {
-                            Icon(Icons.Filled.Refresh, "Refresh")
-                        }
-                        IconButton(onClick = {
-                            viewModel.setViewMode(
-                                if (state.viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
-                            )
-                        }) {
-                            Icon(
-                                if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView
-                                else Icons.AutoMirrored.Filled.ViewList,
-                                "Toggle view",
-                            )
-                        }
-                        Box {
-                            IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.AutoMirrored.Filled.Sort, "Sort")
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(onClick = { showSessionsSheet = true }) {
+                                Icon(Icons.Filled.Folder, "Sessions")
                             }
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                            ) {
-                                SortBy.entries.forEach { sort ->
+                            IconButton(onClick = { viewModel.refresh() }) {
+                                Icon(Icons.Filled.Refresh, "Refresh")
+                            }
+                            IconButton(onClick = {
+                                viewModel.setViewMode(
+                                    if (state.viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
+                                )
+                            }) {
+                                Icon(
+                                    if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView
+                                    else Icons.AutoMirrored.Filled.ViewList,
+                                    "Toggle view",
+                                )
+                            }
+                            Box {
+                                IconButton(onClick = { showSortMenu = true }) {
+                                    Icon(Icons.AutoMirrored.Filled.Sort, "Sort")
+                                }
+                                DropdownMenu(
+                                    expanded = showSortMenu,
+                                    onDismissRequest = { showSortMenu = false },
+                                ) {
+                                    SortBy.entries.forEach { sort ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row {
+                                                    Text(
+                                                        sort.name.lowercase().replaceFirstChar { it.uppercase() },
+                                                        color = if (state.sortBy == sort)
+                                                            MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.onSurface,
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                if (state.sortBy == sort) {
+                                                    viewModel.setSortOrder(
+                                                        if (state.sortOrder == SortOrder.ASCENDING) SortOrder.DESCENDING
+                                                        else SortOrder.ASCENDING
+                                                    )
+                                                } else {
+                                                    viewModel.setSortBy(sort)
+                                                }
+                                                showSortMenu = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                            Box {
+                                IconButton(onClick = { showMoreMenu = true }) {
+                                    Icon(Icons.Filled.MoreVert, "More")
+                                }
+                                DropdownMenu(
+                                    expanded = showMoreMenu,
+                                    onDismissRequest = { showMoreMenu = false },
+                                ) {
+                                    if (BrowserToolbarAction.DISCONNECT in toolbarModel.overflowActions) {
+                                        DropdownMenuItem(
+                                            text = { Text("Disconnect") },
+                                            leadingIcon = { Icon(Icons.Filled.Close, null) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                val closesOnlyActiveSession = sessions.size <= 1
+                                                viewModel.disconnectRemote()
+                                                if (closesOnlyActiveSession) onNavigateBack()
+                                            },
+                                        )
+                                    }
                                     DropdownMenuItem(
-                                        text = {
-                                            Row {
-                                                Text(
-                                                    sort.name.lowercase().replaceFirstChar { it.uppercase() },
-                                                    color = if (state.sortBy == sort)
-                                                        MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.onSurface,
-                                                )
-                                            }
-                                        },
+                                        text = { Text(if (state.showHidden) "Hide hidden files" else "Show hidden files") },
                                         onClick = {
-                                            if (state.sortBy == sort) {
-                                                viewModel.setSortOrder(
-                                                    if (state.sortOrder == SortOrder.ASCENDING) SortOrder.DESCENDING
-                                                    else SortOrder.ASCENDING
-                                                )
-                                            } else {
-                                                viewModel.setSortBy(sort)
+                                            viewModel.setShowHidden(!state.showHidden)
+                                            showMoreMenu = false
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Bookmark this folder") },
+                                        leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                                        onClick = {
+                                            viewModel.toggleBookmark(
+                                                state.currentPath,
+                                                state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
+                                            )
+                                            showMoreMenu = false
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Bookmark toggled")
                                             }
-                                            showSortMenu = false
                                         },
                                     )
                                 }
                             }
                         }
-                        Box {
-                            IconButton(onClick = { showMoreMenu = true }) {
-                                Icon(Icons.Filled.MoreVert, "More")
-                            }
-                            DropdownMenu(
-                                expanded = showMoreMenu,
-                                onDismissRequest = { showMoreMenu = false },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(if (state.showHidden) "Hide hidden files" else "Show hidden files") },
-                                    onClick = {
-                                        viewModel.setShowHidden(!state.showHidden)
-                                        showMoreMenu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Bookmark this folder") },
-                                    leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
-                                    onClick = {
-                                        viewModel.toggleBookmark(
-                                            state.currentPath,
-                                            state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
-                                        )
-                                        showMoreMenu = false
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Bookmark toggled")
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
+                        PathBreadcrumb(
+                            path = state.currentPath,
+                            onNavigate = { viewModel.navigateTo(it) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                        )
+                    }
+                }
             }
         },
         bottomBar = {
@@ -580,6 +596,36 @@ fun BrowserScreen(
             },
         )
     }
+}
+
+data class BrowserToolbarModel(
+    val primaryActions: List<BrowserToolbarAction>,
+    val overflowActions: List<BrowserToolbarAction>,
+) {
+    companion object {
+        fun forState(isRemote: Boolean): BrowserToolbarModel =
+            BrowserToolbarModel(
+                primaryActions = listOf(
+                    BrowserToolbarAction.SESSIONS,
+                    BrowserToolbarAction.REFRESH,
+                    BrowserToolbarAction.TOGGLE_VIEW,
+                    BrowserToolbarAction.SORT,
+                ),
+                overflowActions = if (isRemote) {
+                    listOf(BrowserToolbarAction.DISCONNECT)
+                } else {
+                    emptyList()
+                },
+            )
+    }
+}
+
+enum class BrowserToolbarAction {
+    SESSIONS,
+    REFRESH,
+    TOGGLE_VIEW,
+    SORT,
+    DISCONNECT,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

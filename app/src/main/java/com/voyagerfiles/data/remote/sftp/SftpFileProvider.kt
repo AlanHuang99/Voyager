@@ -30,7 +30,11 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
 
         closeConnection()
 
-        val nextSession = JSch().getSession(
+        val jsch = JSch()
+        connection.privateKeyPath?.takeIf { it.isNotBlank() }?.let { privateKeyPath ->
+            jsch.addIdentity(privateKeyPath)
+        }
+        val nextSession = jsch.getSession(
             connection.username,
             connection.host,
             connection.port,
@@ -44,7 +48,7 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
             nextSession.setConfig(
                 Properties().apply {
                     put("StrictHostKeyChecking", "no")
-                    put("PreferredAuthentications", "password,keyboard-interactive")
+                    put("PreferredAuthentications", "publickey,password,keyboard-interactive")
                 }
             )
             nextSession.setTimeout(CONNECTION_TIMEOUT_MILLIS)

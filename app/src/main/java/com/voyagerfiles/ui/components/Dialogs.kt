@@ -126,6 +126,7 @@ fun ConnectionDialog(
     var port by remember { mutableStateOf(existingConnection?.port?.toString() ?: protocol.defaultPort.toString()) }
     var username by remember { mutableStateOf(existingConnection?.username ?: "") }
     var password by remember { mutableStateOf(existingConnection?.password ?: "") }
+    var privateKeyPath by remember { mutableStateOf(existingConnection?.privateKeyPath ?: "") }
     var remotePath by remember { mutableStateOf(existingConnection?.remotePath ?: "/") }
     var shareName by remember { mutableStateOf(existingConnection?.shareName ?: "") }
     var domain by remember { mutableStateOf(existingConnection?.domain ?: "") }
@@ -218,6 +219,17 @@ fun ConnectionDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
+                if (protocol == ConnectionProtocol.SFTP) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = privateKeyPath,
+                        onValueChange = { privateKeyPath = it },
+                        label = { Text("Private key path (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
                 if (protocol == ConnectionProtocol.SMB) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -260,6 +272,7 @@ fun ConnectionDialog(
                             port = port.toIntOrNull() ?: protocol.defaultPort,
                             username = username,
                             password = password,
+                            privateKeyPath = privateKeyPath.ifBlank { null },
                             remotePath = remotePath,
                             shareName = shareName.ifBlank { null },
                             domain = domain.ifBlank { null },

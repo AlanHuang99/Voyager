@@ -42,11 +42,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.util.FileUtils
+import com.voyagerfiles.util.StorageDirectory
+import com.voyagerfiles.util.StorageInfo
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
@@ -62,7 +65,9 @@ fun HomeScreen(
     val bookmarks by viewModel.bookmarks.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val context = LocalContext.current
     val storageInfo = remember { FileUtils.getStorageInfo() }
+    val storageDirectories = remember(context) { FileUtils.getStorageDirectories(context) }
     val directories = remember { FileUtils.getCommonDirectories() }
 
     Scaffold(
@@ -87,48 +92,15 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Storage card
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToBrowser("/storage/emulated/0") },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.SdStorage,
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    "Internal Storage",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                                Text(
-                                    "${FileItem.formatFileSize(storageInfo.used)} / ${FileItem.formatFileSize(storageInfo.total)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = { storageInfo.usedPercentage },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
-                        )
-                    }
-                }
+            }
+            items(storageDirectories, key = { it.path }) { directory ->
+                StorageDirectoryCard(
+                    directory = directory,
+                    storageInfo = if (directory.name == "Internal Storage") storageInfo else null,
+                    onClick = { onNavigateToBrowser(directory.path) },
+                )
             }
 
             if (sessions.isNotEmpty()) {
@@ -293,6 +265,68 @@ fun HomeScreen(
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun StorageDirectoryCard(
+    directory: StorageDirectory,
+    storageInfo: StorageInfo?,
+    onClick: () -> Unit,
+) {
+    val isInternal = storageInfo != null
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isInternal)
+                MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (isInternal) Icons.Filled.SdStorage else Icons.Filled.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = if (isInternal)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        directory.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isInternal)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        storageInfo?.let {
+                            "${FileItem.formatFileSize(it.used)} / ${FileItem.formatFileSize(it.total)}"
+                        } ?: directory.path,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isInternal)
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (storageInfo != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { storageInfo.usedPercentage },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
+                )
+            }
         }
     }
 }

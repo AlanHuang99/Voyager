@@ -23,6 +23,43 @@ object FileUtils {
         }
     }
 
+    fun getStorageDirectories(context: Context? = null): List<StorageDirectory> {
+        val primaryPath = Environment.getExternalStorageDirectory().absolutePath
+        val removablePaths = mutableListOf<String>()
+
+        context?.getExternalFilesDirs(null)?.forEach { appDirectory ->
+            appDirectory?.toStorageRootPath()?.let { removablePaths += it }
+        }
+        removablePaths += discoverStorageRoots(primaryPath)
+
+        return buildStorageDirectories(primaryPath, removablePaths)
+    }
+
+    fun buildStorageDirectories(
+        primaryExternalPath: String,
+        removableVolumePaths: List<String>,
+    ): List<StorageDirectory> {
+        val primaryPath = primaryExternalPath.normalizedPath()
+        val externalPaths = removableVolumePaths
+            .map { it.normalizedPath() }
+            .filter { it.isNotBlank() }
+            .filterNot { it == primaryPath }
+            .filterNot { it.substringAfterLast("/") in ignoredStorageRootNames }
+            .distinct()
+
+        return buildList {
+            add(StorageDirectory("Internal Storage", primaryPath))
+            externalPaths.forEachIndexed { index, path ->
+                add(
+                    StorageDirectory(
+                        name = if (index == 0) "External Storage" else "External Storage ${index + 1}",
+                        path = path,
+                    )
+                )
+            }
+        }
+    }
+
     fun getCommonDirectories(): List<StorageDirectory> = listOf(
         StorageDirectory("Internal Storage", Environment.getExternalStorageDirectory().absolutePath),
         StorageDirectory("Downloads", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath),
@@ -61,6 +98,26 @@ object FileUtils {
         }
         context.startActivity(Intent.createChooser(intent, "Share"))
     }
+
+    private fun discoverStorageRoots(primaryPath: String): List<String> =
+        runCatching {
+            File("/storage").listFiles()
+                ?.filter { it.isDirectory && it.canRead() }
+                ?.map { it.absolutePath }
+                ?.filterNot { it.normalizedPath() == primaryPath.normalizedPath() }
+                ?: emptyList()
+        }.getOrElse { emptyList() }
+
+    private fun File.toStorageRootPath(): String? {
+        val marker = "${File.separator}Android${File.separator}data"
+        val markerIndex = absolutePath.indexOf(marker)
+        return if (markerIndex > 0) absolutePath.substring(0, markerIndex) else null
+    }
+
+    private fun String.normalizedPath(): String =
+        trim().trimEnd('/').ifBlank { "/" }
+
+    private val ignoredStorageRootNames = setOf("emulated", "self")
 }
 
 data class StorageInfo(

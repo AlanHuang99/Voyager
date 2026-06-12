@@ -53,6 +53,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _clipboardOperation = MutableStateFlow(ClipboardOperation.NONE)
     val clipboardOperation: StateFlow<ClipboardOperation> = _clipboardOperation.asStateFlow()
+    private var clipboardProvider: FileProvider? = null
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
@@ -287,6 +288,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun copyToClipboard(paths: List<String>) {
         _clipboardPaths.value = paths
         _clipboardOperation.value = ClipboardOperation.COPY
+        clipboardProvider = fileProvider
         clearSelection()
         showSnackbar("${paths.size} item${if (paths.size > 1) "s" else ""} copied")
     }
@@ -294,6 +296,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun cutToClipboard(paths: List<String>) {
         _clipboardPaths.value = paths
         _clipboardOperation.value = ClipboardOperation.CUT
+        clipboardProvider = fileProvider
         clearSelection()
         showSnackbar("${paths.size} item${if (paths.size > 1) "s" else ""} cut")
     }
@@ -301,16 +304,31 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun clearClipboard() {
         _clipboardPaths.value = emptyList()
         _clipboardOperation.value = ClipboardOperation.NONE
+        clipboardProvider = null
     }
 
     fun paste() {
         viewModelScope.launch {
             val destPath = _browseState.value.currentPath
+            val sourceProvider = clipboardProvider ?: fileProvider
+            val destinationProvider = fileProvider
             var failed = 0
             for (sourcePath in _clipboardPaths.value) {
                 val result = when (_clipboardOperation.value) {
-                    ClipboardOperation.COPY -> fileProvider.copy(sourcePath, destPath)
-                    ClipboardOperation.CUT -> fileProvider.move(sourcePath, destPath)
+                    ClipboardOperation.COPY -> {
+                        if (sourceProvider === destinationProvider) {
+                            destinationProvider.copy(sourcePath, destPath)
+                        } else {
+                            FileOperationCoordinator.copyPath(sourceProvider, destinationProvider, sourcePath, destPath)
+                        }
+                    }
+                    ClipboardOperation.CUT -> {
+                        if (sourceProvider === destinationProvider) {
+                            destinationProvider.move(sourcePath, destPath)
+                        } else {
+                            FileOperationCoordinator.movePath(sourceProvider, destinationProvider, sourcePath, destPath)
+                        }
+                    }
                     ClipboardOperation.NONE -> Result.success(Unit)
                 }
                 result.onFailure { failed++ }

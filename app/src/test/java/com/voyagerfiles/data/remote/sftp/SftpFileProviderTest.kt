@@ -12,6 +12,8 @@ import org.apache.sshd.server.auth.keyboard.KeyboardInteractiveAuthenticator
 import org.apache.sshd.server.auth.keyboard.UserAuthKeyboardInteractiveFactory
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.auth.password.UserAuthPasswordFactory
+import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator
+import org.apache.sshd.server.auth.pubkey.UserAuthPublicKeyFactory
 import org.apache.sshd.sftp.server.SftpSubsystemFactory
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,6 +25,11 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.KeyPairGenerator
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.interfaces.RSAPrivateCrtKey
+import java.math.BigInteger
+import java.util.Base64
 
 class SftpFileProviderTest {
 
@@ -58,6 +65,24 @@ class SftpFileProviderTest {
         val files = provider.listFiles("/").getOrThrow()
 
         assertEquals(listOf("keyboard.txt"), files.map { it.name })
+    }
+
+    @Test
+    fun listFilesWithPrivateKeyAuthentication() = runBlocking {
+        val clientKeyPair = generateHostKeyPair()
+        val privateKeyFile = temp.newFile("id_rsa").toPath()
+        Files.write(privateKeyFile, privateKeyPem(clientKeyPair.private).toByteArray())
+        val server = startServer(AuthMode.PUBLIC_KEY, clientKeyPair.public)
+        Files.write(server.root.resolve("key.txt"), "key".toByteArray())
+        val provider = createProvider(
+            port = server.port,
+            password = "",
+            privateKeyPath = privateKeyFile.toString(),
+        )
+
+        val files = provider.listFiles("/").getOrThrow()
+
+        assertEquals(listOf("key.txt"), files.map { it.name })
     }
 
     @Test
@@ -155,7 +180,11 @@ class SftpFileProviderTest {
         assertTrue(Files.exists(server.root.resolve("new.txt")))
     }
 
-    private fun createProvider(port: Int): SftpFileProvider {
+    private fun createProvider(
+        port: Int,
+        password: String = PASSWORD,
+        privateKeyPath: String? = null,
+    ): SftpFileProvider {
         val provider = SftpFileProvider(
             RemoteConnection(
                 name = "Local test SFTP",
@@ -163,14 +192,15 @@ class SftpFileProviderTest {
                 host = "127.0.0.1",
                 port = port,
                 username = USERNAME,
-                password = PASSWORD,
+                password = password,
+                privateKeyPath = privateKeyPath,
             )
         )
         providers += provider
         return provider
     }
 
-    private fun startServer(authMode: AuthMode): RunningServer {
+    private fun startServer(authMode: AuthMode, acceptedPublicKey: PublicKey? = null): RunningServer {
         val root = temp.newFolder("sftp-root-${servers.size}").toPath()
         val server = SshServer.setUpDefaultServer().apply {
             host = "127.0.0.1"
@@ -209,6 +239,14 @@ class SftpFileProviderTest {
                         ): Boolean = username == USERNAME && responses.singleOrNull() == PASSWORD
                     }
                 }
+
+                AuthMode.PUBLIC_KEY -> {
+                    val expectedKey = checkNotNull(acceptedPublicKey)
+                    userAuthFactories = listOf(UserAuthPublicKeyFactory.INSTANCE)
+                    publickeyAuthenticator = PublickeyAuthenticator { username, key, _ ->
+                        username == USERNAME && key.encoded.contentEquals(expectedKey.encoded)
+                    }
+                }
             }
         }
 
@@ -226,6 +264,40 @@ class SftpFileProviderTest {
     private fun generateHostKeyPair() =
         KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
 
+    private fun privateKeyPem(privateKey: PrivateKey): String {
+        val rsa = privateKey as RSAPrivateCrtKey
+        val der = derSequence(
+            derInteger(BigInteger.ZERO),
+            derInteger(rsa.modulus),
+            derInteger(rsa.publicExponent),
+            derInteger(rsa.privateExponent),
+            derInteger(rsa.primeP),
+            derInteger(rsa.primeQ),
+            derInteger(rsa.primeExponentP),
+            derInteger(rsa.primeExponentQ),
+            derInteger(rsa.crtCoefficient),
+        )
+        val encoded = Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(der)
+        return "-----BEGIN RSA PRIVATE KEY-----\n$encoded\n-----END RSA PRIVATE KEY-----\n"
+    }
+
+    private fun derSequence(vararg fields: ByteArray): ByteArray {
+        val body = fields.fold(ByteArray(0)) { acc, bytes -> acc + bytes }
+        return byteArrayOf(0x30) + derLength(body.size) + body
+    }
+
+    private fun derInteger(value: BigInteger): ByteArray {
+        val body = value.toByteArray()
+        return byteArrayOf(0x02) + derLength(body.size) + body
+    }
+
+    private fun derLength(length: Int): ByteArray =
+        when {
+            length < 0x80 -> byteArrayOf(length.toByte())
+            length <= 0xff -> byteArrayOf(0x81.toByte(), length.toByte())
+            else -> byteArrayOf(0x82.toByte(), (length shr 8).toByte(), length.toByte())
+        }
+
     private data class RunningServer(
         val root: Path,
         val port: Int,
@@ -234,6 +306,7 @@ class SftpFileProviderTest {
     private enum class AuthMode {
         PASSWORD,
         KEYBOARD_INTERACTIVE,
+        PUBLIC_KEY,
     }
 
     private companion object {
