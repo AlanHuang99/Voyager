@@ -1,0 +1,6 @@
+Voyager 1.2.0:
+- Added local image thumbnails
+- Added Storage Access Framework document-tree browsing
+- Added SFTP key generation in the connection dialog
+- Fixed APK opening
+- Fixed WebDAV folder detection for servers that use trailing-slash hrefs

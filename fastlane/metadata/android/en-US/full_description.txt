@@ -2,7 +2,9 @@ Voyager is an open-source file manager for Android with built-in SFTP, FTP, SMB,
 
 Features:
 • Local file browsing with file management (copy, move, rename, delete, create)
-• SFTP remote access, with password, keyboard-interactive, or private key authentication
+• Image thumbnails for local image files
+• Storage Access Framework document-tree browsing
+• SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication
 • FTP remote access
 • SMB/CIFS network share browsing
 • WebDAV remote access

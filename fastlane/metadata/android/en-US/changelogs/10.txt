@@ -1,0 +1,7 @@
+Release 1.2.0:
+- Added image thumbnails for local image files in list and grid views
+- Added Storage Access Framework document-tree browsing
+- Added SFTP key generation from the connection dialog
+- Fixed APK opening by using Android package archive MIME type
+- Fixed WebDAV folder detection for servers that mark folders with trailing-slash hrefs
+- Kept Quick Access cards even-height on narrow screens

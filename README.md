@@ -24,9 +24,10 @@ An open-source file manager for Android with built-in SFTP, FTP, SMB, and WebDAV
 
 ## Features
 
-- Browse local storage with list and grid views, sorting, search, and a hidden-file toggle.
+- Browse local storage with list and grid views, image thumbnails, sorting, search, and a hidden-file toggle.
+- Browse user-selected folders through Android's Storage Access Framework.
 - Connect to remote servers over SFTP, FTP, SMB, and WebDAV.
-- Authenticate to SFTP with a password, keyboard-interactive, or a private key file.
+- Authenticate to SFTP with a password, keyboard-interactive, a private key file, or an in-app generated key pair.
 - Copy, move, rename, delete, and create files and folders, including between local storage and a remote server.
 - Download remote files and folders to the device.
 - Open several browser sessions at once, for local and remote locations, with a session switcher.
