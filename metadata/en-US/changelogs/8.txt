@@ -1,0 +1,5 @@
+Voyager 1.1.3:
+- Fixed cross-provider copy and paste between local storage and remote providers
+- Added SFTP private key authentication
+- Listed mounted external storage volumes on Home
+- Reworked the browser header in portrait
