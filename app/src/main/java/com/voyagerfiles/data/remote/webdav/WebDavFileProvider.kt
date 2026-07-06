@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.thegrizzlylabs.sardineandroid.DavResource
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,7 +47,7 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
                     FileItem(
                         name = name,
                         path = filePath,
-                        isDirectory = resource.isDirectory,
+                        isDirectory = resource.isDirectoryResource(),
                         size = resource.contentLength,
                         lastModified = resource.modified ?: Date(),
                         isHidden = name.startsWith("."),
@@ -159,7 +160,7 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
                 FileItem(
                     name = resource.name.removeSuffix("/"),
                     path = path,
-                    isDirectory = resource.isDirectory,
+                    isDirectory = resource.isDirectoryResource(),
                     size = resource.contentLength,
                     lastModified = resource.modified ?: Date(),
                     source = FileSource.WEBDAV,
@@ -176,4 +177,7 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
     override suspend fun disconnect() {
         sardine = null
     }
+
+    private fun DavResource.isDirectoryResource(): Boolean =
+        isDirectory || href?.path?.endsWith("/") == true
 }

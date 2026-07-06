@@ -20,7 +20,7 @@ data class FileItem(
 
     val mimeType: String
         get() = if (isDirectory) "inode/directory"
-        else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
+        else mimeTypeFromExtension(extension)
 
     val isImage: Boolean
         get() = mimeType.startsWith("image/")
@@ -40,6 +40,9 @@ data class FileItem(
     val isApk: Boolean
         get() = extension.equals("apk", ignoreCase = true)
 
+    val usesLocalImageThumbnail: Boolean
+        get() = source == FileSource.LOCAL && isImage
+
     val formattedSize: String
         get() = formatFileSize(size)
 
@@ -55,6 +58,26 @@ data class FileItem(
             "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "zst",
         )
 
+        private val mimeTypeOverrides = mapOf(
+            "apk" to "application/vnd.android.package-archive",
+            "avif" to "image/avif",
+            "heic" to "image/heic",
+            "heif" to "image/heif",
+            "jpg" to "image/jpeg",
+            "jpeg" to "image/jpeg",
+            "png" to "image/png",
+            "webp" to "image/webp",
+        )
+
+        private fun mimeTypeFromExtension(extension: String): String {
+            val normalizedExtension = extension.lowercase()
+            return mimeTypeOverrides[normalizedExtension]
+                ?: runCatching {
+                    MimeTypeMap.getSingleton().getMimeTypeFromExtension(normalizedExtension)
+                }.getOrNull()
+                ?: "application/octet-stream"
+        }
+
         fun formatFileSize(size: Long): String {
             if (size <= 0) return "0 B"
             val units = arrayOf("B", "KB", "MB", "GB", "TB")
@@ -67,11 +90,18 @@ data class FileItem(
 
 enum class FileSource {
     LOCAL,
+    SAF,
     SFTP,
     FTP,
     SMB,
     WEBDAV,
 }
+
+val FileSource.isNetwork: Boolean
+    get() = this == FileSource.SFTP ||
+        this == FileSource.FTP ||
+        this == FileSource.SMB ||
+        this == FileSource.WEBDAV
 
 enum class SortBy {
     NAME,

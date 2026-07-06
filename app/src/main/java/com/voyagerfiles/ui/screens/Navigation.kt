@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
@@ -41,6 +42,10 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onOpenSafTree = { uri: Uri ->
+                    viewModel.openSafRoot(uri)
+                    navController.navigate(Screen.Browser.createRoute(uri.toString()))
                 },
             )
         }

@@ -7,6 +7,7 @@ import android.os.Environment
 import android.os.StatFs
 import androidx.core.content.FileProvider
 import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.data.model.FileSource
 import java.io.File
 
 object FileUtils {
@@ -71,12 +72,16 @@ object FileUtils {
     )
 
     fun openFile(context: Context, file: FileItem) {
-        val javaFile = File(file.path)
-        val uri: Uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            javaFile,
-        )
+        val uri: Uri = if (file.source == FileSource.SAF) {
+            Uri.parse(file.path)
+        } else {
+            val javaFile = File(file.path)
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                javaFile,
+            )
+        }
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, file.mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

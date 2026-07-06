@@ -5,6 +5,7 @@ internal object BrowserNavigationBounds {
     fun normalizePath(path: String): String {
         val trimmed = path.trim()
         if (trimmed.isEmpty()) return "/"
+        if (trimmed.contains("://")) return trimmed.removeSuffix("/")
 
         val withLeadingSlash = if (trimmed.startsWith("/")) trimmed else "/$trimmed"
         val collapsed = withLeadingSlash.replace(Regex("/{2,}"), "/")

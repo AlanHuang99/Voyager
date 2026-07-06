@@ -50,6 +50,18 @@ class WebDavFileProviderTest {
     }
 
     @Test
+    fun treatsTrailingSlashHrefAsDirectoryWhenResourceTypeIsMissing() = runBlocking {
+        val server = startServer(omitCollectionResourceType = true)
+        Files.createDirectory(server.root.resolve("folder"))
+        val provider = createProvider(server.port)
+
+        val files = provider.listFiles("/").getOrThrow()
+
+        assertEquals(listOf("folder"), files.map { it.name })
+        assertTrue(files.single().isDirectory)
+    }
+
+    @Test
     fun outputStreamConnectsAndUploadsFile() = runBlocking {
         val server = startServer()
         val provider = createProvider(server.port)
@@ -119,14 +131,22 @@ class WebDavFileProviderTest {
             )
         )
 
-    private fun startServer(): LocalWebDavServer {
-        val server = LocalWebDavServer(temp.newFolder("webdav-root-${servers.size}").toPath())
+    private fun startServer(
+        omitCollectionResourceType: Boolean = false,
+    ): LocalWebDavServer {
+        val server = LocalWebDavServer(
+            root = temp.newFolder("webdav-root-${servers.size}").toPath(),
+            omitCollectionResourceType = omitCollectionResourceType,
+        )
         server.start()
         servers += server
         return server
     }
 
-    private class LocalWebDavServer(val root: Path) {
+    private class LocalWebDavServer(
+        val root: Path,
+        private val omitCollectionResourceType: Boolean,
+    ) {
         private val server = MockWebServer()
         val port: Int get() = server.port
 
@@ -247,7 +267,7 @@ class WebDavFileProviderTest {
                 Instant.ofEpochMilli(Files.getLastModifiedTime(this).toMillis()).atZone(ZoneOffset.UTC)
             )
             val length = if (directory) 0L else Files.size(this)
-            val resourceType = if (directory) "<d:collection />" else ""
+            val resourceType = if (directory && !omitCollectionResourceType) "<d:collection />" else ""
 
             return """
                 <d:response>

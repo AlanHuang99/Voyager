@@ -4,12 +4,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,12 +22,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.remote.sftp.SshKeyGenerator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @Composable
 fun CreateItemDialog(
@@ -120,6 +132,8 @@ fun ConnectionDialog(
     onDismiss: () -> Unit,
     onSave: (RemoteConnection) -> Unit,
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var name by remember { mutableStateOf(existingConnection?.name ?: "") }
     var protocol by remember { mutableStateOf(existingConnection?.protocol ?: ConnectionProtocol.SFTP) }
     var host by remember { mutableStateOf(existingConnection?.host ?: "") }
@@ -127,6 +141,8 @@ fun ConnectionDialog(
     var username by remember { mutableStateOf(existingConnection?.username ?: "") }
     var password by remember { mutableStateOf(existingConnection?.password ?: "") }
     var privateKeyPath by remember { mutableStateOf(existingConnection?.privateKeyPath ?: "") }
+    var keyGenerationMessage by remember { mutableStateOf<String?>(null) }
+    var isGeneratingKey by remember { mutableStateOf(false) }
     var remotePath by remember { mutableStateOf(existingConnection?.remotePath ?: "/") }
     var shareName by remember { mutableStateOf(existingConnection?.shareName ?: "") }
     var domain by remember { mutableStateOf(existingConnection?.domain ?: "") }
@@ -228,6 +244,47 @@ fun ConnectionDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                isGeneratingKey = true
+                                keyGenerationMessage = null
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        SshKeyGenerator.generateToDirectory(
+                                            directory = File(context.filesDir, "ssh"),
+                                            baseName = SshKeyGenerator.safeKeyBaseName(
+                                                host.ifBlank { name }.ifBlank { username },
+                                            ),
+                                            comment = listOf(username, host)
+                                                .filter { it.isNotBlank() }
+                                                .joinToString("@")
+                                                .ifBlank { "voyager" },
+                                        )
+                                    }
+                                }.fold(
+                                    onSuccess = { generated ->
+                                        privateKeyPath = generated.privateKeyFile.absolutePath
+                                        keyGenerationMessage = "Public key saved to ${generated.publicKeyFile.absolutePath}"
+                                    },
+                                    onFailure = { error ->
+                                        keyGenerationMessage = "Key generation failed: ${error.message ?: "unknown error"}"
+                                    },
+                                )
+                                isGeneratingKey = false
+                            }
+                        },
+                        enabled = !isGeneratingKey,
+                    ) {
+                        Icon(Icons.Filled.VpnKey, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isGeneratingKey) "Generating..." else "Generate key")
+                    }
+                    keyGenerationMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(message)
+                    }
                 }
 
                 if (protocol == ConnectionProtocol.SMB) {

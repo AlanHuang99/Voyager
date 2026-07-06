@@ -1,6 +1,7 @@
 package com.voyagerfiles.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,8 @@ import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
+import com.voyagerfiles.data.model.isNetwork
+import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
@@ -97,7 +100,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
             val rootPath = browserSessionRootPath
-            if (rootPath != null && !BrowserNavigationBounds.isPathAtOrInsideRoot(normalizedPath, rootPath)) {
+            if (
+                rootPath != null &&
+                _browseState.value.source != FileSource.SAF &&
+                !BrowserNavigationBounds.isPathAtOrInsideRoot(normalizedPath, rootPath)
+            ) {
                 showSnackbar("This location is outside the current session")
                 return@launch
             }
@@ -124,6 +131,32 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 _sessions.update { sessions ->
                     sessions.map { session ->
                         if (session.id == sessionId) session.copy(currentPath = normalizedPath) else session
+                    }
+                }
+            }
+            activateSessionInternal(sessionId)
+        }
+    }
+
+    fun openSafRoot(treeUri: Uri) {
+        viewModelScope.launch {
+            val rootPath = SafFileProvider.rootDocumentUri(treeUri).toString()
+            val sessionId = safSessionId(rootPath)
+            if (_sessions.value.none { it.id == sessionId }) {
+                sessionProviders[sessionId] = FileProviderFactory.createSaf(getApplication(), treeUri)
+                _sessions.update { sessions ->
+                    sessions + BrowserSession(
+                        id = sessionId,
+                        title = SafFileProvider.titleForTreeUri(treeUri),
+                        source = FileSource.SAF,
+                        rootPath = rootPath,
+                        currentPath = rootPath,
+                    )
+                }
+            } else {
+                _sessions.update { sessions ->
+                    sessions.map { session ->
+                        if (session.id == sessionId) session.copy(currentPath = rootPath) else session
                     }
                 }
             }
@@ -357,7 +390,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val state = _browseState.value
             if (paths.isEmpty()) return@launch
-            if (state.source == FileSource.LOCAL) {
+            if (!state.source.isNetwork) {
                 showSnackbar("This file is already on this device")
                 return@launch
             }
@@ -586,6 +619,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun remoteSessionId(connectionId: Long): String =
         "remote:$connectionId"
+
+    private fun safSessionId(rootPath: String): String =
+        "saf:$rootPath"
 
     private fun titleForLocalPath(path: String): String =
         BrowserNavigationBounds.normalizePath(path).substringAfterLast("/").ifEmpty { "Local Files" }

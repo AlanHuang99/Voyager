@@ -13,7 +13,7 @@ data class BrowserSession(
 ) {
     val description: String
         get() {
-            if (source == FileSource.LOCAL) return currentPath
+            if (source == FileSource.LOCAL || source == FileSource.SAF) return currentPath
             val hostLabel = host?.takeIf { it.isNotBlank() }
             return listOfNotNull(source.name, hostLabel, currentPath).joinToString(" - ")
         }

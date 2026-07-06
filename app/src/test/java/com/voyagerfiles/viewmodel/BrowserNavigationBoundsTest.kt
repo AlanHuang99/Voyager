@@ -15,6 +15,14 @@ class BrowserNavigationBoundsTest {
     }
 
     @Test
+    fun normalizePathKeepsContentUrisStable() {
+        val uri = "content://com.android.externalstorage.documents/tree/primary%3ADocuments"
+
+        assertEquals(uri, BrowserNavigationBounds.normalizePath(uri))
+        assertTrue(BrowserNavigationBounds.isAtSessionRoot(uri, uri))
+    }
+
+    @Test
     fun parentNavigationStopsAtSessionRoot() {
         val root = "/storage/emulated/0/Download"
 

@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
@@ -117,8 +118,8 @@ fun BrowserScreen(
     var showSessionsSheet by remember { mutableStateOf(false) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
-    val isRemote = state.source != FileSource.LOCAL
-    val toolbarModel = remember(isRemote) { BrowserToolbarModel.forState(isRemote) }
+    val isNetwork = state.source.isNetwork
+    val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
 
     fun leaveBrowser() {
         onNavigateBack()
@@ -164,7 +165,7 @@ fun BrowserScreen(
                         IconButton(onClick = { viewModel.selectAll() }) {
                             Icon(Icons.Filled.SelectAll, "Select all")
                         }
-                        if (isRemote) {
+                        if (isNetwork) {
                             IconButton(onClick = { viewModel.downloadSelected() }) {
                                 Icon(Icons.Filled.Download, "Download")
                             }
@@ -353,7 +354,7 @@ fun BrowserScreen(
         floatingActionButton = {
             if (!isSelectionMode) {
                 Box {
-                    if (!isRemote) {
+                    if (!isNetwork) {
                         FloatingActionButton(
                             onClick = { showCreateMenu = true },
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -472,9 +473,9 @@ fun BrowserScreen(
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
                                         viewModel.navigateTo(file.path)
-                                    } else if (isRemote) {
+                                    } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
-                                    } else if (state.source == FileSource.LOCAL) {
+                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                         try {
                                             FileUtils.openFile(context, file)
                                         } catch (e: Exception) {
@@ -512,9 +513,9 @@ fun BrowserScreen(
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
                                         viewModel.navigateTo(file.path)
-                                    } else if (isRemote) {
+                                    } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
-                                    } else if (state.source == FileSource.LOCAL) {
+                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                         try {
                                             FileUtils.openFile(context, file)
                                         } catch (e: Exception) {
@@ -684,7 +685,11 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (session.source == FileSource.LOCAL) Icons.Filled.Folder else Icons.Filled.Cloud,
+            imageVector = if (session.source == FileSource.LOCAL || session.source == FileSource.SAF) {
+                Icons.Filled.Folder
+            } else {
+                Icons.Filled.Cloud
+            },
             contentDescription = null,
             modifier = Modifier.size(28.dp),
             tint = if (isActive) MaterialTheme.colorScheme.primary

@@ -1,5 +1,9 @@
 package com.voyagerfiles.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -61,11 +66,21 @@ fun HomeScreen(
     onNavigateToSession: (String, String) -> Unit,
     onNavigateToConnections: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onOpenSafTree: (Uri) -> Unit,
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val context = LocalContext.current
+    val safTreeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
+        onOpenSafTree(uri)
+    }
     val storageInfo = remember { FileUtils.getStorageInfo() }
     val storageDirectories = remember(context) { FileUtils.getStorageDirectories(context) }
     val directories = remember { FileUtils.getCommonDirectories() }
@@ -101,6 +116,10 @@ fun HomeScreen(
                     storageInfo = if (directory.name == "Internal Storage") storageInfo else null,
                     onClick = { onNavigateToBrowser(directory.path) },
                 )
+            }
+
+            item {
+                SafAccessCard(onClick = { safTreeLauncher.launch(null) })
             }
 
             if (sessions.isNotEmpty()) {
@@ -270,6 +289,45 @@ fun HomeScreen(
 }
 
 @Composable
+private fun SafAccessCard(
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.FolderOpen,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    "Document Tree",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    "Storage Access Framework",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun StorageDirectoryCard(
     directory: StorageDirectory,
     storageInfo: StorageInfo?,
@@ -350,7 +408,11 @@ private fun ActiveSessionRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (session.source == FileSource.LOCAL) Icons.Filled.Folder else Icons.Filled.Cloud,
+                if (session.source == FileSource.LOCAL || session.source == FileSource.SAF) {
+                    Icons.Filled.Folder
+                } else {
+                    Icons.Filled.Cloud
+                },
                 contentDescription = null,
                 tint = if (isActive) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -414,6 +476,8 @@ private fun QuickAccessCard(
                 label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
