@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.remote.sftp.SshKeyGenerator
+import com.voyagerfiles.util.FileNameValidationResult
+import com.voyagerfiles.util.FileNameValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +45,8 @@ fun CreateItemDialog(
     onCreate: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    val validation = FileNameValidator.validate(name)
+    val validationError = (validation as? FileNameValidationResult.Invalid)?.message
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -52,14 +56,18 @@ fun CreateItemDialog(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
+                isError = validationError != null,
+                supportingText = validationError?.let { message -> { Text(message) } },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name) },
-                enabled = name.isNotBlank(),
+                onClick = {
+                    (validation as? FileNameValidationResult.Valid)?.let { onCreate(it.name) }
+                },
+                enabled = validation is FileNameValidationResult.Valid,
             ) { Text("Create") }
         },
         dismissButton = {
@@ -75,6 +83,9 @@ fun RenameDialog(
     onRename: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf(currentName) }
+    val validation = FileNameValidator.validate(name)
+    val validatedName = (validation as? FileNameValidationResult.Valid)?.name
+    val validationError = (validation as? FileNameValidationResult.Invalid)?.message
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -84,14 +95,16 @@ fun RenameDialog(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("New name") },
+                isError = validationError != null,
+                supportingText = validationError?.let { message -> { Text(message) } },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = {
             TextButton(
-                onClick = { onRename(name) },
-                enabled = name.isNotBlank() && name != currentName,
+                onClick = { validatedName?.let(onRename) },
+                enabled = validatedName != null && validatedName != currentName,
             ) { Text("Rename") }
         },
         dismissButton = {

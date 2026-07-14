@@ -22,6 +22,8 @@ import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
 import com.voyagerfiles.ui.theme.AppTheme
+import com.voyagerfiles.util.FileNameValidationResult
+import com.voyagerfiles.util.FileNameValidator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -266,8 +268,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun createDirectory(name: String) {
+        val validatedName = validFileNameOrNotify(name) ?: return
         viewModelScope.launch {
-            fileProvider.createDirectory(_browseState.value.currentPath, name).fold(
+            fileProvider.createDirectory(_browseState.value.currentPath, validatedName).fold(
                 onSuccess = {
                     showSnackbar("Folder created")
                     refreshFiles()
@@ -278,8 +281,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun createFile(name: String) {
+        val validatedName = validFileNameOrNotify(name) ?: return
         viewModelScope.launch {
-            fileProvider.createFile(_browseState.value.currentPath, name).fold(
+            fileProvider.createFile(_browseState.value.currentPath, validatedName).fold(
                 onSuccess = {
                     showSnackbar("File created")
                     refreshFiles()
@@ -307,10 +311,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun rename(oldPath: String, newName: String) {
+        val validatedName = validFileNameOrNotify(newName) ?: return
         viewModelScope.launch {
-            fileProvider.rename(oldPath, newName).fold(
+            fileProvider.rename(oldPath, validatedName).fold(
                 onSuccess = {
-                    showSnackbar("Renamed to $newName")
+                    showSnackbar("Renamed to $validatedName")
                     refreshFiles()
                 },
                 onFailure = { showSnackbar("Rename failed: ${it.message}") },
@@ -512,6 +517,15 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private fun showSnackbar(message: String) {
         _snackbarMessage.value = message
     }
+
+    private fun validFileNameOrNotify(name: String): String? =
+        when (val result = FileNameValidator.validate(name)) {
+            is FileNameValidationResult.Valid -> result.name
+            is FileNameValidationResult.Invalid -> {
+                showSnackbar(result.message)
+                null
+            }
+        }
 
     fun clearSnackbar() {
         _snackbarMessage.value = null
