@@ -16,6 +16,7 @@ import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
+import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
@@ -69,6 +70,12 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
+
+    private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
+    val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
+
+    private val _trashState = MutableStateFlow(TrashState())
+    val trashState: StateFlow<TrashState> = _trashState.asStateFlow()
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -335,7 +342,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val selectedPaths = state.selectedFiles.toList()
         if (selectedPaths.isEmpty()) return
         val moveToTrash = state.source == FileSource.LOCAL && useTrash.value
-        viewModelScope.launch {
+        launchOperation(if (moveToTrash) "Moving to Trash" else "Deleting") {
             val count = selectedPaths.size
             var failed = 0
             for (path in selectedPaths) {
@@ -389,7 +396,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun paste() {
-        viewModelScope.launch {
+        if (_clipboardPaths.value.isEmpty() || _clipboardOperation.value == ClipboardOperation.NONE) return
+        launchOperation("Pasting") {
             val destPath = _browseState.value.currentPath
             val sourceProvider = clipboardProvider ?: fileProvider
             val destinationProvider = fileProvider
@@ -435,12 +443,12 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun downloadPaths(paths: List<String>, clearSelection: Boolean) {
-        viewModelScope.launch {
+        if (paths.isEmpty()) return
+        launchOperation("Downloading") {
             val state = _browseState.value
-            if (paths.isEmpty()) return@launch
             if (!state.source.isNetwork) {
                 showSnackbar("This file is already on this device")
-                return@launch
+                return@launchOperation
             }
 
             val provider = fileProvider
@@ -451,11 +459,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }.getOrElse { error ->
                 showSnackbar("Download failed: ${error.message}")
-                return@launch
+                return@launchOperation
             }
             if (items.any { it.path == state.currentPath }) {
                 showSnackbar("Choose files or folders inside this location")
-                return@launch
+                return@launchOperation
             }
 
             if (clearSelection) clearSelection()
@@ -540,6 +548,71 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun refreshTrash() {
+        viewModelScope.launch { loadTrashEntries() }
+    }
+
+    fun toggleTrashSelection(id: String) {
+        _trashState.update { state ->
+            val selected = state.selectedIds.toMutableSet()
+            if (!selected.add(id)) selected.remove(id)
+            state.copy(selectedIds = selected)
+        }
+    }
+
+    fun selectAllTrash() {
+        _trashState.update { state -> state.copy(selectedIds = state.entries.mapTo(mutableSetOf()) { it.id }) }
+    }
+
+    fun clearTrashSelection() {
+        _trashState.update { it.copy(selectedIds = emptySet()) }
+    }
+
+    fun restoreSelectedTrash() {
+        val entries = selectedTrashEntries()
+        if (entries.isEmpty()) return
+        launchOperation("Restoring from Trash") {
+            val failures = runTrashActions(entries, trashManager::restore)
+            loadTrashEntries()
+            showTrashResult(
+                entries = entries,
+                failures = failures,
+                successMessage = { count -> "$count item${if (count == 1) "" else "s"} restored" },
+                failureAction = "restore",
+            )
+        }
+    }
+
+    fun deleteSelectedTrashPermanently() {
+        val entries = selectedTrashEntries()
+        if (entries.isEmpty()) return
+        launchOperation("Deleting permanently") {
+            val failures = runTrashActions(entries, trashManager::deletePermanently)
+            loadTrashEntries()
+            showTrashResult(
+                entries = entries,
+                failures = failures,
+                successMessage = { count -> "$count item${if (count == 1) "" else "s"} permanently deleted" },
+                failureAction = "delete",
+            )
+        }
+    }
+
+    fun emptyTrash() {
+        launchOperation("Emptying Trash") {
+            trashManager.empty().fold(
+                onSuccess = { removed ->
+                    loadTrashEntries()
+                    showSnackbar(if (removed == 0) "Trash is already empty" else "Trash emptied")
+                },
+                onFailure = { error ->
+                    loadTrashEntries()
+                    showSnackbar("Could not empty Trash: ${error.message ?: "Unknown error"}")
+                },
+            )
+        }
+    }
+
     fun toggleBookmark(path: String, name: String) {
         viewModelScope.launch {
             if (bookmarkDao.isBookmarked(path)) {
@@ -559,6 +632,74 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     // Snackbar
     private fun showSnackbar(message: String) {
         _snackbarMessage.value = message
+    }
+
+    private fun launchOperation(label: String, block: suspend () -> Unit) {
+        val active = _operationState.value as? OperationState.Running
+        if (active != null) {
+            showSnackbar("${active.label} is already in progress")
+            return
+        }
+        _operationState.value = OperationState.Running(label)
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (error: Throwable) {
+                showSnackbar("$label failed: ${error.message ?: "Unknown error"}")
+            } finally {
+                _operationState.value = OperationState.Idle
+            }
+        }
+    }
+
+    private suspend fun loadTrashEntries() {
+        _trashState.update { it.copy(isLoading = true, error = null) }
+        runCatching { trashManager.listEntries() }.fold(
+            onSuccess = { entries ->
+                _trashState.update { state ->
+                    state.copy(
+                        entries = entries,
+                        selectedIds = state.selectedIds.intersect(entries.mapTo(mutableSetOf()) { it.id }),
+                        isLoading = false,
+                        error = null,
+                    )
+                }
+            },
+            onFailure = { error ->
+                _trashState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = error.message ?: "Could not load Trash",
+                    )
+                }
+            },
+        )
+    }
+
+    private fun selectedTrashEntries(): List<TrashEntry> {
+        val state = _trashState.value
+        return state.entries.filter { it.id in state.selectedIds }
+    }
+
+    private suspend fun runTrashActions(
+        entries: List<TrashEntry>,
+        action: suspend (TrashEntry) -> Result<Unit>,
+    ): List<Throwable> = buildList {
+        entries.forEach { entry -> action(entry).exceptionOrNull()?.let(::add) }
+    }
+
+    private fun showTrashResult(
+        entries: List<TrashEntry>,
+        failures: List<Throwable>,
+        successMessage: (Int) -> String,
+        failureAction: String,
+    ) {
+        val succeeded = entries.size - failures.size
+        when {
+            failures.isEmpty() -> showSnackbar(successMessage(succeeded))
+            succeeded > 0 -> showSnackbar("$succeeded succeeded; ${failures.size} could not $failureAction")
+            else -> showSnackbar("Could not $failureAction: ${failures.first().message ?: "Unknown error"}")
+        }
     }
 
     private fun validFileNameOrNotify(name: String): String? =

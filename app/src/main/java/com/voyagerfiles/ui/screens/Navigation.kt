@@ -18,6 +18,7 @@ sealed class Screen(val route: String) {
             "browser/${URLEncoder.encode(path, "UTF-8")}"
     }
     data object Connections : Screen("connections")
+    data object Trash : Screen("trash")
     data object Settings : Screen("settings")
 }
 
@@ -39,6 +40,9 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                 },
                 onNavigateToConnections = {
                     navController.navigate(Screen.Connections.route)
+                },
+                onNavigateToTrash = {
+                    navController.navigate(Screen.Trash.route)
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
@@ -69,6 +73,13 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                         popUpTo(Screen.Home.route)
                     }
                 },
+            )
+        }
+
+        composable(Screen.Trash.route) {
+            TrashScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 

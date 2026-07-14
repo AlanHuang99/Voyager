@@ -74,6 +74,7 @@ fun SettingsScreen(
 ) {
     val currentTheme by viewModel.theme.collectAsState()
     val browseState by viewModel.browseState.collectAsState()
+    val useTrash by viewModel.useTrash.collectAsState()
     var selectedThemeCategoryIndex by rememberSaveable { mutableIntStateOf(0) }
     val selectedThemeCategory = themeCategories[selectedThemeCategoryIndex]
 
@@ -154,6 +155,28 @@ fun SettingsScreen(
                 Switch(
                     checked = browseState.showHidden,
                     onCheckedChange = { viewModel.setShowHidden(it) },
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Use Trash for local files", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Turn off only if local deletes should be permanent",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = useTrash,
+                    onCheckedChange = viewModel::setUseTrash,
                 )
             }
 

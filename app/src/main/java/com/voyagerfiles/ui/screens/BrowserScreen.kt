@@ -58,6 +58,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -90,6 +91,7 @@ import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.components.CreateItemDialog
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
+import com.voyagerfiles.ui.components.DeleteDialogModel
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
@@ -98,6 +100,7 @@ import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.viewmodel.OperationState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,6 +115,8 @@ fun BrowserScreen(
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val useTrash by viewModel.useTrash.collectAsState()
+    val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -132,6 +137,7 @@ fun BrowserScreen(
     val selectionToolbarModel = remember(isNetwork, state.selectedFiles.size) {
         SelectionToolbarModel.forState(isNetwork, state.selectedFiles.size)
     }
+    val runningOperation = operationState as? OperationState.Running
 
     fun leaveBrowser() {
         onNavigateBack()
@@ -175,22 +181,34 @@ fun BrowserScreen(
                     },
                     actions = {
                         if (SelectionToolbarAction.COPY in selectionToolbarModel.primaryActions) {
-                            IconButton(onClick = { viewModel.copyToClipboard(state.selectedFiles.toList()) }) {
+                            IconButton(
+                                onClick = { viewModel.copyToClipboard(state.selectedFiles.toList()) },
+                                enabled = runningOperation == null,
+                            ) {
                                 Icon(Icons.Filled.ContentCopy, "Copy")
                             }
                         }
                         if (SelectionToolbarAction.CUT in selectionToolbarModel.primaryActions) {
-                            IconButton(onClick = { viewModel.cutToClipboard(state.selectedFiles.toList()) }) {
+                            IconButton(
+                                onClick = { viewModel.cutToClipboard(state.selectedFiles.toList()) },
+                                enabled = runningOperation == null,
+                            ) {
                                 Icon(Icons.Filled.ContentCut, "Cut")
                             }
                         }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
-                            IconButton(onClick = { showDeleteDialog = true }) {
+                            IconButton(
+                                onClick = { showDeleteDialog = true },
+                                enabled = runningOperation == null,
+                            ) {
                                 Icon(Icons.Filled.Delete, "Delete")
                             }
                         }
                         Box {
-                            IconButton(onClick = { showSelectionMoreMenu = true }) {
+                            IconButton(
+                                onClick = { showSelectionMoreMenu = true },
+                                enabled = runningOperation == null,
+                            ) {
                                 Icon(Icons.Filled.MoreVert, "More selection actions")
                             }
                             DropdownMenu(
@@ -429,7 +447,10 @@ fun BrowserScreen(
                     }) {
                         Text("Cancel")
                     }
-                    IconButton(onClick = { viewModel.paste() }) {
+                    IconButton(
+                        onClick = { viewModel.paste() },
+                        enabled = runningOperation == null,
+                    ) {
                         Icon(
                             Icons.Filled.ContentPaste,
                             "Paste here",
@@ -440,7 +461,7 @@ fun BrowserScreen(
             }
         },
         floatingActionButton = {
-            if (!isSelectionMode) {
+            if (!isSelectionMode && runningOperation == null) {
                 Box {
                     if (!isNetwork) {
                         FloatingActionButton(
@@ -480,6 +501,15 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            runningOperation?.let { operation ->
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    operation.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             when {
                 state.isLoading -> {
                     Box(
@@ -669,9 +699,14 @@ fun BrowserScreen(
     }
 
     if (showDeleteDialog) {
+        val count = state.selectedFiles.size
+        val fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: ""
         DeleteConfirmDialog(
-            fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: "",
-            count = state.selectedFiles.size,
+            model = if (state.source == FileSource.LOCAL && useTrash) {
+                DeleteDialogModel.localTrash(count, fileName)
+            } else {
+                DeleteDialogModel.permanent(count, fileName)
+            },
             onDismiss = { showDeleteDialog = false },
             onConfirm = {
                 viewModel.deleteSelected()

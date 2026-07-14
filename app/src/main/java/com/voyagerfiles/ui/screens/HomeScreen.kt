@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -65,6 +66,7 @@ fun HomeScreen(
     onNavigateToBrowser: (String) -> Unit,
     onNavigateToSession: (String, String) -> Unit,
     onNavigateToConnections: () -> Unit,
+    onNavigateToTrash: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onOpenSafTree: (Uri) -> Unit,
 ) {
@@ -120,6 +122,38 @@ fun HomeScreen(
 
             item {
                 SafAccessCard(onClick = { safTreeLauncher.launch(null) })
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onNavigateToTrash),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Trash", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Restore or permanently delete local items",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
 
             if (sessions.isNotEmpty()) {

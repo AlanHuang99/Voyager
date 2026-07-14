@@ -115,22 +115,16 @@ fun RenameDialog(
 
 @Composable
 fun DeleteConfirmDialog(
-    fileName: String,
-    count: Int = 1,
+    model: DeleteDialogModel,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete") },
-        text = {
-            Text(
-                if (count == 1) "Delete \"$fileName\"?"
-                else "Delete $count items?"
-            )
-        },
+        title = { Text(model.title) },
+        text = { Text(model.message) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Delete") }
+            TextButton(onClick = onConfirm) { Text(model.confirmLabel) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
