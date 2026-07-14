@@ -16,6 +16,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
@@ -97,6 +99,34 @@ class FtpFileProviderTest {
         assertFalse(Files.exists(server.root.resolve("folder")))
     }
 
+    @Test
+    fun streamsTransferLargeFilesWithoutByteArrayBuffers() = runBlocking {
+        val server = startServer()
+        val provider = createProvider(server.port)
+        val payload = ByteArray(LARGE_TRANSFER_BYTES) { (it % 251).toByte() }
+
+        val output = provider.getOutputStream("/large.bin").getOrThrow()
+        assertFalse(output is ByteArrayOutputStream)
+        output.use { it.write(payload) }
+
+        val input = provider.getInputStream("/large.bin").getOrThrow()
+        assertFalse(input is ByteArrayInputStream)
+        assertTrue(input.use { it.readBytes().contentEquals(payload) })
+    }
+
+    @Test
+    fun copyLargeFileUsesBoundedMemory() = runBlocking {
+        val server = startServer()
+        val payload = ByteArray(LARGE_TRANSFER_BYTES) { (it % 241).toByte() }
+        Files.write(server.root.resolve("source.bin"), payload)
+        Files.createDirectory(server.root.resolve("target"))
+        val provider = createProvider(server.port)
+
+        provider.copy("/source.bin", "/target").getOrThrow()
+
+        assertTrue(Files.readAllBytes(server.root.resolve("target/source.bin")).contentEquals(payload))
+    }
+
     private fun createProvider(port: Int): FtpFileProvider {
         val provider = FtpFileProvider(
             RemoteConnection(
@@ -106,7 +136,8 @@ class FtpFileProviderTest {
                 port = port,
                 username = USERNAME,
                 password = PASSWORD,
-            )
+            ),
+            temp.root,
         )
         providers += provider
         return provider
@@ -151,5 +182,6 @@ class FtpFileProviderTest {
     private companion object {
         const val USERNAME = "tester"
         const val PASSWORD = "secret"
+        const val LARGE_TRANSFER_BYTES = 2 * 1024 * 1024
     }
 }

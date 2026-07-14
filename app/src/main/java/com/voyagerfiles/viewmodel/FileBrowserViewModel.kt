@@ -494,7 +494,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             if (_sessions.value.none { it.id == sessionId }) {
                 val normalizedPath = BrowserNavigationBounds.normalizePath(connection.remotePath)
                 val source = sourceForProtocol(connection.protocol)
-                sessionProviders[sessionId] = FileProviderFactory.createRemote(connection)
+                sessionProviders[sessionId] = FileProviderFactory.createRemote(
+                    context = getApplication(),
+                    connection = connection,
+                )
                 _sessions.update { sessions ->
                     sessions + BrowserSession(
                         id = sessionId,

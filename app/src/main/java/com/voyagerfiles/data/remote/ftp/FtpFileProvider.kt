@@ -10,12 +10,19 @@ import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPReply
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.FilterInputStream
+import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
-class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
+class FtpFileProvider(
+    private val connection: RemoteConnection,
+    private val temporaryDirectory: File,
+) : FileProvider {
 
     private var ftpClient: FTPClient? = null
 
@@ -143,13 +150,7 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
                     return@runCatching
                 }
 
-                val output = ByteArrayOutputStream()
-                if (!ftp.retrieveFile(sourcePath, output)) {
-                    throw IllegalStateException("Failed to read: $sourcePath")
-                }
-                if (!ftp.storeFile(targetPath, ByteArrayInputStream(output.toByteArray()))) {
-                    throw IllegalStateException("Failed to write: $targetPath")
-                }
+                copyFileThroughTemporaryStorage(ftp, sourcePath, targetPath)
                 Unit
             }
         }
@@ -166,14 +167,33 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             if (file.isDirectory) {
                 copyDirectoryRecursive(ftp, sourceChild, targetChild)
             } else {
-                val output = ByteArrayOutputStream()
-                if (!ftp.retrieveFile(sourceChild, output)) {
-                    throw IllegalStateException("Failed to read: $sourceChild")
-                }
-                if (!ftp.storeFile(targetChild, ByteArrayInputStream(output.toByteArray()))) {
-                    throw IllegalStateException("Failed to write: $targetChild")
+                copyFileThroughTemporaryStorage(ftp, sourceChild, targetChild)
+            }
+        }
+    }
+
+    private fun copyFileThroughTemporaryStorage(
+        ftp: FTPClient,
+        sourcePath: String,
+        targetPath: String,
+    ) {
+        check(temporaryDirectory.isDirectory || temporaryDirectory.mkdirs()) {
+            "Could not prepare temporary storage for the copy"
+        }
+        val temporaryFile = File.createTempFile("voyager-ftp-", ".copy", temporaryDirectory)
+        try {
+            FileOutputStream(temporaryFile).use { output ->
+                if (!ftp.retrieveFile(sourcePath, output)) {
+                    throw IllegalStateException("Failed to read: $sourcePath")
                 }
             }
+            FileInputStream(temporaryFile).use { input ->
+                if (!ftp.storeFile(targetPath, input)) {
+                    throw IllegalStateException("Failed to write: $targetPath")
+                }
+            }
+        } finally {
+            temporaryFile.delete()
         }
     }
 
@@ -192,11 +212,10 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
         withContext(Dispatchers.IO) {
             runCatching {
                 ensureConnected()
-                val output = ByteArrayOutputStream()
-                if (!ftpClient!!.retrieveFile(path, output)) {
-                    throw IllegalStateException("Failed to read: $path")
-                }
-                ByteArrayInputStream(output.toByteArray()) as InputStream
+                val ftp = ftpClient!!
+                val input = ftp.retrieveFileStream(path)
+                    ?: throw IllegalStateException("Failed to read: $path")
+                PendingCommandInputStream(ftp, input, path) as InputStream
             }
         }
 
@@ -205,18 +224,9 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
             runCatching {
                 ensureConnected()
                 val ftp = ftpClient!!
-                object : ByteArrayOutputStream() {
-                    private var closed = false
-
-                    override fun close() {
-                        if (closed) return
-                        closed = true
-                        super.close()
-                        if (!ftp.storeFile(path, ByteArrayInputStream(toByteArray()))) {
-                            throw IllegalStateException("Failed to write: $path")
-                        }
-                    }
-                } as OutputStream
+                val output = ftp.storeFileStream(path)
+                    ?: throw IllegalStateException("Failed to write: $path")
+                PendingCommandOutputStream(ftp, output, path) as OutputStream
             }
         }
 
@@ -277,5 +287,45 @@ class FtpFileProvider(private val connection: RemoteConnection) : FileProvider {
         parent.isBlank() || parent == "/" -> "/$child"
         parent.endsWith("/") -> "$parent$child"
         else -> "$parent/$child"
+    }
+
+    private class PendingCommandInputStream(
+        private val ftp: FTPClient,
+        input: InputStream,
+        private val path: String,
+    ) : FilterInputStream(input) {
+        private var closed = false
+
+        override fun close() {
+            if (closed) return
+            closed = true
+            try {
+                super.close()
+            } finally {
+                if (!ftp.completePendingCommand()) {
+                    throw IllegalStateException("Failed to finish reading: $path")
+                }
+            }
+        }
+    }
+
+    private class PendingCommandOutputStream(
+        private val ftp: FTPClient,
+        output: OutputStream,
+        private val path: String,
+    ) : FilterOutputStream(output) {
+        private var closed = false
+
+        override fun close() {
+            if (closed) return
+            closed = true
+            try {
+                super.close()
+            } finally {
+                if (!ftp.completePendingCommand()) {
+                    throw IllegalStateException("Failed to finish writing: $path")
+                }
+            }
+        }
     }
 }

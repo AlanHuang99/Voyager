@@ -16,8 +16,8 @@ import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
@@ -276,13 +276,24 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
                     SMB2CreateDisposition.FILE_OPEN,
                     null,
                 )
-                val output = ByteArrayOutputStream()
                 try {
-                    file.inputStream.use { it.copyTo(output) }
-                } finally {
+                    object : FilterInputStream(file.inputStream) {
+                        private var closed = false
+
+                        override fun close() {
+                            if (closed) return
+                            closed = true
+                            try {
+                                super.close()
+                            } finally {
+                                file.close()
+                            }
+                        }
+                    } as InputStream
+                } catch (error: Throwable) {
                     file.close()
+                    throw error
                 }
-                ByteArrayInputStream(output.toByteArray()) as InputStream
             }
         }
 
@@ -290,29 +301,32 @@ class SmbFileProvider(private val connection: RemoteConnection) : FileProvider {
         withContext(Dispatchers.IO) {
             runCatching {
                 ensureConnected()
-                val diskShare = share!!
-                object : ByteArrayOutputStream() {
-                    private var closed = false
+                val file = share!!.openFile(
+                    toSmbPath(path),
+                    EnumSet.of(AccessMask.GENERIC_WRITE),
+                    null,
+                    SMB2ShareAccess.ALL,
+                    SMB2CreateDisposition.FILE_OVERWRITE_IF,
+                    null,
+                )
+                try {
+                    object : FilterOutputStream(file.outputStream) {
+                        private var closed = false
 
-                    override fun close() {
-                        if (closed) return
-                        closed = true
-                        super.close()
-                        val file = diskShare.openFile(
-                            toSmbPath(path),
-                            EnumSet.of(AccessMask.GENERIC_WRITE),
-                            null,
-                            SMB2ShareAccess.ALL,
-                            SMB2CreateDisposition.FILE_OVERWRITE_IF,
-                            null,
-                        )
-                        try {
-                            file.outputStream.use { it.write(toByteArray()) }
-                        } finally {
-                            file.close()
+                        override fun close() {
+                            if (closed) return
+                            closed = true
+                            try {
+                                super.close()
+                            } finally {
+                                file.close()
+                            }
                         }
-                    }
-                } as OutputStream
+                    } as OutputStream
+                } catch (error: Throwable) {
+                    file.close()
+                    throw error
+                }
             }
         }
 
