@@ -82,6 +82,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,6 +122,7 @@ fun BrowserScreen(
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -146,6 +148,16 @@ fun BrowserScreen(
         onNavigateBack()
     }
 
+    fun navigateTo(path: String) {
+        focusManager.clearFocus(force = true)
+        viewModel.navigateTo(path)
+    }
+
+    fun navigateUpOrLeave() {
+        focusManager.clearFocus(force = true)
+        if (!viewModel.navigateUp()) leaveBrowser()
+    }
+
     fun closeSession(sessionId: String) {
         val closesOnlyActiveSession = sessionId == activeSession?.id && sessions.size <= 1
         viewModel.closeSession(sessionId)
@@ -167,7 +179,7 @@ fun BrowserScreen(
     BackHandler {
         when {
             isSelectionMode -> viewModel.clearSelection()
-            !viewModel.navigateUp() -> leaveBrowser()
+            else -> navigateUpOrLeave()
         }
     }
 
@@ -271,9 +283,7 @@ fun BrowserScreen(
                                 .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconButton(onClick = {
-                                if (!viewModel.navigateUp()) leaveBrowser()
-                            }) {
+                            IconButton(onClick = ::navigateUpOrLeave) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                             }
                             Spacer(modifier = Modifier.weight(1f))
@@ -393,7 +403,7 @@ fun BrowserScreen(
                         }
                         PathBreadcrumb(
                             path = state.currentPath,
-                            onNavigate = { viewModel.navigateTo(it) },
+                            onNavigate = ::navigateTo,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
@@ -582,7 +592,7 @@ fun BrowserScreen(
                                     if (isSelectionMode) {
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
-                                        viewModel.navigateTo(file.path)
+                                        navigateTo(file.path)
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
@@ -622,7 +632,7 @@ fun BrowserScreen(
                                     if (isSelectionMode) {
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
-                                        viewModel.navigateTo(file.path)
+                                        navigateTo(file.path)
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
