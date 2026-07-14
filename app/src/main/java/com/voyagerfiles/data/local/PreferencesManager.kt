@@ -22,6 +22,7 @@ class PreferencesManager(private val context: Context) {
     private object Keys {
         val THEME = stringPreferencesKey("theme")
         val SHOW_HIDDEN = booleanPreferencesKey("show_hidden")
+        val USE_TRASH = booleanPreferencesKey("use_trash")
         val SORT_BY = stringPreferencesKey("sort_by")
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val VIEW_MODE = stringPreferencesKey("view_mode")
@@ -37,6 +38,10 @@ class PreferencesManager(private val context: Context) {
 
     val showHidden: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.SHOW_HIDDEN] ?: false
+    }
+
+    val useTrash: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.USE_TRASH] ?: true
     }
 
     val sortBy: Flow<SortBy> = context.dataStore.data.map { prefs ->
@@ -76,6 +81,10 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setShowHidden(show: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_HIDDEN] = show }
+    }
+
+    suspend fun setUseTrash(useTrash: Boolean) {
+        context.dataStore.edit { it[Keys.USE_TRASH] = useTrash }
     }
 
     suspend fun setSortBy(sortBy: SortBy) {

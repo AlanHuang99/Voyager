@@ -22,9 +22,11 @@ import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
+import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
+import com.voyagerfiles.util.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -40,6 +43,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val db = AppDatabase.getInstance(application)
     private val connectionDao = db.connectionDao()
     private val bookmarkDao = db.bookmarkDao()
+    private val trashManager = LocalTrashManager(
+        FileUtils.getStorageDirectories(application).map { File(it.path) },
+    )
 
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
     private var browserSessionRootPath: String? = null
@@ -65,6 +71,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
+    val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val connections = connectionDao.getAllConnections().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -324,18 +331,24 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun deleteSelected() {
+        val state = _browseState.value
+        val selectedPaths = state.selectedFiles.toList()
+        if (selectedPaths.isEmpty()) return
+        val moveToTrash = state.source == FileSource.LOCAL && useTrash.value
         viewModelScope.launch {
-            val count = _browseState.value.selectedFiles.size
+            val count = selectedPaths.size
             var failed = 0
-            for (path in _browseState.value.selectedFiles) {
-                fileProvider.delete(path).onFailure { failed++ }
+            for (path in selectedPaths) {
+                val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else fileProvider.delete(path)
+                result.onFailure { failed++ }
             }
             clearSelection()
             refreshFiles()
             if (failed > 0) {
-                showSnackbar("$failed of $count items failed to delete")
+                showSnackbar("$failed of $count item${if (count == 1) "" else "s"} could not be deleted")
             } else {
-                showSnackbar("$count item${if (count > 1) "s" else ""} deleted")
+                val action = if (moveToTrash) "moved to Trash" else "permanently deleted"
+                showSnackbar("$count item${if (count > 1) "s" else ""} $action")
             }
         }
     }
@@ -568,6 +581,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setShowHidden(show: Boolean) {
         viewModelScope.launch { prefs.setShowHidden(show) }
+    }
+
+    fun setUseTrash(useTrash: Boolean) {
+        viewModelScope.launch { prefs.setUseTrash(useTrash) }
     }
 
     fun setSortBy(sortBy: SortBy) {
