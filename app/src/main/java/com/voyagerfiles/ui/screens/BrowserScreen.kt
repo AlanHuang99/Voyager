@@ -7,6 +7,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -393,35 +394,12 @@ fun BrowserScreen(
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                         )
-                        OutlinedTextField(
-                            value = state.searchQuery,
-                            onValueChange = viewModel::setSearchQuery,
-                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (state.searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                        Icon(Icons.Filled.Close, "Clear search")
-                                    }
-                                }
-                            },
-                            placeholder = { Text("Search this folder") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
+                        BrowserFilterControls(
+                            query = state.searchQuery,
+                            selectedFilter = state.fileTypeFilter,
+                            onQueryChange = viewModel::setSearchQuery,
+                            onFilterChange = viewModel::setFileTypeFilter,
                         )
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(FileTypeFilter.entries, key = { it.name }) { filter ->
-                                FilterChip(
-                                    selected = state.fileTypeFilter == filter,
-                                    onClick = { viewModel.setFileTypeFilter(filter) },
-                                    label = { Text(filter.label) },
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -725,6 +703,98 @@ fun BrowserScreen(
                 viewModel.clearSelection()
             },
         )
+    }
+}
+
+@Composable
+private fun BrowserFilterControls(
+    query: String,
+    selectedFilter: FileTypeFilter,
+    onQueryChange: (String) -> Unit,
+    onFilterChange: (FileTypeFilter) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (maxWidth >= 600.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BrowserSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    modifier = Modifier.weight(0.42f),
+                )
+                FileTypeFilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChange = onFilterChange,
+                    contentPadding = PaddingValues(start = 8.dp),
+                    modifier = Modifier.weight(0.58f),
+                )
+            }
+        } else {
+            Column {
+                BrowserSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                )
+                FileTypeFilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChange = onFilterChange,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, "Clear search")
+                }
+            }
+        },
+        placeholder = { Text("Search this folder") },
+        singleLine = true,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun FileTypeFilterRow(
+    selectedFilter: FileTypeFilter,
+    onFilterChange: (FileTypeFilter) -> Unit,
+    contentPadding: PaddingValues,
+    modifier: Modifier,
+) {
+    LazyRow(
+        modifier = modifier,
+        contentPadding = contentPadding,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(FileTypeFilter.entries, key = { it.name }) { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterChange(filter) },
+                label = { Text(filter.label) },
+            )
+        }
     }
 }
 
