@@ -253,7 +253,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 if (!loadGuard.isCurrent(requestId, sessionId) || !isCurrentLoad(sessionId)) return@fold
                 _browseState.update {
                     it.copy(
-                        error = error.message ?: "Failed to list files",
+                        error = OperationMessages.reason(error),
                         isLoading = false,
                         files = emptyList(),
                     )
@@ -325,26 +325,30 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun createDirectory(name: String) {
         val validatedName = validFileNameOrNotify(name) ?: return
-        viewModelScope.launch {
-            fileProvider.createDirectory(_browseState.value.currentPath, validatedName).fold(
+        val provider = fileProvider
+        val path = _browseState.value.currentPath
+        launchOperation("Creating folder") {
+            provider.createDirectory(path, validatedName).fold(
                 onSuccess = {
                     showSnackbar("Folder created")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Failed to create folder: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Create folder", it)) },
             )
         }
     }
 
     fun createFile(name: String) {
         val validatedName = validFileNameOrNotify(name) ?: return
-        viewModelScope.launch {
-            fileProvider.createFile(_browseState.value.currentPath, validatedName).fold(
+        val provider = fileProvider
+        val path = _browseState.value.currentPath
+        launchOperation("Creating file") {
+            provider.createFile(path, validatedName).fold(
                 onSuccess = {
                     showSnackbar("File created")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Failed to create file: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Create file", it)) },
             )
         }
     }
@@ -354,17 +358,29 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val selectedPaths = state.selectedFiles.toList()
         if (selectedPaths.isEmpty()) return
         val moveToTrash = state.source == FileSource.LOCAL && useTrash.value
+        val provider = fileProvider
         launchOperation(if (moveToTrash) "Moving to Trash" else "Deleting") {
             val count = selectedPaths.size
             var failed = 0
+            var firstError: Throwable? = null
             for (path in selectedPaths) {
-                val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else fileProvider.delete(path)
-                result.onFailure { failed++ }
+                val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else provider.delete(path)
+                result.onFailure { error ->
+                    failed++
+                    if (firstError == null) firstError = error
+                }
             }
             clearSelection()
             refreshFiles()
             if (failed > 0) {
-                showSnackbar("$failed of $count item${if (count == 1) "" else "s"} could not be deleted")
+                showSnackbar(
+                    OperationMessages.partial(
+                        failed = failed,
+                        total = count,
+                        action = if (moveToTrash) "moved to Trash" else "deleted",
+                        error = checkNotNull(firstError),
+                    )
+                )
             } else {
                 val action = if (moveToTrash) "moved to Trash" else "permanently deleted"
                 showSnackbar("$count item${if (count > 1) "s" else ""} $action")
@@ -374,13 +390,14 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun rename(oldPath: String, newName: String) {
         val validatedName = validFileNameOrNotify(newName) ?: return
-        viewModelScope.launch {
-            fileProvider.rename(oldPath, validatedName).fold(
+        val provider = fileProvider
+        launchOperation("Renaming") {
+            provider.rename(oldPath, validatedName).fold(
                 onSuccess = {
                     showSnackbar("Renamed to $validatedName")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Rename failed: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Rename", it)) },
             )
         }
     }
@@ -408,14 +425,17 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun paste() {
-        if (_clipboardPaths.value.isEmpty() || _clipboardOperation.value == ClipboardOperation.NONE) return
+        val paths = _clipboardPaths.value.toList()
+        val operation = _clipboardOperation.value
+        if (paths.isEmpty() || operation == ClipboardOperation.NONE) return
+        val destPath = _browseState.value.currentPath
+        val sourceProvider = clipboardProvider ?: fileProvider
+        val destinationProvider = fileProvider
         launchOperation("Pasting") {
-            val destPath = _browseState.value.currentPath
-            val sourceProvider = clipboardProvider ?: fileProvider
-            val destinationProvider = fileProvider
             var failed = 0
-            for (sourcePath in _clipboardPaths.value) {
-                val result = when (_clipboardOperation.value) {
+            var firstError: Throwable? = null
+            for (sourcePath in paths) {
+                val result = when (operation) {
                     ClipboardOperation.COPY -> {
                         if (sourceProvider === destinationProvider) {
                             destinationProvider.copy(sourcePath, destPath)
@@ -432,14 +452,24 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     }
                     ClipboardOperation.NONE -> Result.success(Unit)
                 }
-                result.onFailure { failed++ }
+                result.onFailure { error ->
+                    failed++
+                    if (firstError == null) firstError = error
+                }
             }
-            if (_clipboardOperation.value == ClipboardOperation.CUT && failed == 0) {
+            if (operation == ClipboardOperation.CUT && failed == 0) {
                 clearClipboard()
             }
             refreshFiles()
             if (failed > 0) {
-                showSnackbar("$failed items failed to paste")
+                showSnackbar(
+                    OperationMessages.partial(
+                        failed = failed,
+                        total = paths.size,
+                        action = "pasted",
+                        error = checkNotNull(firstError),
+                    )
+                )
             } else {
                 showSnackbar("Pasted successfully")
             }
@@ -456,21 +486,21 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun downloadPaths(paths: List<String>, clearSelection: Boolean) {
         if (paths.isEmpty()) return
+        val state = _browseState.value
+        val provider = fileProvider
         launchOperation("Downloading") {
-            val state = _browseState.value
             if (!state.source.isNetwork) {
                 showSnackbar("This file is already on this device")
                 return@launchOperation
             }
 
-            val provider = fileProvider
             val items = runCatching {
                 paths.map { path ->
                     state.files.firstOrNull { it.path == path }
                         ?: provider.getFileInfo(path).getOrThrow()
                 }
             }.getOrElse { error ->
-                showSnackbar("Download failed: ${error.message}")
+                showSnackbar(OperationMessages.failure("Download", error))
                 return@launchOperation
             }
             if (items.any { it.path == state.currentPath }) {
@@ -490,7 +520,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 },
                 onFailure = { error ->
-                    showSnackbar("Download failed: ${error.message}")
+                    showSnackbar(OperationMessages.failure("Download", error))
                 },
             )
         }
@@ -667,7 +697,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 block()
             } catch (error: Throwable) {
-                showSnackbar("$label failed: ${error.message ?: "Unknown error"}")
+                showSnackbar(OperationMessages.failure(label, error))
             } finally {
                 _operationState.value = OperationState.Idle
             }
