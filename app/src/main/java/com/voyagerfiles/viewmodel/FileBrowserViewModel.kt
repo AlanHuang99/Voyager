@@ -12,6 +12,7 @@ import com.voyagerfiles.data.model.BrowseState
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
@@ -188,6 +189,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 isLoading = true,
                 error = null,
                 selectedFiles = emptySet(),
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
         loadFiles(normalizedPath, sessionId, fileProvider)
@@ -215,7 +218,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 val filtered = if (_browseState.value.showHidden) files
                 else files.filter { !it.isHidden }
                 val sorted = sortFiles(filtered)
-                _browseState.update { it.copy(files = sorted, isLoading = false) }
+                _browseState.update { state ->
+                    val next = state.copy(files = sorted, isLoading = false)
+                    next.copy(selectedFiles = next.reconciledSelection)
+                }
             },
             onFailure = { error ->
                 if (!isCurrentLoad(sessionId)) return@fold
@@ -259,7 +265,31 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun selectAll() {
         _browseState.update { state ->
-            state.copy(selectedFiles = state.files.map { it.path }.toSet())
+            state.copy(selectedFiles = state.visibleFiles.map { it.path }.toSet())
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        _browseState.update { state ->
+            val next = state.copy(searchQuery = query)
+            next.copy(selectedFiles = next.reconciledSelection)
+        }
+    }
+
+    fun setFileTypeFilter(filter: FileTypeFilter) {
+        _browseState.update { state ->
+            val next = state.copy(fileTypeFilter = filter)
+            next.copy(selectedFiles = next.reconciledSelection)
+        }
+    }
+
+    fun clearFilters() {
+        _browseState.update { state ->
+            state.copy(
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
+                selectedFiles = emptySet(),
+            )
         }
     }
 
@@ -572,6 +602,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 source = session.source,
                 selectedFiles = emptySet(),
                 error = null,
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
         loadFiles(session.currentPath, session.id, provider)
@@ -607,6 +639,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 error = null,
                 selectedFiles = emptySet(),
                 source = FileSource.LOCAL,
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
     }
