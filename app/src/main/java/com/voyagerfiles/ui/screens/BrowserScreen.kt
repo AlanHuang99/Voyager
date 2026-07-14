@@ -370,20 +370,22 @@ fun BrowserScreen(
                                             showMoreMenu = false
                                         },
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text("Bookmark this folder") },
-                                        leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
-                                        onClick = {
-                                            viewModel.toggleBookmark(
-                                                state.currentPath,
-                                                state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
-                                            )
-                                            showMoreMenu = false
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Bookmark toggled")
-                                            }
-                                        },
-                                    )
+                                    if (state.source == FileSource.LOCAL) {
+                                        DropdownMenuItem(
+                                            text = { Text("Bookmark this folder") },
+                                            leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                                            onClick = {
+                                                viewModel.toggleBookmark(
+                                                    state.currentPath,
+                                                    state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
+                                                )
+                                                showMoreMenu = false
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Bookmark toggled")
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }

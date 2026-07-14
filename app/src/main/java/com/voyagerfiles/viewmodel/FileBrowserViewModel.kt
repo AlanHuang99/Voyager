@@ -23,7 +23,9 @@ import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
+import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.LocalTrashManager
+import com.voyagerfiles.security.AndroidCredentialCipher
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
@@ -43,6 +45,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
     private val connectionDao = db.connectionDao()
+    private val connectionRepository = ConnectionRepository(connectionDao, AndroidCredentialCipher())
     private val bookmarkDao = db.bookmarkDao()
     private val trashManager = LocalTrashManager(
         FileUtils.getStorageVolumes(application).mapNotNull { it.path?.let(::File) },
@@ -81,10 +84,16 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    val connections = connectionDao.getAllConnections().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
+        viewModelScope.launch {
+            runCatching { connectionRepository.migratePlaintextCredentials() }
+                .onFailure {
+                    showSnackbar("Could not secure saved connection passwords. Edit and save them again.")
+                }
+        }
         viewModelScope.launch {
             prefs.showHidden.collect { show ->
                 _browseState.update { it.copy(showHidden = show) }
@@ -510,7 +519,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 }
             }
-            connectionDao.updateLastConnected(connection.id, System.currentTimeMillis())
+            connectionRepository.updateLastConnected(connection.id, System.currentTimeMillis())
             activateSessionInternal(sessionId)
         }
     }
@@ -537,20 +546,23 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun saveConnection(connection: RemoteConnection) {
         viewModelScope.launch {
-            if (connection.id == 0L) {
-                connectionDao.insert(connection)
-                showSnackbar("Connection saved")
-            } else {
-                connectionDao.update(connection)
-                showSnackbar("Connection updated")
-            }
+            runCatching { connectionRepository.save(connection) }.fold(
+                onSuccess = {
+                    showSnackbar(if (connection.id == 0L) "Connection saved" else "Connection updated")
+                },
+                onFailure = {
+                    showSnackbar("Could not protect and save the connection")
+                },
+            )
         }
     }
 
     fun deleteConnection(connection: RemoteConnection) {
         viewModelScope.launch {
-            connectionDao.delete(connection)
-            showSnackbar("Connection deleted")
+            runCatching { connectionRepository.delete(connection) }.fold(
+                onSuccess = { showSnackbar("Connection deleted") },
+                onFailure = { showSnackbar("Could not delete the connection") },
+            )
         }
     }
 
@@ -620,6 +632,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun toggleBookmark(path: String, name: String) {
+        if (_browseState.value.source != FileSource.LOCAL) {
+            showSnackbar("Bookmarks are available for local folders")
+            return
+        }
         viewModelScope.launch {
             if (bookmarkDao.isBookmarked(path)) {
                 bookmarkDao.deleteByPath(path)

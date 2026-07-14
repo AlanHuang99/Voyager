@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -59,6 +61,7 @@ fun ConnectionsScreen(
     val connections by viewModel.connections.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editConnection by remember { mutableStateOf<RemoteConnection?>(null) }
+    var connectionToDelete by remember { mutableStateOf<RemoteConnection?>(null) }
 
     Scaffold(
         topBar = {
@@ -126,7 +129,7 @@ fun ConnectionsScreen(
                             onConnected()
                         },
                         onEdit = { editConnection = connection },
-                        onDelete = { viewModel.deleteConnection(connection) },
+                        onDelete = { connectionToDelete = connection },
                     )
                 }
                 item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -154,6 +157,40 @@ fun ConnectionsScreen(
             },
         )
     }
+
+    connectionToDelete?.let { connection ->
+        ConnectionDeleteDialog(
+            connectionName = connection.name,
+            onDismiss = { connectionToDelete = null },
+            onConfirm = {
+                viewModel.deleteConnection(connection)
+                connectionToDelete = null
+            },
+        )
+    }
+}
+
+@Composable
+internal fun ConnectionDeleteDialog(
+    connectionName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete connection?") },
+        text = { Text("Delete \"$connectionName\"? Saved login details will be removed from this device.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -201,10 +238,10 @@ private fun ConnectionCard(
                 }
             }
             IconButton(onClick = onEdit) {
-                Icon(Icons.Filled.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Filled.Edit, "Edit ${connection.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Filled.Delete, "Delete ${connection.name}", tint = MaterialTheme.colorScheme.error)
             }
         }
     }

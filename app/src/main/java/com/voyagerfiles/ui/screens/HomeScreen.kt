@@ -98,6 +98,7 @@ fun HomeScreen(
     }
     val directories = remember { FileUtils.getCommonDirectories() }
     val visibleSessions = sessions.filter { hasAllFilesAccess || it.source != FileSource.LOCAL }
+    val localBookmarks = bookmarks.filter { it.source == FileSource.LOCAL }
 
     Scaffold(
         topBar = {
@@ -305,7 +306,7 @@ fun HomeScreen(
             }
 
             // Bookmarks
-            if (hasAllFilesAccess && bookmarks.isNotEmpty()) {
+            if (hasAllFilesAccess && localBookmarks.isNotEmpty()) {
                 item {
                     Text(
                         "Bookmarks",
@@ -314,7 +315,7 @@ fun HomeScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-                items(bookmarks) { bookmark ->
+                items(localBookmarks) { bookmark ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
