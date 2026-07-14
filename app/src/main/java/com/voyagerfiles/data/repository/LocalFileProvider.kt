@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
@@ -58,6 +59,8 @@ class LocalFileProvider : FileProvider {
             runCatching {
                 val oldFile = File(oldPath)
                 val newFile = File(oldFile.parent, newName)
+                requireSource(oldFile)
+                if (newFile.exists()) throw IllegalStateException("$newName already exists in this folder")
                 if (!oldFile.renameTo(newFile)) throw IllegalStateException("Failed to rename")
                 newFile.toFileItem()
             }
@@ -67,13 +70,8 @@ class LocalFileProvider : FileProvider {
         withContext(Dispatchers.IO) {
             runCatching {
                 val source = File(sourcePath)
-                val dest = File(destPath, source.name)
-                if (source.isDirectory) {
-                    source.copyRecursively(dest, overwrite = false)
-                } else {
-                    source.copyTo(dest, overwrite = false)
-                }
-                Unit
+                val target = requireSafeTarget(source, File(destPath))
+                copyToNewTarget(source, target)
             }
         }
 
@@ -81,15 +79,15 @@ class LocalFileProvider : FileProvider {
         withContext(Dispatchers.IO) {
             runCatching {
                 val source = File(sourcePath)
-                val dest = File(destPath, source.name)
-                if (!source.renameTo(dest)) {
-                    // Fallback: copy then delete
-                    if (source.isDirectory) {
-                        source.copyRecursively(dest, overwrite = false)
-                    } else {
-                        source.copyTo(dest, overwrite = false)
-                    }
-                    source.deleteRecursively()
+                val target = requireSafeTarget(source, File(destPath))
+                if (source.renameTo(target)) return@runCatching
+
+                copyToNewTarget(source, target)
+                val deleted = if (source.isDirectory) source.deleteRecursively() else source.delete()
+                if (!deleted) {
+                    throw IOException(
+                        "Copied ${source.name}, but could not remove the original. Both copies were kept.",
+                    )
                 }
             }
         }
@@ -113,6 +111,44 @@ class LocalFileProvider : FileProvider {
         }
 
     override fun getParentPath(path: String): String? = File(path).parent
+
+    private fun requireSafeTarget(source: File, destinationDirectory: File): File {
+        requireSource(source)
+        if (!destinationDirectory.exists()) {
+            throw IllegalArgumentException("Destination does not exist: ${destinationDirectory.path}")
+        }
+        if (!destinationDirectory.isDirectory) {
+            throw IllegalArgumentException("Destination is not a folder: ${destinationDirectory.path}")
+        }
+
+        val target = File(destinationDirectory, source.name)
+        if (target.exists()) {
+            throw IllegalStateException("${source.name} already exists in this folder")
+        }
+        if (source.isDirectory && target.canonicalFile.toPath().startsWith(source.canonicalFile.toPath())) {
+            throw IllegalArgumentException("A folder cannot be copied or moved into itself")
+        }
+        return target
+    }
+
+    private fun requireSource(source: File) {
+        if (!source.exists()) throw IllegalArgumentException("Source does not exist: ${source.path}")
+    }
+
+    private fun copyToNewTarget(source: File, target: File) {
+        try {
+            if (source.isDirectory) {
+                if (!source.copyRecursively(target, overwrite = false)) {
+                    throw IOException("Failed to copy ${source.name}")
+                }
+            } else {
+                source.copyTo(target, overwrite = false)
+            }
+        } catch (error: Throwable) {
+            if (target.exists()) target.deleteRecursively()
+            throw error
+        }
+    }
 
     private fun File.toFileItem(): FileItem = FileItem(
         name = name,
