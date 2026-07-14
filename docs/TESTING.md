@@ -33,7 +33,7 @@ adb connect 192.168.27.167:5555
 ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --stacktrace
 ```
 
-Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise thumbnail fallback rendering, unavailable-storage presentation, saved-connection delete confirmation, parent navigation after using search, and Android Keystore encryption.
+Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise thumbnail fallback rendering, unavailable-storage presentation, saved-connection delete confirmation, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
 
 ## Protocol integration tests
 

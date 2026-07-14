@@ -53,4 +53,4 @@ Filesystem and network work runs on `Dispatchers.IO`. `OperationState` serialize
 
 ## Tests
 
-JVM tests cover pure models, validation, operation safety, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, unavailable storage, destructive confirmation, search-to-folder Back behavior, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.
+JVM tests cover pure models, validation, operation safety, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, unavailable storage, destructive confirmation, search-to-folder Back behavior, selection-control accessibility, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.
