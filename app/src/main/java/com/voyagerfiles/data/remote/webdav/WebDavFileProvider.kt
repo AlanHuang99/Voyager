@@ -19,9 +19,7 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
     private var sardine: OkHttpSardine? = null
 
     private fun baseUrl(): String {
-        val scheme = if (connection.port == 443) "https" else "http"
-        val portPart = if (connection.port == 443 || connection.port == 80) "" else ":${connection.port}"
-        return "$scheme://${connection.host}$portPart"
+        return webDavBaseUrl(connection)
     }
 
     private fun toUrl(path: String): String {
@@ -180,4 +178,11 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
 
     private fun DavResource.isDirectoryResource(): Boolean =
         isDirectory || href?.path?.endsWith("/") == true
+}
+
+internal fun webDavBaseUrl(connection: RemoteConnection): String {
+    val scheme = if (connection.useTls) "https" else "http"
+    val defaultPort = if (connection.useTls) 443 else 80
+    val portPart = if (connection.port == defaultPort) "" else ":${connection.port}"
+    return "$scheme://${connection.host}$portPart"
 }

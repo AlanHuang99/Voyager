@@ -39,6 +39,32 @@ class WebDavFileProviderTest {
     }
 
     @Test
+    fun httpsSupportsCustomPorts() {
+        val connection = RemoteConnection(
+            name = "Secure WebDAV",
+            protocol = ConnectionProtocol.WEBDAV,
+            host = "files.example.com",
+            port = 8443,
+            useTls = true,
+        )
+
+        assertEquals("https://files.example.com:8443", webDavBaseUrl(connection))
+    }
+
+    @Test
+    fun httpMustBeSelectedExplicitly() {
+        val connection = RemoteConnection(
+            name = "Local WebDAV",
+            protocol = ConnectionProtocol.WEBDAV,
+            host = "192.168.1.5",
+            port = 8080,
+            useTls = false,
+        )
+
+        assertEquals("http://192.168.1.5:8080", webDavBaseUrl(connection))
+    }
+
+    @Test
     fun listFilesFromPropfindResponse() = runBlocking {
         val server = startServer()
         Files.write(server.root.resolve("hello.txt"), "hello".toByteArray())

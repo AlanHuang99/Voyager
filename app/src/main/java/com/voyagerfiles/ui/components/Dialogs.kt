@@ -1,10 +1,13 @@
 package com.voyagerfiles.ui.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
@@ -14,8 +17,10 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -154,12 +160,29 @@ fun ConnectionDialog(
     var shareName by remember { mutableStateOf(existingConnection?.shareName ?: "") }
     var domain by remember { mutableStateOf(existingConnection?.domain ?: "") }
     var protocolExpanded by remember { mutableStateOf(false) }
+    var useTls by remember { mutableStateOf(existingConnection?.useTls ?: true) }
+    var showCleartextConfirmation by remember { mutableStateOf(false) }
+
+    fun connectionFromFields(): RemoteConnection = RemoteConnection(
+        id = existingConnection?.id ?: 0,
+        name = name.ifBlank { "$host (${protocol.displayName})" },
+        protocol = protocol,
+        host = host,
+        port = port.toIntOrNull() ?: protocol.defaultPort,
+        useTls = useTls,
+        username = username,
+        password = password,
+        privateKeyPath = privateKeyPath.ifBlank { null },
+        remotePath = remotePath,
+        shareName = shareName.ifBlank { null },
+        domain = domain.ifBlank { null },
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existingConnection != null) "Edit Connection" else "New Connection") },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -194,6 +217,7 @@ fun ConnectionDialog(
                                 onClick = {
                                     protocol = proto
                                     port = proto.defaultPort.toString()
+                                    if (proto == ConnectionProtocol.WEBDAV) useTls = true
                                     protocolExpanded = false
                                 },
                             )
@@ -210,6 +234,24 @@ fun ConnectionDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                if (protocol == ConnectionProtocol.WEBDAV) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Use HTTPS")
+                            Text(
+                                if (useTls) "Encrypted WebDAV connection" else "HTTP sends credentials without transport encryption",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (useTls) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Switch(checked = useTls, onCheckedChange = { useTls = it })
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -327,21 +369,11 @@ fun ConnectionDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onSave(
-                        RemoteConnection(
-                            id = existingConnection?.id ?: 0,
-                            name = name.ifBlank { "$host (${protocol.displayName})" },
-                            protocol = protocol,
-                            host = host,
-                            port = port.toIntOrNull() ?: protocol.defaultPort,
-                            username = username,
-                            password = password,
-                            privateKeyPath = privateKeyPath.ifBlank { null },
-                            remotePath = remotePath,
-                            shareName = shareName.ifBlank { null },
-                            domain = domain.ifBlank { null },
-                        )
-                    )
+                    if (protocol == ConnectionProtocol.WEBDAV && !useTls) {
+                        showCleartextConfirmation = true
+                    } else {
+                        onSave(connectionFromFields())
+                    }
                 },
                 enabled = host.isNotBlank(),
             ) { Text("Save") }
@@ -350,4 +382,23 @@ fun ConnectionDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+
+    if (showCleartextConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showCleartextConfirmation = false },
+            title = { Text("Use unencrypted HTTP?") },
+            text = { Text("The WebDAV username, password, and files can be exposed on the network. Use HTTPS unless this is an isolated trusted network.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCleartextConfirmation = false
+                        onSave(connectionFromFields())
+                    },
+                ) { Text("Use HTTP") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleartextConfirmation = false }) { Text("Cancel") }
+            },
+        )
+    }
 }
