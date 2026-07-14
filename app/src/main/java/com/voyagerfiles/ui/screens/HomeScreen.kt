@@ -49,13 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.util.FileUtils
-import com.voyagerfiles.util.StorageDirectory
 import com.voyagerfiles.util.StorageInfo
+import com.voyagerfiles.util.StorageVolumeInfo
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
@@ -69,6 +72,8 @@ fun HomeScreen(
     onNavigateToTrash: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onOpenSafTree: (Uri) -> Unit,
+    hasAllFilesAccess: Boolean,
+    onRequestAllFilesAccess: () -> Unit,
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
@@ -83,9 +88,16 @@ fun HomeScreen(
         runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
         onOpenSafTree(uri)
     }
-    val storageInfo = remember { FileUtils.getStorageInfo() }
-    val storageDirectories = remember(context) { FileUtils.getStorageDirectories(context) }
+    val storageVolumes = remember(context, hasAllFilesAccess) {
+        if (hasAllFilesAccess) FileUtils.getStorageVolumes(context) else emptyList()
+    }
+    val storageInfoByPath = remember(storageVolumes) {
+        storageVolumes.mapNotNull { volume ->
+            volume.path?.takeIf { volume.isAvailable }?.let { path -> path to FileUtils.getStorageInfo(path) }
+        }.toMap()
+    }
     val directories = remember { FileUtils.getCommonDirectories() }
+    val visibleSessions = sessions.filter { hasAllFilesAccess || it.source != FileSource.LOCAL }
 
     Scaffold(
         topBar = {
@@ -112,51 +124,89 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            items(storageDirectories, key = { it.path }) { directory ->
-                StorageDirectoryCard(
-                    directory = directory,
-                    storageInfo = if (directory.name == "Internal Storage") storageInfo else null,
-                    onClick = { onNavigateToBrowser(directory.path) },
-                )
-            }
-
-            item {
-                SafAccessCard(onClick = { safTreeLauncher.launch(null) })
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onNavigateToTrash),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            if (hasAllFilesAccess) {
+                item {
+                    Text(
+                        "Storage",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                items(
+                    items = storageVolumes,
+                    key = { "${it.description}:${it.path}:${it.isPrimary}" },
+                ) { volume ->
+                    StorageVolumeCard(
+                        volume = volume,
+                        storageInfo = volume.path?.let(storageInfoByPath::get),
+                        onClick = { volume.path?.let(onNavigateToBrowser) },
+                    )
+                }
+            } else {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onRequestAllFilesAccess),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                     ) {
-                        Icon(
-                            Icons.Filled.DeleteOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Trash", style = MaterialTheme.typography.titleMedium)
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                "Restore or permanently delete local items",
+                                "Limited storage access",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                "Document trees and remote servers remain available. Grant full access to browse device storage directly.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     }
                 }
             }
 
-            if (sessions.isNotEmpty()) {
+            item {
+                SafAccessCard(onClick = { safTreeLauncher.launch(null) })
+            }
+
+            if (hasAllFilesAccess) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateToTrash),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Filled.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Trash", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Restore or permanently delete local items",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (visibleSessions.isNotEmpty()) {
                 item {
                     Text(
                         "Active Sessions",
@@ -165,7 +215,7 @@ fun HomeScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-                items(sessions, key = { it.id }) { session ->
+                items(visibleSessions, key = { it.id }) { session ->
                     ActiveSessionRow(
                         session = session,
                         isActive = session.id == activeSession?.id,
@@ -174,45 +224,46 @@ fun HomeScreen(
                 }
             }
 
-            // Quick access
-            item {
-                Text(
-                    "Quick Access",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
+            if (hasAllFilesAccess) {
+                item {
+                    Text(
+                        "Quick Access",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
 
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    QuickAccessCard(
-                        icon = Icons.Filled.Download,
-                        label = "Downloads",
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
-                    )
-                    QuickAccessCard(
-                        icon = Icons.Filled.Image,
-                        label = "Pictures",
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
-                    )
-                    QuickAccessCard(
-                        icon = Icons.Filled.MusicNote,
-                        label = "Music",
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
-                    )
-                    QuickAccessCard(
-                        icon = Icons.Filled.VideoLibrary,
-                        label = "Videos",
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
-                    )
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        QuickAccessCard(
+                            icon = Icons.Filled.Download,
+                            label = "Downloads",
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
+                        )
+                        QuickAccessCard(
+                            icon = Icons.Filled.Image,
+                            label = "Pictures",
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
+                        )
+                        QuickAccessCard(
+                            icon = Icons.Filled.MusicNote,
+                            label = "Music",
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
+                        )
+                        QuickAccessCard(
+                            icon = Icons.Filled.VideoLibrary,
+                            label = "Videos",
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
+                        )
+                    }
                 }
             }
 
@@ -254,7 +305,7 @@ fun HomeScreen(
             }
 
             // Bookmarks
-            if (bookmarks.isNotEmpty()) {
+            if (hasAllFilesAccess && bookmarks.isNotEmpty()) {
                 item {
                     Text(
                         "Bookmarks",
@@ -289,31 +340,32 @@ fun HomeScreen(
                 }
             }
 
-            // Common folders
-            item {
-                Text(
-                    "Folders",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            items(directories) { dir ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToBrowser(dir.path) }
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp),
+            if (hasAllFilesAccess) {
+                item {
+                    Text(
+                        "Folders",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                }
+                items(directories) { dir ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToBrowser(dir.path) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
 
@@ -362,16 +414,18 @@ private fun SafAccessCard(
 }
 
 @Composable
-private fun StorageDirectoryCard(
-    directory: StorageDirectory,
+internal fun StorageVolumeCard(
+    volume: StorageVolumeInfo,
     storageInfo: StorageInfo?,
     onClick: () -> Unit,
 ) {
-    val isInternal = storageInfo != null
+    val isInternal = volume.isPrimary
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .testTag("storage-volume:${volume.description}")
+            .semantics { stateDescription = volume.statusLabel ?: "Available" }
+            .clickable(enabled = volume.isAvailable, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isInternal)
                 MaterialTheme.colorScheme.primaryContainer
@@ -381,7 +435,7 @@ private fun StorageDirectoryCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    if (isInternal) Icons.Filled.SdStorage else Icons.Filled.Folder,
+                    if (isInternal) Icons.Filled.PhoneAndroid else Icons.Filled.SdStorage,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
                     tint = if (isInternal)
@@ -391,16 +445,16 @@ private fun StorageDirectoryCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        directory.name,
+                        volume.description,
                         style = MaterialTheme.typography.titleMedium,
                         color = if (isInternal)
                             MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        storageInfo?.let {
+                        volume.statusLabel ?: storageInfo?.let {
                             "${FileItem.formatFileSize(it.used)} / ${FileItem.formatFileSize(it.total)}"
-                        } ?: directory.path,
+                        } ?: volume.path.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isInternal)
                             MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -410,7 +464,7 @@ private fun StorageDirectoryCard(
                     )
                 }
             }
-            if (storageInfo != null) {
+            if (storageInfo != null && volume.statusLabel == null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { storageInfo.usedPercentage },

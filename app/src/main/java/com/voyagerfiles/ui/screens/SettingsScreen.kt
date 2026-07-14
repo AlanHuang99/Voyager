@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +72,8 @@ import com.voyagerfiles.viewmodel.FileBrowserViewModel
 fun SettingsScreen(
     viewModel: FileBrowserViewModel,
     onNavigateBack: () -> Unit,
+    hasAllFilesAccess: Boolean,
+    onRequestAllFilesAccess: () -> Unit,
 ) {
     val currentTheme by viewModel.theme.collectAsState()
     val browseState by viewModel.browseState.collectAsState()
@@ -132,6 +135,32 @@ fun SettingsScreen(
                         onClick = { viewModel.setTheme(theme) },
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "Storage access",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                if (hasAllFilesAccess) "Full file access" else "Limited access",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                if (hasAllFilesAccess) {
+                    "Device storage and mounted external media are available."
+                } else {
+                    "Document trees and remote servers remain available. Direct device storage requires Android special access."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onRequestAllFilesAccess) {
+                Text(if (hasAllFilesAccess) "Manage access" else "Grant full access")
             }
 
             Spacer(modifier = Modifier.height(24.dp))

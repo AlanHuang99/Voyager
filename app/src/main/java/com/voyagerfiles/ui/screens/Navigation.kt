@@ -23,7 +23,11 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun AppNavigation(viewModel: FileBrowserViewModel) {
+fun AppNavigation(
+    viewModel: FileBrowserViewModel,
+    hasAllFilesAccess: Boolean,
+    onRequestAllFilesAccess: () -> Unit,
+) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Screen.Home.route) {
@@ -51,6 +55,8 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                     viewModel.openSafRoot(uri)
                     navController.navigate(Screen.Browser.createRoute(uri.toString()))
                 },
+                hasAllFilesAccess = hasAllFilesAccess,
+                onRequestAllFilesAccess = onRequestAllFilesAccess,
             )
         }
 
@@ -87,6 +93,8 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
             SettingsScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
+                hasAllFilesAccess = hasAllFilesAccess,
+                onRequestAllFilesAccess = onRequestAllFilesAccess,
             )
         }
     }

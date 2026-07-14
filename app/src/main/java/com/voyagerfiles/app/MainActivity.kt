@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.voyagerfiles.ui.screens.AppNavigation
 import com.voyagerfiles.ui.screens.PermissionScreen
+import com.voyagerfiles.ui.screens.StorageAccessMode
+import com.voyagerfiles.ui.screens.storageAccessMode
 import com.voyagerfiles.ui.theme.VoyagerTheme
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
@@ -54,12 +56,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val theme by viewModel.theme.collectAsState()
             val permissionGranted by hasStoragePermission
+            val limitedAccessAccepted by viewModel.limitedAccessAccepted.collectAsState()
 
             VoyagerTheme(appTheme = theme) {
-                if (permissionGranted) {
-                    AppNavigation(viewModel = viewModel)
-                } else {
-                    PermissionScreen(onRequestPermission = { requestStoragePermission() })
+                when (storageAccessMode(permissionGranted, limitedAccessAccepted)) {
+                    StorageAccessMode.NEEDS_DECISION -> PermissionScreen(
+                        onRequestPermission = ::requestStoragePermission,
+                        onContinueLimited = { viewModel.setLimitedAccessAccepted(true) },
+                    )
+                    StorageAccessMode.FULL, StorageAccessMode.LIMITED -> AppNavigation(
+                        viewModel = viewModel,
+                        hasAllFilesAccess = permissionGranted,
+                        onRequestAllFilesAccess = ::requestStoragePermission,
+                    )
                 }
             }
         }
@@ -85,7 +94,10 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                 data = Uri.parse("package:$packageName")
             }
-            requestManageStorage.launch(intent)
+            runCatching { requestManageStorage.launch(intent) }
+                .onFailure {
+                    requestManageStorage.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                }
         } else {
             requestLegacyPermission.launch(
                 arrayOf(

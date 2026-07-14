@@ -45,7 +45,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val connectionDao = db.connectionDao()
     private val bookmarkDao = db.bookmarkDao()
     private val trashManager = LocalTrashManager(
-        FileUtils.getStorageDirectories(application).map { File(it.path) },
+        FileUtils.getStorageVolumes(application).mapNotNull { it.path?.let(::File) },
     )
 
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
@@ -80,6 +80,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val connections = connectionDao.getAllConnections().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -728,6 +729,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setUseTrash(useTrash: Boolean) {
         viewModelScope.launch { prefs.setUseTrash(useTrash) }
+    }
+
+    fun setLimitedAccessAccepted(accepted: Boolean) {
+        viewModelScope.launch { prefs.setLimitedAccessAccepted(accepted) }
     }
 
     fun setSortBy(sortBy: SortBy) {
