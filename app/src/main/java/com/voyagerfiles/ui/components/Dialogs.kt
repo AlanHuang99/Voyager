@@ -162,20 +162,22 @@ fun ConnectionDialog(
     var protocolExpanded by remember { mutableStateOf(false) }
     var useTls by remember { mutableStateOf(existingConnection?.useTls ?: true) }
     var showCleartextConfirmation by remember { mutableStateOf(false) }
+    val validation = ConnectionFormValidator.validate(protocol, host, port, shareName)
+    val transportWarning = connectionTransportWarning(protocol, useTls)
 
     fun connectionFromFields(): RemoteConnection = RemoteConnection(
         id = existingConnection?.id ?: 0,
-        name = name.ifBlank { "$host (${protocol.displayName})" },
+        name = name.trim().ifBlank { "${host.trim()} (${protocol.displayName})" },
         protocol = protocol,
-        host = host,
-        port = port.toIntOrNull() ?: protocol.defaultPort,
+        host = host.trim(),
+        port = checkNotNull(port.toIntOrNull()),
         useTls = useTls,
-        username = username,
+        username = username.trim(),
         password = password,
-        privateKeyPath = privateKeyPath.ifBlank { null },
-        remotePath = remotePath,
-        shareName = shareName.ifBlank { null },
-        domain = domain.ifBlank { null },
+        privateKeyPath = privateKeyPath.trim().ifBlank { null },
+        remotePath = remotePath.trim().ifBlank { "/" },
+        shareName = shareName.trim().ifBlank { null },
+        domain = domain.trim().ifBlank { null },
     )
 
     AlertDialog(
@@ -231,9 +233,20 @@ fun ConnectionDialog(
                     value = host,
                     onValueChange = { host = it },
                     label = { Text("Host") },
+                    isError = validation.hostError != null,
+                    supportingText = validation.hostError?.let { message -> { Text(message) } },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                if (protocol == ConnectionProtocol.FTP) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "FTP sends credentials and files without transport encryption",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
 
                 if (protocol == ConnectionProtocol.WEBDAV) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -259,6 +272,8 @@ fun ConnectionDialog(
                     value = port,
                     onValueChange = { port = it },
                     label = { Text("Port") },
+                    isError = validation.portError != null,
+                    supportingText = validation.portError?.let { message -> { Text(message) } },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -342,6 +357,8 @@ fun ConnectionDialog(
                         value = shareName,
                         onValueChange = { shareName = it },
                         label = { Text("Share Name") },
+                        isError = validation.shareNameError != null,
+                        supportingText = validation.shareNameError?.let { message -> { Text(message) } },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -369,13 +386,13 @@ fun ConnectionDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (protocol == ConnectionProtocol.WEBDAV && !useTls) {
+                    if (transportWarning != null) {
                         showCleartextConfirmation = true
                     } else {
                         onSave(connectionFromFields())
                     }
                 },
-                enabled = host.isNotBlank(),
+                enabled = validation.isValid,
             ) { Text("Save") }
         },
         dismissButton = {
@@ -384,17 +401,18 @@ fun ConnectionDialog(
     )
 
     if (showCleartextConfirmation) {
+        val warning = checkNotNull(transportWarning)
         AlertDialog(
             onDismissRequest = { showCleartextConfirmation = false },
-            title = { Text("Use unencrypted HTTP?") },
-            text = { Text("The WebDAV username, password, and files can be exposed on the network. Use HTTPS unless this is an isolated trusted network.") },
+            title = { Text(warning.title) },
+            text = { Text(warning.message) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showCleartextConfirmation = false
                         onSave(connectionFromFields())
                     },
-                ) { Text("Use HTTP") }
+                ) { Text(warning.confirmLabel) }
             },
             dismissButton = {
                 TextButton(onClick = { showCleartextConfirmation = false }) { Text("Cancel") }
