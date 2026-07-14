@@ -51,6 +51,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
     private var browserSessionRootPath: String? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
+    private val loadGuard = DirectoryLoadGuard()
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
@@ -225,10 +226,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         sessionId: String? = _activeSession.value?.id,
         provider: FileProvider = fileProvider,
     ) {
+        val requestId = loadGuard.nextRequest(sessionId)
         _browseState.update { it.copy(isLoading = true, error = null) }
         provider.listFiles(path).fold(
             onSuccess = { files ->
-                if (!isCurrentLoad(sessionId)) return@fold
+                if (!loadGuard.isCurrent(requestId, sessionId) || !isCurrentLoad(sessionId)) return@fold
                 val filtered = if (_browseState.value.showHidden) files
                 else files.filter { !it.isHidden }
                 val sorted = sortFiles(filtered)
@@ -238,7 +240,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 }
             },
             onFailure = { error ->
-                if (!isCurrentLoad(sessionId)) return@fold
+                if (!loadGuard.isCurrent(requestId, sessionId) || !isCurrentLoad(sessionId)) return@fold
                 _browseState.update {
                     it.copy(
                         error = error.message ?: "Failed to list files",
