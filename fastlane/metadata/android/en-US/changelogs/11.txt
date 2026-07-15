@@ -1,0 +1,7 @@
+Release 1.3.0:
+- Fixed crashes when browsing files with vector thumbnail fallbacks
+- Added search, file-type filters, and recoverable per-volume Trash
+- Added removable-storage discovery and a limited-access mode
+- Hardened local and cross-provider copy and move operations
+- Encrypted saved remote credentials and added SFTP host verification
+- Improved operation errors, responsive layouts, and accessibility
