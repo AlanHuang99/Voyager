@@ -4,6 +4,9 @@ import com.voyagerfiles.data.repository.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+class DestinationConflictException(val path: String) :
+    IllegalStateException("An item named ${path.substringAfterLast('/')} already exists in this folder")
+
 object FileOperationCoordinator {
     private const val BUFFER_SIZE = 64 * 1024
 
@@ -38,20 +41,34 @@ object FileOperationCoordinator {
     ) {
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
         val targetPath = joinPath(destinationDirectoryPath, item.name)
-        if (item.isDirectory) {
-            if (!destinationProvider.exists(targetPath)) {
-                destinationProvider.createDirectory(destinationDirectoryPath, item.name).getOrThrow()
-            }
-            sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
-                copyPathInternal(sourceProvider, destinationProvider, child.path, targetPath)
-            }
-            return
-        }
+        if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
 
-        sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
-            destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
-                input.copyTo(output, BUFFER_SIZE)
+        var targetCreated = false
+        try {
+            if (item.isDirectory) {
+                destinationProvider.createDirectory(destinationDirectoryPath, item.name).getOrThrow()
+                targetCreated = true
+                sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
+                    copyPathInternal(sourceProvider, destinationProvider, child.path, targetPath)
+                }
+                return
             }
+
+            sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
+                destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
+                    targetCreated = true
+                    input.copyTo(output, BUFFER_SIZE)
+                }
+            }
+        } catch (error: Throwable) {
+            if (targetCreated) {
+                runCatching {
+                    if (destinationProvider.exists(targetPath)) {
+                        destinationProvider.delete(targetPath).getOrThrow()
+                    }
+                }.onFailure(error::addSuppressed)
+            }
+            throw error
         }
     }
 

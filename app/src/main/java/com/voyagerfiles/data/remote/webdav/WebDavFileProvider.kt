@@ -8,20 +8,29 @@ import com.thegrizzlylabs.sardineandroid.DavResource
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import okhttp3.Credentials
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+import java.io.FileOutputStream
+import java.io.FilterOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
-class WebDavFileProvider(private val connection: RemoteConnection) : FileProvider {
+class WebDavFileProvider(
+    private val connection: RemoteConnection,
+    private val temporaryDirectory: File,
+) : FileProvider {
 
     private var sardine: OkHttpSardine? = null
+    private var httpClient: OkHttpClient? = null
 
     private fun baseUrl(): String {
-        val scheme = if (connection.port == 443) "https" else "http"
-        val portPart = if (connection.port == 443 || connection.port == 80) "" else ":${connection.port}"
-        return "$scheme://${connection.host}$portPart"
+        return webDavBaseUrl(connection)
     }
 
     private fun toUrl(path: String): String {
@@ -31,9 +40,24 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
 
     private fun ensureConnected() {
         if (sardine != null) return
-        val s = OkHttpSardine()
-        s.setCredentials(connection.username, connection.password)
-        sardine = s
+        val client = OkHttpClient.Builder()
+            .apply {
+                if (connection.username.isNotEmpty()) {
+                    authenticator { _, response ->
+                        val credential = Credentials.basic(connection.username, connection.password)
+                        if (response.request.header("Authorization") == credential) {
+                            null
+                        } else {
+                            response.request.newBuilder()
+                                .header("Authorization", credential)
+                                .build()
+                        }
+                    }
+                }
+            }
+            .build()
+        httpClient = client
+        sardine = OkHttpSardine(client)
     }
 
     override suspend fun listFiles(path: String): Result<List<FileItem>> =
@@ -126,15 +150,35 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
         withContext(Dispatchers.IO) {
             runCatching {
                 ensureConnected()
-                val client = sardine!!
-                object : ByteArrayOutputStream() {
+                val client = httpClient!!
+                check(temporaryDirectory.isDirectory || temporaryDirectory.mkdirs()) {
+                    "Could not prepare temporary storage for the upload"
+                }
+                val temporaryFile = File.createTempFile(
+                    "voyager-webdav-",
+                    ".upload",
+                    temporaryDirectory,
+                )
+                object : FilterOutputStream(FileOutputStream(temporaryFile)) {
                     private var closed = false
 
                     override fun close() {
                         if (closed) return
                         closed = true
-                        super.close()
-                        client.put(toUrl(path), toByteArray())
+                        try {
+                            super.close()
+                            val request = Request.Builder()
+                                .url(toUrl(path))
+                                .put(temporaryFile.asRequestBody("application/octet-stream".toMediaType()))
+                                .build()
+                            client.newCall(request).execute().use { response ->
+                                if (!response.isSuccessful) {
+                                    throw IOException("WebDAV upload failed: HTTP ${response.code}")
+                                }
+                            }
+                        } finally {
+                            temporaryFile.delete()
+                        }
                     }
                 } as OutputStream
             }
@@ -175,9 +219,19 @@ class WebDavFileProvider(private val connection: RemoteConnection) : FileProvide
     }
 
     override suspend fun disconnect() {
+        httpClient?.dispatcher?.cancelAll()
+        httpClient?.connectionPool?.evictAll()
+        httpClient = null
         sardine = null
     }
 
     private fun DavResource.isDirectoryResource(): Boolean =
         isDirectory || href?.path?.endsWith("/") == true
+}
+
+internal fun webDavBaseUrl(connection: RemoteConnection): String {
+    val scheme = if (connection.useTls) "https" else "http"
+    val defaultPort = if (connection.useTls) 443 else 80
+    val portPart = if (connection.port == defaultPort) "" else ":${connection.port}"
+    return "$scheme://${connection.host}$portPart"
 }

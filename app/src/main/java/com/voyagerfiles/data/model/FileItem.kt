@@ -126,7 +126,23 @@ data class BrowseState(
     val showHidden: Boolean = false,
     val viewMode: ViewMode = ViewMode.LIST,
     val source: FileSource = FileSource.LOCAL,
-)
+    val searchQuery: String = "",
+    val fileTypeFilter: FileTypeFilter = FileTypeFilter.ALL,
+) {
+    val visibleFiles: List<FileItem>
+        get() {
+            val query = searchQuery.trim()
+            return files.filter { file ->
+                (query.isEmpty() || file.name.contains(query, ignoreCase = true)) && fileTypeFilter.matches(file)
+            }
+        }
+
+    val reconciledSelection: Set<String>
+        get() {
+            val visiblePaths = visibleFiles.mapTo(mutableSetOf()) { it.path }
+            return selectedFiles.intersect(visiblePaths)
+        }
+}
 
 enum class ViewMode {
     LIST,

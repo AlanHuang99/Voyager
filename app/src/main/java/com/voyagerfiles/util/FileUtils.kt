@@ -3,8 +3,11 @@ package com.voyagerfiles.util
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.storage.StorageManager
+import android.os.storage.StorageVolume
 import androidx.core.content.FileProvider
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
@@ -12,9 +15,9 @@ import java.io.File
 
 object FileUtils {
 
-    fun getStorageInfo(): StorageInfo {
+    fun getStorageInfo(path: String = Environment.getExternalStorageDirectory().path): StorageInfo {
         return try {
-            val stat = StatFs(Environment.getExternalStorageDirectory().path)
+            val stat = StatFs(path)
             val total = stat.totalBytes
             val available = stat.availableBytes
             val used = total - available
@@ -25,6 +28,11 @@ object FileUtils {
     }
 
     fun getStorageDirectories(context: Context? = null): List<StorageDirectory> {
+        if (context != null) {
+            return getStorageVolumes(context)
+                .filter(StorageVolumeInfo::isAvailable)
+                .mapNotNull { volume -> volume.path?.let { StorageDirectory(volume.description, it) } }
+        }
         val primaryPath = Environment.getExternalStorageDirectory().absolutePath
         val removablePaths = mutableListOf<String>()
 
@@ -34,6 +42,42 @@ object FileUtils {
         removablePaths += discoverStorageRoots(primaryPath)
 
         return buildStorageDirectories(primaryPath, removablePaths)
+    }
+
+    fun getStorageVolumes(context: Context): List<StorageVolumeInfo> {
+        val primaryPath = Environment.getExternalStorageDirectory().absolutePath
+        val storageManager = context.getSystemService(StorageManager::class.java)
+        val externalRoots = context.getExternalFilesDirs(null)
+            .mapNotNull { it?.toStorageRootPath() }
+        val fallbackPaths = (listOf(primaryPath) + externalRoots + discoverStorageRoots(primaryPath))
+            .map { it.normalizedPath() }
+            .filterNot { it.substringAfterLast("/") in ignoredStorageRootNames }
+
+        val rootsByVolume = context.getExternalFilesDirs(null)
+            .mapNotNull { appDirectory ->
+                appDirectory ?: return@mapNotNull null
+                val volume = storageManager.getStorageVolume(appDirectory) ?: return@mapNotNull null
+                volume.identity(context) to appDirectory.toStorageRootPath()
+            }
+            .filter { it.second != null }
+            .associate { it.first to checkNotNull(it.second) }
+
+        val platformVolumes = storageManager.storageVolumes.map { volume ->
+            val path = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                volume.directory?.absolutePath
+            } else {
+                rootsByVolume[volume.identity(context)] ?: if (volume.isPrimary) primaryPath else null
+            }
+            StorageVolumeInfo(
+                description = volume.getDescription(context),
+                path = path,
+                isPrimary = volume.isPrimary,
+                isRemovable = volume.isRemovable,
+                state = volume.state,
+            )
+        }
+
+        return mergeStorageVolumes(platformVolumes, fallbackPaths, primaryPath)
     }
 
     fun buildStorageDirectories(
@@ -118,6 +162,9 @@ object FileUtils {
         val markerIndex = absolutePath.indexOf(marker)
         return if (markerIndex > 0) absolutePath.substring(0, markerIndex) else null
     }
+
+    private fun StorageVolume.identity(context: Context): String =
+        listOf(isPrimary.toString(), uuid.orEmpty(), getDescription(context)).joinToString(":")
 
     private fun String.normalizedPath(): String =
         trim().trimEnd('/').ifBlank { "/" }

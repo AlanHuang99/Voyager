@@ -2,6 +2,7 @@ package com.voyagerfiles.data.remote.sftp
 
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
+import com.jcraft.jsch.JSchChangedHostKeyException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.UIKeyboardInteractive
 import com.jcraft.jsch.UserInfo
@@ -13,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.FilterInputStream
 import java.io.FilterOutputStream
 import java.io.InputStream
@@ -20,7 +22,10 @@ import java.io.OutputStream
 import java.util.Date
 import java.util.Properties
 
-class SftpFileProvider(private val connection: RemoteConnection) : FileProvider {
+class SftpFileProvider(
+    private val connection: RemoteConnection,
+    private val knownHostsFile: File,
+) : FileProvider {
 
     private val connectionLock = Mutex()
     private var session: Session? = null
@@ -31,6 +36,8 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
         closeConnection()
 
         val jsch = JSch()
+        prepareKnownHostsFile()
+        jsch.setKnownHosts(knownHostsFile.absolutePath)
         connection.privateKeyPath?.takeIf { it.isNotBlank() }?.let { privateKeyPath ->
             jsch.addIdentity(privateKeyPath)
         }
@@ -47,7 +54,7 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
             nextSession.userInfo = PasswordUserInfo(connection.password)
             nextSession.setConfig(
                 Properties().apply {
-                    put("StrictHostKeyChecking", "no")
+                    put("StrictHostKeyChecking", "ask")
                     put("PreferredAuthentications", "publickey,password,keyboard-interactive")
                 }
             )
@@ -57,9 +64,25 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
             nextSession.connect(CONNECTION_TIMEOUT_MILLIS)
             session = nextSession
             return nextSession
+        } catch (error: JSchChangedHostKeyException) {
+            runCatching { nextSession.disconnect() }
+            throw IllegalStateException(
+                "SFTP host key changed. Verify the server before reconnecting.",
+                error,
+            )
         } catch (error: Throwable) {
             runCatching { nextSession.disconnect() }
             throw error
+        }
+    }
+
+    private fun prepareKnownHostsFile() {
+        val parent = knownHostsFile.parentFile
+        check(parent == null || parent.isDirectory || parent.mkdirs()) {
+            "Could not create the SFTP security directory"
+        }
+        check(knownHostsFile.isFile || knownHostsFile.createNewFile()) {
+            "Could not create the SFTP known-hosts file"
         }
     }
 
@@ -323,7 +346,8 @@ class SftpFileProvider(private val connection: RemoteConnection) : FileProvider 
 
         override fun promptPassphrase(message: String?): Boolean = false
 
-        override fun promptYesNo(message: String?): Boolean = true
+        override fun promptYesNo(message: String?): Boolean =
+            message?.startsWith("The authenticity of host '") == true
 
         override fun showMessage(message: String?) = Unit
 

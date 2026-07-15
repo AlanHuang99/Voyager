@@ -12,16 +12,24 @@ import com.voyagerfiles.data.model.BrowseState
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
+import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
+import com.voyagerfiles.data.repository.ConnectionRepository
+import com.voyagerfiles.data.repository.LocalTrashManager
+import com.voyagerfiles.security.AndroidCredentialCipher
 import com.voyagerfiles.ui.theme.AppTheme
+import com.voyagerfiles.util.FileNameValidationResult
+import com.voyagerfiles.util.FileNameValidator
+import com.voyagerfiles.util.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,17 +38,23 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
     private val connectionDao = db.connectionDao()
+    private val connectionRepository = ConnectionRepository(connectionDao, AndroidCredentialCipher())
     private val bookmarkDao = db.bookmarkDao()
+    private val trashManager = LocalTrashManager(
+        FileUtils.getStorageVolumes(application).mapNotNull { it.path?.let(::File) },
+    )
 
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
     private var browserSessionRootPath: String? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
+    private val loadGuard = DirectoryLoadGuard()
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
@@ -61,11 +75,25 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
+    private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
+    val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
+
+    private val _trashState = MutableStateFlow(TrashState())
+    val trashState: StateFlow<TrashState> = _trashState.asStateFlow()
+
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
-    val connections = connectionDao.getAllConnections().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
+        viewModelScope.launch {
+            runCatching { connectionRepository.migratePlaintextCredentials() }
+                .onFailure {
+                    showSnackbar("Could not secure saved connection passwords. Edit and save them again.")
+                }
+        }
         viewModelScope.launch {
             prefs.showHidden.collect { show ->
                 _browseState.update { it.copy(showHidden = show) }
@@ -186,6 +214,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 isLoading = true,
                 error = null,
                 selectedFiles = emptySet(),
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
         loadFiles(normalizedPath, sessionId, fileProvider)
@@ -206,20 +236,24 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         sessionId: String? = _activeSession.value?.id,
         provider: FileProvider = fileProvider,
     ) {
+        val requestId = loadGuard.nextRequest(sessionId)
         _browseState.update { it.copy(isLoading = true, error = null) }
         provider.listFiles(path).fold(
             onSuccess = { files ->
-                if (!isCurrentLoad(sessionId)) return@fold
+                if (!loadGuard.isCurrent(requestId, sessionId) || !isCurrentLoad(sessionId)) return@fold
                 val filtered = if (_browseState.value.showHidden) files
                 else files.filter { !it.isHidden }
                 val sorted = sortFiles(filtered)
-                _browseState.update { it.copy(files = sorted, isLoading = false) }
+                _browseState.update { state ->
+                    val next = state.copy(files = sorted, isLoading = false)
+                    next.copy(selectedFiles = next.reconciledSelection)
+                }
             },
             onFailure = { error ->
-                if (!isCurrentLoad(sessionId)) return@fold
+                if (!loadGuard.isCurrent(requestId, sessionId) || !isCurrentLoad(sessionId)) return@fold
                 _browseState.update {
                     it.copy(
-                        error = error.message ?: "Failed to list files",
+                        error = OperationMessages.reason(error),
                         isLoading = false,
                         files = emptyList(),
                     )
@@ -257,7 +291,31 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun selectAll() {
         _browseState.update { state ->
-            state.copy(selectedFiles = state.files.map { it.path }.toSet())
+            state.copy(selectedFiles = state.visibleFiles.map { it.path }.toSet())
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        _browseState.update { state ->
+            val next = state.copy(searchQuery = query)
+            next.copy(selectedFiles = next.reconciledSelection)
+        }
+    }
+
+    fun setFileTypeFilter(filter: FileTypeFilter) {
+        _browseState.update { state ->
+            val next = state.copy(fileTypeFilter = filter)
+            next.copy(selectedFiles = next.reconciledSelection)
+        }
+    }
+
+    fun clearFilters() {
+        _browseState.update { state ->
+            state.copy(
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
+                selectedFiles = emptySet(),
+            )
         }
     }
 
@@ -266,54 +324,80 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun createDirectory(name: String) {
-        viewModelScope.launch {
-            fileProvider.createDirectory(_browseState.value.currentPath, name).fold(
+        val validatedName = validFileNameOrNotify(name) ?: return
+        val provider = fileProvider
+        val path = _browseState.value.currentPath
+        launchOperation("Creating folder") {
+            provider.createDirectory(path, validatedName).fold(
                 onSuccess = {
                     showSnackbar("Folder created")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Failed to create folder: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Create folder", it)) },
             )
         }
     }
 
     fun createFile(name: String) {
-        viewModelScope.launch {
-            fileProvider.createFile(_browseState.value.currentPath, name).fold(
+        val validatedName = validFileNameOrNotify(name) ?: return
+        val provider = fileProvider
+        val path = _browseState.value.currentPath
+        launchOperation("Creating file") {
+            provider.createFile(path, validatedName).fold(
                 onSuccess = {
                     showSnackbar("File created")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Failed to create file: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Create file", it)) },
             )
         }
     }
 
     fun deleteSelected() {
-        viewModelScope.launch {
-            val count = _browseState.value.selectedFiles.size
+        val state = _browseState.value
+        val selectedPaths = state.selectedFiles.toList()
+        if (selectedPaths.isEmpty()) return
+        val moveToTrash = state.source == FileSource.LOCAL && useTrash.value
+        val provider = fileProvider
+        launchOperation(if (moveToTrash) "Moving to Trash" else "Deleting") {
+            val count = selectedPaths.size
             var failed = 0
-            for (path in _browseState.value.selectedFiles) {
-                fileProvider.delete(path).onFailure { failed++ }
+            var firstError: Throwable? = null
+            for (path in selectedPaths) {
+                val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else provider.delete(path)
+                result.onFailure { error ->
+                    failed++
+                    if (firstError == null) firstError = error
+                }
             }
             clearSelection()
             refreshFiles()
             if (failed > 0) {
-                showSnackbar("$failed of $count items failed to delete")
+                showSnackbar(
+                    OperationMessages.partial(
+                        failed = failed,
+                        total = count,
+                        action = if (moveToTrash) "moved to Trash" else "deleted",
+                        error = checkNotNull(firstError),
+                    )
+                )
             } else {
-                showSnackbar("$count item${if (count > 1) "s" else ""} deleted")
+                val action = if (moveToTrash) "moved to Trash" else "permanently deleted"
+                showSnackbar("$count item${if (count > 1) "s" else ""} $action")
             }
         }
     }
 
     fun rename(oldPath: String, newName: String) {
-        viewModelScope.launch {
-            fileProvider.rename(oldPath, newName).fold(
+        val validatedName = validFileNameOrNotify(newName) ?: return
+        val provider = fileProvider
+        launchOperation("Renaming") {
+            provider.rename(oldPath, validatedName).fold(
                 onSuccess = {
-                    showSnackbar("Renamed to $newName")
+                    showSnackbar("Renamed to $validatedName")
                     refreshFiles()
                 },
-                onFailure = { showSnackbar("Rename failed: ${it.message}") },
+                onFailure = { showSnackbar(OperationMessages.failure("Rename", it)) },
             )
         }
     }
@@ -341,13 +425,17 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun paste() {
-        viewModelScope.launch {
-            val destPath = _browseState.value.currentPath
-            val sourceProvider = clipboardProvider ?: fileProvider
-            val destinationProvider = fileProvider
+        val paths = _clipboardPaths.value.toList()
+        val operation = _clipboardOperation.value
+        if (paths.isEmpty() || operation == ClipboardOperation.NONE) return
+        val destPath = _browseState.value.currentPath
+        val sourceProvider = clipboardProvider ?: fileProvider
+        val destinationProvider = fileProvider
+        launchOperation("Pasting") {
             var failed = 0
-            for (sourcePath in _clipboardPaths.value) {
-                val result = when (_clipboardOperation.value) {
+            var firstError: Throwable? = null
+            for (sourcePath in paths) {
+                val result = when (operation) {
                     ClipboardOperation.COPY -> {
                         if (sourceProvider === destinationProvider) {
                             destinationProvider.copy(sourcePath, destPath)
@@ -364,14 +452,24 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     }
                     ClipboardOperation.NONE -> Result.success(Unit)
                 }
-                result.onFailure { failed++ }
+                result.onFailure { error ->
+                    failed++
+                    if (firstError == null) firstError = error
+                }
             }
-            if (_clipboardOperation.value == ClipboardOperation.CUT && failed == 0) {
+            if (operation == ClipboardOperation.CUT && failed == 0) {
                 clearClipboard()
             }
             refreshFiles()
             if (failed > 0) {
-                showSnackbar("$failed items failed to paste")
+                showSnackbar(
+                    OperationMessages.partial(
+                        failed = failed,
+                        total = paths.size,
+                        action = "pasted",
+                        error = checkNotNull(firstError),
+                    )
+                )
             } else {
                 showSnackbar("Pasted successfully")
             }
@@ -387,27 +485,27 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun downloadPaths(paths: List<String>, clearSelection: Boolean) {
-        viewModelScope.launch {
-            val state = _browseState.value
-            if (paths.isEmpty()) return@launch
+        if (paths.isEmpty()) return
+        val state = _browseState.value
+        val provider = fileProvider
+        launchOperation("Downloading") {
             if (!state.source.isNetwork) {
                 showSnackbar("This file is already on this device")
-                return@launch
+                return@launchOperation
             }
 
-            val provider = fileProvider
             val items = runCatching {
                 paths.map { path ->
                     state.files.firstOrNull { it.path == path }
                         ?: provider.getFileInfo(path).getOrThrow()
                 }
             }.getOrElse { error ->
-                showSnackbar("Download failed: ${error.message}")
-                return@launch
+                showSnackbar(OperationMessages.failure("Download", error))
+                return@launchOperation
             }
             if (items.any { it.path == state.currentPath }) {
                 showSnackbar("Choose files or folders inside this location")
-                return@launch
+                return@launchOperation
             }
 
             if (clearSelection) clearSelection()
@@ -422,7 +520,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 },
                 onFailure = { error ->
-                    showSnackbar("Download failed: ${error.message}")
+                    showSnackbar(OperationMessages.failure("Download", error))
                 },
             )
         }
@@ -435,7 +533,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             if (_sessions.value.none { it.id == sessionId }) {
                 val normalizedPath = BrowserNavigationBounds.normalizePath(connection.remotePath)
                 val source = sourceForProtocol(connection.protocol)
-                sessionProviders[sessionId] = FileProviderFactory.createRemote(connection)
+                sessionProviders[sessionId] = FileProviderFactory.createRemote(
+                    context = getApplication(),
+                    connection = connection,
+                )
                 _sessions.update { sessions ->
                     sessions + BrowserSession(
                         id = sessionId,
@@ -448,7 +549,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 }
             }
-            connectionDao.updateLastConnected(connection.id, System.currentTimeMillis())
+            connectionRepository.updateLastConnected(connection.id, System.currentTimeMillis())
             activateSessionInternal(sessionId)
         }
     }
@@ -475,24 +576,96 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun saveConnection(connection: RemoteConnection) {
         viewModelScope.launch {
-            if (connection.id == 0L) {
-                connectionDao.insert(connection)
-                showSnackbar("Connection saved")
-            } else {
-                connectionDao.update(connection)
-                showSnackbar("Connection updated")
-            }
+            runCatching { connectionRepository.save(connection) }.fold(
+                onSuccess = {
+                    showSnackbar(if (connection.id == 0L) "Connection saved" else "Connection updated")
+                },
+                onFailure = {
+                    showSnackbar("Could not protect and save the connection")
+                },
+            )
         }
     }
 
     fun deleteConnection(connection: RemoteConnection) {
         viewModelScope.launch {
-            connectionDao.delete(connection)
-            showSnackbar("Connection deleted")
+            runCatching { connectionRepository.delete(connection) }.fold(
+                onSuccess = { showSnackbar("Connection deleted") },
+                onFailure = { showSnackbar("Could not delete the connection") },
+            )
+        }
+    }
+
+    fun refreshTrash() {
+        viewModelScope.launch { loadTrashEntries() }
+    }
+
+    fun toggleTrashSelection(id: String) {
+        _trashState.update { state ->
+            val selected = state.selectedIds.toMutableSet()
+            if (!selected.add(id)) selected.remove(id)
+            state.copy(selectedIds = selected)
+        }
+    }
+
+    fun selectAllTrash() {
+        _trashState.update { state -> state.copy(selectedIds = state.entries.mapTo(mutableSetOf()) { it.id }) }
+    }
+
+    fun clearTrashSelection() {
+        _trashState.update { it.copy(selectedIds = emptySet()) }
+    }
+
+    fun restoreSelectedTrash() {
+        val entries = selectedTrashEntries()
+        if (entries.isEmpty()) return
+        launchOperation("Restoring from Trash") {
+            val failures = runTrashActions(entries, trashManager::restore)
+            loadTrashEntries()
+            showTrashResult(
+                entries = entries,
+                failures = failures,
+                successMessage = { count -> "$count item${if (count == 1) "" else "s"} restored" },
+                failureAction = "restore",
+            )
+        }
+    }
+
+    fun deleteSelectedTrashPermanently() {
+        val entries = selectedTrashEntries()
+        if (entries.isEmpty()) return
+        launchOperation("Deleting permanently") {
+            val failures = runTrashActions(entries, trashManager::deletePermanently)
+            loadTrashEntries()
+            showTrashResult(
+                entries = entries,
+                failures = failures,
+                successMessage = { count -> "$count item${if (count == 1) "" else "s"} permanently deleted" },
+                failureAction = "delete",
+            )
+        }
+    }
+
+    fun emptyTrash() {
+        launchOperation("Emptying Trash") {
+            trashManager.empty().fold(
+                onSuccess = { removed ->
+                    loadTrashEntries()
+                    showSnackbar(if (removed == 0) "Trash is already empty" else "Trash emptied")
+                },
+                onFailure = { error ->
+                    loadTrashEntries()
+                    showSnackbar("Could not empty Trash: ${error.message ?: "Unknown error"}")
+                },
+            )
         }
     }
 
     fun toggleBookmark(path: String, name: String) {
+        if (_browseState.value.source != FileSource.LOCAL) {
+            showSnackbar("Bookmarks are available for local folders")
+            return
+        }
         viewModelScope.launch {
             if (bookmarkDao.isBookmarked(path)) {
                 bookmarkDao.deleteByPath(path)
@@ -513,6 +686,83 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         _snackbarMessage.value = message
     }
 
+    private fun launchOperation(label: String, block: suspend () -> Unit) {
+        val active = _operationState.value as? OperationState.Running
+        if (active != null) {
+            showSnackbar("${active.label} is already in progress")
+            return
+        }
+        _operationState.value = OperationState.Running(label)
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (error: Throwable) {
+                showSnackbar(OperationMessages.failure(label, error))
+            } finally {
+                _operationState.value = OperationState.Idle
+            }
+        }
+    }
+
+    private suspend fun loadTrashEntries() {
+        _trashState.update { it.copy(isLoading = true, error = null) }
+        runCatching { trashManager.listEntries() }.fold(
+            onSuccess = { entries ->
+                _trashState.update { state ->
+                    state.copy(
+                        entries = entries,
+                        selectedIds = state.selectedIds.intersect(entries.mapTo(mutableSetOf()) { it.id }),
+                        isLoading = false,
+                        error = null,
+                    )
+                }
+            },
+            onFailure = { error ->
+                _trashState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = error.message ?: "Could not load Trash",
+                    )
+                }
+            },
+        )
+    }
+
+    private fun selectedTrashEntries(): List<TrashEntry> {
+        val state = _trashState.value
+        return state.entries.filter { it.id in state.selectedIds }
+    }
+
+    private suspend fun runTrashActions(
+        entries: List<TrashEntry>,
+        action: suspend (TrashEntry) -> Result<Unit>,
+    ): List<Throwable> = buildList {
+        entries.forEach { entry -> action(entry).exceptionOrNull()?.let(::add) }
+    }
+
+    private fun showTrashResult(
+        entries: List<TrashEntry>,
+        failures: List<Throwable>,
+        successMessage: (Int) -> String,
+        failureAction: String,
+    ) {
+        val succeeded = entries.size - failures.size
+        when {
+            failures.isEmpty() -> showSnackbar(successMessage(succeeded))
+            succeeded > 0 -> showSnackbar("$succeeded succeeded; ${failures.size} could not $failureAction")
+            else -> showSnackbar("Could not $failureAction: ${failures.first().message ?: "Unknown error"}")
+        }
+    }
+
+    private fun validFileNameOrNotify(name: String): String? =
+        when (val result = FileNameValidator.validate(name)) {
+            is FileNameValidationResult.Valid -> result.name
+            is FileNameValidationResult.Invalid -> {
+                showSnackbar(result.message)
+                null
+            }
+        }
+
     fun clearSnackbar() {
         _snackbarMessage.value = null
     }
@@ -524,6 +774,14 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setShowHidden(show: Boolean) {
         viewModelScope.launch { prefs.setShowHidden(show) }
+    }
+
+    fun setUseTrash(useTrash: Boolean) {
+        viewModelScope.launch { prefs.setUseTrash(useTrash) }
+    }
+
+    fun setLimitedAccessAccepted(accepted: Boolean) {
+        viewModelScope.launch { prefs.setLimitedAccessAccepted(accepted) }
     }
 
     fun setSortBy(sortBy: SortBy) {
@@ -558,6 +816,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 source = session.source,
                 selectedFiles = emptySet(),
                 error = null,
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
         loadFiles(session.currentPath, session.id, provider)
@@ -593,6 +853,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 error = null,
                 selectedFiles = emptySet(),
                 source = FileSource.LOCAL,
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
             )
         }
     }

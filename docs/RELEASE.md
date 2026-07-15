@@ -1,11 +1,11 @@
 # Release Process
 
-Voyager has two distribution paths:
+Voyager has two coordinated distribution paths:
 
 - GitHub releases and GitHub Pages host APKs signed with the project's release key.
-- F-Droid builds from source using `metadata/com.voyagerfiles.yml` and signs the APK with F-Droid's own key.
+- The current F-Droid recipe rebuilds the source, verifies it against the upstream APK through the `Binaries` directive, checks the expected developer signing key with `AllowedAPKSigningKeys`, and publishes the verified developer-signed APK.
 
-Keep those paths separate. Do not commit keystores, generated APKs, local signing files, or F-Droid build output.
+Keep the release inputs aligned. Do not commit keystores, generated APKs, local signing files, or F-Droid build output. F-Droid's reproducible-build flow is documented at [f-droid.org/docs/Reproducible_Builds](https://f-droid.org/docs/Reproducible_Builds/).
 
 ## GitHub Actions Secrets
 
@@ -61,6 +61,6 @@ Important constraints:
 
 - `Builds.commit` should be the full commit hash for the source revision being built.
 - `AutoUpdateMode: Version` with `UpdateCheckMode: Tags` lets F-Droid discover future version tags.
-- The build uses `gradleprops: voyager.enableAbiSplits=false` so F-Droid builds one APK instead of the ABI split set used by GitHub releases.
+- The build uses `gradleprops: voyager.enableAbiSplits=false` so F-Droid reproduces the universal upstream APK instead of the ABI split set.
 
 After a new GitHub release commit is final, update the F-Droid build block to the release commit hash and matching version if the F-Droid metadata is maintained in this repository.

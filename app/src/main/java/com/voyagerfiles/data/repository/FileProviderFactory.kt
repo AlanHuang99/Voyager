@@ -9,6 +9,7 @@ import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.remote.sftp.SftpFileProvider
 import com.voyagerfiles.data.remote.smb.SmbFileProvider
 import com.voyagerfiles.data.remote.webdav.WebDavFileProvider
+import java.io.File
 
 object FileProviderFactory {
     fun createLocal(): FileProvider = LocalFileProvider()
@@ -16,10 +17,13 @@ object FileProviderFactory {
     fun createSaf(context: Context, treeUri: Uri): FileProvider =
         SafFileProvider(context.applicationContext, treeUri)
 
-    fun createRemote(connection: RemoteConnection): FileProvider = when (connection.protocol) {
-        ConnectionProtocol.SFTP -> SftpFileProvider(connection)
-        ConnectionProtocol.FTP -> FtpFileProvider(connection)
+    fun createRemote(context: Context, connection: RemoteConnection): FileProvider = when (connection.protocol) {
+        ConnectionProtocol.SFTP -> SftpFileProvider(
+            connection = connection,
+            knownHostsFile = File(context.applicationContext.filesDir, "ssh/known_hosts"),
+        )
+        ConnectionProtocol.FTP -> FtpFileProvider(connection, context.applicationContext.cacheDir)
         ConnectionProtocol.SMB -> SmbFileProvider(connection)
-        ConnectionProtocol.WEBDAV -> WebDavFileProvider(connection)
+        ConnectionProtocol.WEBDAV -> WebDavFileProvider(connection, context.applicationContext.cacheDir)
     }
 }

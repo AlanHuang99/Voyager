@@ -7,6 +7,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -41,19 +43,26 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -73,15 +82,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.components.CreateItemDialog
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
+import com.voyagerfiles.ui.components.DeleteDialogModel
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
@@ -90,6 +104,7 @@ import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.viewmodel.OperationState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,7 +119,10 @@ fun BrowserScreen(
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val useTrash by viewModel.useTrash.collectAsState()
+    val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -114,15 +132,30 @@ fun BrowserScreen(
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showSelectionMoreMenu by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var showSessionsSheet by remember { mutableStateOf(false) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
+    val selectionToolbarModel = remember(isNetwork, state.selectedFiles.size) {
+        SelectionToolbarModel.forState(isNetwork, state.selectedFiles.size)
+    }
+    val runningOperation = operationState as? OperationState.Running
 
     fun leaveBrowser() {
         onNavigateBack()
+    }
+
+    fun navigateTo(path: String) {
+        focusManager.clearFocus(force = true)
+        viewModel.navigateTo(path)
+    }
+
+    fun navigateUpOrLeave() {
+        focusManager.clearFocus(force = true)
+        if (!viewModel.navigateUp()) leaveBrowser()
     }
 
     fun closeSession(sessionId: String) {
@@ -146,7 +179,7 @@ fun BrowserScreen(
     BackHandler {
         when {
             isSelectionMode -> viewModel.clearSelection()
-            !viewModel.navigateUp() -> leaveBrowser()
+            else -> navigateUpOrLeave()
         }
     }
 
@@ -162,29 +195,72 @@ fun BrowserScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.selectAll() }) {
-                            Icon(Icons.Filled.SelectAll, "Select all")
-                        }
-                        if (isNetwork) {
-                            IconButton(onClick = { viewModel.downloadSelected() }) {
-                                Icon(Icons.Filled.Download, "Download")
+                        if (SelectionToolbarAction.COPY in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = { viewModel.copyToClipboard(state.selectedFiles.toList()) },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.ContentCopy, "Copy")
                             }
                         }
-                        IconButton(onClick = { viewModel.copyToClipboard(state.selectedFiles.toList()) }) {
-                            Icon(Icons.Filled.ContentCopy, "Copy")
-                        }
-                        IconButton(onClick = { viewModel.cutToClipboard(state.selectedFiles.toList()) }) {
-                            Icon(Icons.Filled.ContentCut, "Cut")
-                        }
-                        if (state.selectedFiles.size == 1) {
-                            IconButton(onClick = {
-                                showRenameDialog = state.selectedFiles.first()
-                            }) {
-                                Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
+                        if (SelectionToolbarAction.CUT in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = { viewModel.cutToClipboard(state.selectedFiles.toList()) },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.ContentCut, "Cut")
                             }
                         }
-                        IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(Icons.Filled.Delete, "Delete")
+                        if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = { showDeleteDialog = true },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.Delete, "Delete")
+                            }
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { showSelectionMoreMenu = true },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.MoreVert, "More selection actions")
+                            }
+                            DropdownMenu(
+                                expanded = showSelectionMoreMenu,
+                                onDismissRequest = { showSelectionMoreMenu = false },
+                            ) {
+                                if (SelectionToolbarAction.SELECT_ALL in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Select all visible") },
+                                        leadingIcon = { Icon(Icons.Filled.SelectAll, null) },
+                                        onClick = {
+                                            viewModel.selectAll()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.DOWNLOAD in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Download") },
+                                        leadingIcon = { Icon(Icons.Filled.Download, null) },
+                                        onClick = {
+                                            viewModel.downloadSelected()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.RENAME in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Rename") },
+                                        leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, null) },
+                                        onClick = {
+                                            showRenameDialog = state.selectedFiles.first()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -207,9 +283,7 @@ fun BrowserScreen(
                                 .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconButton(onClick = {
-                                if (!viewModel.navigateUp()) leaveBrowser()
-                            }) {
+                            IconButton(onClick = ::navigateUpOrLeave) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                             }
                             Spacer(modifier = Modifier.weight(1f))
@@ -240,29 +314,45 @@ fun BrowserScreen(
                                 ) {
                                     SortBy.entries.forEach { sort ->
                                         DropdownMenuItem(
-                                            text = {
-                                                Row {
-                                                    Text(
-                                                        sort.name.lowercase().replaceFirstChar { it.uppercase() },
-                                                        color = if (state.sortBy == sort)
-                                                            MaterialTheme.colorScheme.primary
-                                                        else MaterialTheme.colorScheme.onSurface,
+                                            text = { Text(sort.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                                            trailingIcon = {
+                                                if (state.sortBy == sort) {
+                                                    Icon(
+                                                        if (state.sortOrder == SortOrder.ASCENDING) Icons.Filled.KeyboardArrowUp
+                                                        else Icons.Filled.KeyboardArrowDown,
+                                                        if (state.sortOrder == SortOrder.ASCENDING) "Ascending" else "Descending",
                                                     )
                                                 }
                                             },
                                             onClick = {
-                                                if (state.sortBy == sort) {
-                                                    viewModel.setSortOrder(
-                                                        if (state.sortOrder == SortOrder.ASCENDING) SortOrder.DESCENDING
-                                                        else SortOrder.ASCENDING
-                                                    )
-                                                } else {
-                                                    viewModel.setSortBy(sort)
-                                                }
+                                                viewModel.setSortBy(sort)
                                                 showSortMenu = false
                                             },
                                         )
                                     }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                if (state.sortOrder == SortOrder.ASCENDING) "Sort descending"
+                                                else "Sort ascending",
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (state.sortOrder == SortOrder.ASCENDING) Icons.Filled.KeyboardArrowDown
+                                                else Icons.Filled.KeyboardArrowUp,
+                                                null,
+                                            )
+                                        },
+                                        onClick = {
+                                            viewModel.setSortOrder(
+                                                if (state.sortOrder == SortOrder.ASCENDING) SortOrder.DESCENDING
+                                                else SortOrder.ASCENDING,
+                                            )
+                                            showSortMenu = false
+                                        },
+                                    )
                                 }
                             }
                             Box {
@@ -292,29 +382,37 @@ fun BrowserScreen(
                                             showMoreMenu = false
                                         },
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text("Bookmark this folder") },
-                                        leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
-                                        onClick = {
-                                            viewModel.toggleBookmark(
-                                                state.currentPath,
-                                                state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
-                                            )
-                                            showMoreMenu = false
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Bookmark toggled")
-                                            }
-                                        },
-                                    )
+                                    if (state.source == FileSource.LOCAL) {
+                                        DropdownMenuItem(
+                                            text = { Text("Bookmark this folder") },
+                                            leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                                            onClick = {
+                                                viewModel.toggleBookmark(
+                                                    state.currentPath,
+                                                    state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
+                                                )
+                                                showMoreMenu = false
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Bookmark toggled")
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
                         PathBreadcrumb(
                             path = state.currentPath,
-                            onNavigate = { viewModel.navigateTo(it) },
+                            onNavigate = ::navigateTo,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                        )
+                        BrowserFilterControls(
+                            query = state.searchQuery,
+                            selectedFilter = state.fileTypeFilter,
+                            onQueryChange = viewModel::setSearchQuery,
+                            onFilterChange = viewModel::setFileTypeFilter,
                         )
                     }
                 }
@@ -341,7 +439,10 @@ fun BrowserScreen(
                     }) {
                         Text("Cancel")
                     }
-                    IconButton(onClick = { viewModel.paste() }) {
+                    IconButton(
+                        onClick = { viewModel.paste() },
+                        enabled = runningOperation == null,
+                    ) {
                         Icon(
                             Icons.Filled.ContentPaste,
                             "Paste here",
@@ -352,7 +453,7 @@ fun BrowserScreen(
             }
         },
         floatingActionButton = {
-            if (!isSelectionMode) {
+            if (!isSelectionMode && runningOperation == null) {
                 Box {
                     if (!isNetwork) {
                         FloatingActionButton(
@@ -392,6 +493,19 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            runningOperation?.let { operation ->
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { stateDescription = operation.label },
+                )
+                Text(
+                    operation.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             when {
                 state.isLoading -> {
                     Box(
@@ -437,7 +551,7 @@ fun BrowserScreen(
                     }
                 }
 
-                state.files.isEmpty() -> {
+                state.visibleFiles.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -451,10 +565,16 @@ fun BrowserScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                "Empty folder",
+                                if (state.files.isEmpty()) "Empty folder" else "No matching files",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (state.files.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(onClick = viewModel::clearFilters) {
+                                    Text("Clear search and filters")
+                                }
+                            }
                         }
                     }
                 }
@@ -463,7 +583,7 @@ fun BrowserScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(state.files, key = { it.path }) { file ->
+                        items(state.visibleFiles, key = { it.path }) { file ->
                             FileListItem(
                                 file = file,
                                 isSelected = file.path in state.selectedFiles,
@@ -472,7 +592,7 @@ fun BrowserScreen(
                                     if (isSelectionMode) {
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
-                                        viewModel.navigateTo(file.path)
+                                        navigateTo(file.path)
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
@@ -503,7 +623,7 @@ fun BrowserScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(state.files, key = { it.path }) { file ->
+                        items(state.visibleFiles, key = { it.path }) { file ->
                             FileGridItem(
                                 file = file,
                                 isSelected = file.path in state.selectedFiles,
@@ -512,7 +632,7 @@ fun BrowserScreen(
                                     if (isSelectionMode) {
                                         viewModel.toggleSelection(file.path)
                                     } else if (file.isDirectory) {
-                                        viewModel.navigateTo(file.path)
+                                        navigateTo(file.path)
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
@@ -575,9 +695,14 @@ fun BrowserScreen(
     }
 
     if (showDeleteDialog) {
+        val count = state.selectedFiles.size
+        val fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: ""
         DeleteConfirmDialog(
-            fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: "",
-            count = state.selectedFiles.size,
+            model = if (state.source == FileSource.LOCAL && useTrash) {
+                DeleteDialogModel.localTrash(count, fileName)
+            } else {
+                DeleteDialogModel.permanent(count, fileName)
+            },
             onDismiss = { showDeleteDialog = false },
             onConfirm = {
                 viewModel.deleteSelected()
@@ -596,6 +721,98 @@ fun BrowserScreen(
                 viewModel.clearSelection()
             },
         )
+    }
+}
+
+@Composable
+private fun BrowserFilterControls(
+    query: String,
+    selectedFilter: FileTypeFilter,
+    onQueryChange: (String) -> Unit,
+    onFilterChange: (FileTypeFilter) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (maxWidth >= 600.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BrowserSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    modifier = Modifier.weight(0.42f),
+                )
+                FileTypeFilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChange = onFilterChange,
+                    contentPadding = PaddingValues(start = 8.dp),
+                    modifier = Modifier.weight(0.58f),
+                )
+            }
+        } else {
+            Column {
+                BrowserSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                )
+                FileTypeFilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChange = onFilterChange,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, "Clear search")
+                }
+            }
+        },
+        placeholder = { Text("Search this folder") },
+        singleLine = true,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun FileTypeFilterRow(
+    selectedFilter: FileTypeFilter,
+    onFilterChange: (FileTypeFilter) -> Unit,
+    contentPadding: PaddingValues,
+    modifier: Modifier,
+) {
+    LazyRow(
+        modifier = modifier,
+        contentPadding = contentPadding,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(FileTypeFilter.entries, key = { it.name }) { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterChange(filter) },
+                label = { Text(filter.label) },
+            )
+        }
     }
 }
 
@@ -627,6 +844,36 @@ enum class BrowserToolbarAction {
     TOGGLE_VIEW,
     SORT,
     DISCONNECT,
+}
+
+data class SelectionToolbarModel(
+    val primaryActions: List<SelectionToolbarAction>,
+    val overflowActions: List<SelectionToolbarAction>,
+) {
+    companion object {
+        fun forState(isRemote: Boolean, selectionCount: Int): SelectionToolbarModel =
+            SelectionToolbarModel(
+                primaryActions = listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.CUT,
+                    SelectionToolbarAction.DELETE,
+                ),
+                overflowActions = buildList {
+                    add(SelectionToolbarAction.SELECT_ALL)
+                    if (isRemote) add(SelectionToolbarAction.DOWNLOAD)
+                    if (selectionCount == 1) add(SelectionToolbarAction.RENAME)
+                },
+            )
+    }
+}
+
+enum class SelectionToolbarAction {
+    COPY,
+    CUT,
+    DELETE,
+    SELECT_ALL,
+    DOWNLOAD,
+    RENAME,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

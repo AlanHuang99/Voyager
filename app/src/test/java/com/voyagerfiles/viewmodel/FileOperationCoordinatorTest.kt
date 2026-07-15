@@ -8,10 +8,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicReference
 
@@ -54,10 +56,7 @@ class FileOperationCoordinatorTest {
 
     @Test
     fun copyRunsStreamIoOffTheCallingThread() = runBlocking {
-        // In production paste() runs on viewModelScope.launch (Dispatchers.Main). If the
-        // coordinator streams on the caller's thread, the real SFTP/WebDAV socket writes run
-        // on the Android main thread and throw NetworkOnMainThreadException, leaving a 0-byte
-        // file (GitHub issues #1 and #7). The coordinator must move stream I/O to Dispatchers.IO.
+        // In production paste() runs on viewModelScope.launch (Dispatchers.Main). If the coordinator streams on the caller's thread, the real SFTP/WebDAV socket writes run on the Android main thread and throw NetworkOnMainThreadException, leaving a 0-byte file (GitHub issues #1 and #7). The coordinator must move stream I/O to Dispatchers.IO.
         val callerThread = Thread.currentThread().name
         val writeThread = AtomicReference<String?>(null)
         val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
@@ -72,6 +71,69 @@ class FileOperationCoordinatorTest {
             callerThread,
             actual,
         )
+    }
+
+    @Test
+    fun copyRefusesExistingFileWithoutOverwritingIt() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = MemoryProvider().apply {
+            putDirectory("/remote")
+            putFile("/remote/report.txt", "existing")
+        }
+
+        val result = FileOperationCoordinator.copyPath(source, destination, "/local/report.txt", "/remote")
+
+        assertTrue(result.exceptionOrNull() is DestinationConflictException)
+        assertEquals("existing", destination.readFile("/remote/report.txt"))
+        assertTrue(source.exists("/local/report.txt"))
+    }
+
+    @Test
+    fun copyRefusesExistingDirectoryWithoutMergingTrees() = runBlocking {
+        val source = MemoryProvider().apply {
+            putDirectory("/local/folder")
+            putFile("/local/folder/new.txt", "new")
+        }
+        val destination = MemoryProvider().apply {
+            putDirectory("/remote")
+            putDirectory("/remote/folder")
+            putFile("/remote/folder/existing.txt", "existing")
+        }
+
+        val result = FileOperationCoordinator.copyPath(source, destination, "/local/folder", "/remote")
+
+        assertTrue(result.exceptionOrNull() is DestinationConflictException)
+        assertFalse(destination.exists("/remote/folder/new.txt"))
+        assertEquals("existing", destination.readFile("/remote/folder/existing.txt"))
+    }
+
+    @Test
+    fun failedMoveRemovesPartialTargetAndKeepsSource() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = FailingWriteProvider().apply { putDirectory("/remote") }
+
+        val result = FileOperationCoordinator.movePath(source, destination, "/local/report.txt", "/remote")
+
+        assertTrue(result.isFailure)
+        assertFalse(destination.exists("/remote/report.txt"))
+        assertTrue(source.exists("/local/report.txt"))
+    }
+
+    private class FailingWriteProvider : MemoryProvider() {
+        override suspend fun getOutputStream(path: String): Result<OutputStream> =
+            Result.success(
+                object : OutputStream() {
+                    override fun write(b: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated write failure")
+                    }
+
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated write failure")
+                    }
+                },
+            )
     }
 
     private class ThreadRecordingProvider(

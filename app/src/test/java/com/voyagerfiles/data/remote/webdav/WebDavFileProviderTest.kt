@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.URI
 import java.net.URLDecoder
@@ -36,6 +37,32 @@ class WebDavFileProviderTest {
     @After
     fun tearDown() {
         servers.forEach { it.stop() }
+    }
+
+    @Test
+    fun httpsSupportsCustomPorts() {
+        val connection = RemoteConnection(
+            name = "Secure WebDAV",
+            protocol = ConnectionProtocol.WEBDAV,
+            host = "files.example.com",
+            port = 8443,
+            useTls = true,
+        )
+
+        assertEquals("https://files.example.com:8443", webDavBaseUrl(connection))
+    }
+
+    @Test
+    fun httpMustBeSelectedExplicitly() {
+        val connection = RemoteConnection(
+            name = "Local WebDAV",
+            protocol = ConnectionProtocol.WEBDAV,
+            host = "192.168.1.5",
+            port = 8080,
+            useTls = false,
+        )
+
+        assertEquals("http://192.168.1.5:8080", webDavBaseUrl(connection))
     }
 
     @Test
@@ -119,6 +146,20 @@ class WebDavFileProviderTest {
         assertEquals("space", String(Files.readAllBytes(server.root.resolve("space file.txt"))))
     }
 
+    @Test
+    fun outputStreamSpoolsLargeFilesWithoutByteArrayBuffering() = runBlocking {
+        val server = startServer()
+        val provider = createProvider(server.port)
+        val payload = ByteArray(LARGE_TRANSFER_BYTES) { (it % 251).toByte() }
+
+        val output = provider.getOutputStream("/large.bin").getOrThrow()
+        assertFalse(output is ByteArrayOutputStream)
+        output.use { it.write(payload) }
+
+        assertTrue(Files.readAllBytes(server.root.resolve("large.bin")).contentEquals(payload))
+        assertTrue(temp.root.listFiles().orEmpty().none { it.name.startsWith("voyager-webdav-") })
+    }
+
     private fun createProvider(port: Int): WebDavFileProvider =
         WebDavFileProvider(
             RemoteConnection(
@@ -128,7 +169,8 @@ class WebDavFileProviderTest {
                 port = port,
                 username = USERNAME,
                 password = PASSWORD,
-            )
+            ),
+            temp.root,
         )
 
     private fun startServer(
@@ -337,5 +379,6 @@ class WebDavFileProviderTest {
     private companion object {
         const val USERNAME = "tester"
         const val PASSWORD = "secret"
+        const val LARGE_TRANSFER_BYTES = 2 * 1024 * 1024
     }
 }

@@ -1,6 +1,7 @@
 package com.voyagerfiles.data.model
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "remote_connections")
@@ -11,6 +12,8 @@ data class RemoteConnection(
     val protocol: ConnectionProtocol,
     val host: String,
     val port: Int,
+    @ColumnInfo(defaultValue = "1")
+    val useTls: Boolean = port == 443,
     val username: String = "",
     val password: String = "",
     val privateKeyPath: String? = null,

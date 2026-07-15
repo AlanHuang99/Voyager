@@ -31,4 +31,7 @@ interface ConnectionDao {
 
     @Query("UPDATE remote_connections SET lastConnected = :timestamp WHERE id = :id")
     suspend fun updateLastConnected(id: Long, timestamp: Long)
+
+    @Query("UPDATE remote_connections SET password = :replacement WHERE id = :id AND password = :expected")
+    suspend fun replacePassword(id: Long, expected: String, replacement: String): Int
 }

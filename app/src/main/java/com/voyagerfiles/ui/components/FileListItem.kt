@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileItem
@@ -62,6 +64,9 @@ fun FileListItem(
                 Checkbox(
                     checked = isSelected,
                     onCheckedChange = null,
+                    modifier = Modifier.semantics {
+                        contentDescription = if (isSelected) "Deselect ${file.name}" else "Select ${file.name}"
+                    },
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }

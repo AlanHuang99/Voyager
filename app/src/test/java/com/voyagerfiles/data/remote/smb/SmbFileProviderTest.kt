@@ -9,6 +9,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 class SmbFileProviderTest {
@@ -59,9 +61,15 @@ class SmbFileProviderTest {
         smb.createDirectory(rootPath, "source").getOrThrow()
         smb.createDirectory(rootPath, "target").getOrThrow()
 
-        smb.getOutputStream("$rootPath/source/file.txt").getOrThrow().use { stream ->
+        val output = smb.getOutputStream("$rootPath/source/file.txt").getOrThrow()
+        assertTrue(output !is ByteArrayOutputStream)
+        output.use { stream ->
             stream.write("smb".toByteArray())
         }
+
+        val input = smb.getInputStream("$rootPath/source/file.txt").getOrThrow()
+        assertTrue(input !is ByteArrayInputStream)
+        assertEquals("smb", input.use { String(it.readBytes()) })
 
         val sourceFiles = smb.listFiles("$rootPath/source").getOrThrow()
         assertEquals(listOf("file.txt"), sourceFiles.map { it.name })

@@ -21,9 +21,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.PublicKey
@@ -180,10 +182,48 @@ class SftpFileProviderTest {
         assertTrue(Files.exists(server.root.resolve("new.txt")))
     }
 
+    @Test
+    fun firstConnectionPinsHostKeyAndAllowsReconnect() = runBlocking {
+        val server = startServer(AuthMode.PASSWORD)
+        Files.write(server.root.resolve("pinned.txt"), "pinned".toByteArray())
+        val knownHostsFile = temp.newFile("known_hosts")
+        val firstProvider = createProvider(server.port, knownHostsFile = knownHostsFile)
+
+        firstProvider.listFiles("/").getOrThrow()
+        firstProvider.disconnect()
+        val secondProvider = createProvider(server.port, knownHostsFile = knownHostsFile)
+        val files = secondProvider.listFiles("/").getOrThrow()
+
+        assertTrue(knownHostsFile.readText().contains("[127.0.0.1]:${server.port}"))
+        assertEquals(listOf("pinned.txt"), files.map { it.name })
+    }
+
+    @Test
+    fun changedHostKeyIsRejected() = runBlocking {
+        val firstServer = startServer(AuthMode.PASSWORD)
+        val knownHostsFile = temp.newFile("changed_known_hosts")
+        val firstProvider = createProvider(firstServer.port, knownHostsFile = knownHostsFile)
+        firstProvider.listFiles("/").getOrThrow()
+        firstProvider.disconnect()
+        firstServer.server.stop(true)
+
+        startServer(AuthMode.PASSWORD, port = firstServer.port)
+        val secondProvider = createProvider(firstServer.port, knownHostsFile = knownHostsFile)
+
+        val result = secondProvider.listFiles("/")
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            "SFTP host key changed. Verify the server before reconnecting.",
+            result.exceptionOrNull()?.message,
+        )
+    }
+
     private fun createProvider(
         port: Int,
         password: String = PASSWORD,
         privateKeyPath: String? = null,
+        knownHostsFile: File = temp.newFile("known-hosts-${providers.size}"),
     ): SftpFileProvider {
         val provider = SftpFileProvider(
             RemoteConnection(
@@ -194,18 +234,24 @@ class SftpFileProviderTest {
                 username = USERNAME,
                 password = password,
                 privateKeyPath = privateKeyPath,
-            )
+            ),
+            knownHostsFile,
         )
         providers += provider
         return provider
     }
 
-    private fun startServer(authMode: AuthMode, acceptedPublicKey: PublicKey? = null): RunningServer {
+    private fun startServer(
+        authMode: AuthMode,
+        acceptedPublicKey: PublicKey? = null,
+        hostKeyPair: KeyPair = generateHostKeyPair(),
+        port: Int = 0,
+    ): RunningServer {
         val root = temp.newFolder("sftp-root-${servers.size}").toPath()
         val server = SshServer.setUpDefaultServer().apply {
             host = "127.0.0.1"
-            port = 0
-            keyPairProvider = KeyPairProvider.wrap(generateHostKeyPair())
+            this.port = port
+            keyPairProvider = KeyPairProvider.wrap(hostKeyPair)
             fileSystemFactory = VirtualFileSystemFactory(root)
             subsystemFactories = listOf(SftpSubsystemFactory())
 
@@ -258,7 +304,7 @@ class SftpFileProviderTest {
             .first()
             .port
 
-        return RunningServer(root, port)
+        return RunningServer(root, port, server)
     }
 
     private fun generateHostKeyPair() =
@@ -301,6 +347,7 @@ class SftpFileProviderTest {
     private data class RunningServer(
         val root: Path,
         val port: Int,
+        val server: SshServer,
     )
 
     private enum class AuthMode {

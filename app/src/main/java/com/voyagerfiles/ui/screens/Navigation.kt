@@ -18,11 +18,16 @@ sealed class Screen(val route: String) {
             "browser/${URLEncoder.encode(path, "UTF-8")}"
     }
     data object Connections : Screen("connections")
+    data object Trash : Screen("trash")
     data object Settings : Screen("settings")
 }
 
 @Composable
-fun AppNavigation(viewModel: FileBrowserViewModel) {
+fun AppNavigation(
+    viewModel: FileBrowserViewModel,
+    hasAllFilesAccess: Boolean,
+    onRequestAllFilesAccess: () -> Unit,
+) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Screen.Home.route) {
@@ -40,6 +45,9 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                 onNavigateToConnections = {
                     navController.navigate(Screen.Connections.route)
                 },
+                onNavigateToTrash = {
+                    navController.navigate(Screen.Trash.route)
+                },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
                 },
@@ -47,6 +55,8 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
                     viewModel.openSafRoot(uri)
                     navController.navigate(Screen.Browser.createRoute(uri.toString()))
                 },
+                hasAllFilesAccess = hasAllFilesAccess,
+                onRequestAllFilesAccess = onRequestAllFilesAccess,
             )
         }
 
@@ -72,10 +82,19 @@ fun AppNavigation(viewModel: FileBrowserViewModel) {
             )
         }
 
+        composable(Screen.Trash.route) {
+            TrashScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
         composable(Screen.Settings.route) {
             SettingsScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
+                hasAllFilesAccess = hasAllFilesAccess,
+                onRequestAllFilesAccess = onRequestAllFilesAccess,
             )
         }
     }

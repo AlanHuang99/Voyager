@@ -1,0 +1,6 @@
+Voyager 1.3.0:
+- Fixed browser crashes for unsupported thumbnail types
+- Added search, file filters, recoverable Trash, and removable-storage discovery
+- Made local and cross-provider copy and move operations safer
+- Encrypted saved remote credentials and added SFTP host verification
+- Improved errors, layouts, and accessibility

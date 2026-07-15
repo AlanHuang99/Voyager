@@ -17,10 +17,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.voyagerfiles.data.model.FileItem
 import java.io.File
@@ -33,6 +33,7 @@ fun FileThumbnailOrIcon(
 ) {
     val icon = fileIcon(file)
     if (file.usesLocalImageThumbnail) {
+        val fallbackPainter = rememberVectorPainter(icon)
         Surface(
             modifier = modifier.size(iconSize),
             shape = MaterialTheme.shapes.small,
@@ -45,8 +46,8 @@ fun FileThumbnailOrIcon(
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                placeholder = rememberAsyncImagePainter(icon),
-                error = rememberAsyncImagePainter(icon),
+                placeholder = fallbackPainter,
+                error = fallbackPainter,
                 modifier = Modifier.fillMaxSize(),
             )
         }
