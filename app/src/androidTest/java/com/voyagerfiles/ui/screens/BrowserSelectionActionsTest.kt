@@ -118,6 +118,20 @@ class BrowserSelectionActionsTest {
         }
     }
 
+    @Test
+    fun singleSelectionDetailsShowTheFilePath() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+        composeTestRule.onNodeWithText("Details").assertIsDisplayed().performClick()
+
+        composeTestRule.onNodeWithText("Details").assertIsDisplayed()
+        composeTestRule.onNodeWithText(root.resolve("notes.txt").absolutePath).assertIsDisplayed()
+    }
+
     private fun launchBrowser(): FileBrowserViewModel {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(application)

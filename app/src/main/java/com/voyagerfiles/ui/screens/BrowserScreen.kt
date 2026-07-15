@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
@@ -90,6 +91,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
@@ -101,6 +103,7 @@ import com.voyagerfiles.ui.components.DeleteChoiceDialog
 import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
+import com.voyagerfiles.ui.components.FileDetailsSheet
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
@@ -137,6 +140,7 @@ fun BrowserScreen(
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
+    var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showViewMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
@@ -321,6 +325,16 @@ fun BrowserScreen(
                                         leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, null) },
                                         onClick = {
                                             showRenameDialog = state.selectedFiles.first()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.DETAILS in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Details") },
+                                        leadingIcon = { Icon(Icons.Filled.Info, null) },
+                                        onClick = {
+                                            showDetailsFor = selectedItems.singleOrNull()
                                             showSelectionMoreMenu = false
                                         },
                                     )
@@ -764,6 +778,13 @@ fun BrowserScreen(
             },
             onClose = { sessionId -> closeSession(sessionId) },
             onDismiss = { showSessionsSheet = false },
+        )
+    }
+
+    showDetailsFor?.let { file ->
+        FileDetailsSheet(
+            file = file,
+            onDismiss = { showDetailsFor = null },
         )
     }
 
