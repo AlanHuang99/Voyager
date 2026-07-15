@@ -1014,7 +1014,7 @@ Expected: all JVM and device tests pass, lint has zero errors, and debug and rel
 
 - [ ] **Step 7: Review warnings, artifacts, and the final diff**
 
-Inspect the lint XML by warning ID, aggregate test XML counts, run `git diff --check`, confirm no fixture or audit file is tracked, confirm version 1.3.0 remains unchanged during feature work, and review every changed production file for error paths, selection state, and accessibility labels.
+Inspect the lint XML by warning ID, aggregate test XML counts, run `git diff --check`, confirm no fixture or audit file is tracked, confirm the release-only version change is consistently 1.4.0 with version code 12, and review every changed production file for error paths, selection state, and accessibility labels.
 
 - [ ] **Step 8: Remove device fixtures and restore user state**
 

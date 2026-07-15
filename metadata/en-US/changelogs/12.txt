@@ -1,0 +1,6 @@
+Voyager 1.4.0:
+- Added single and multiple file sharing for local and document-tree files
+- Added per-operation Trash or permanent deletion choices for local files
+- Added persistent List, Compact list, and Grid layouts
+- Added a Details sheet with selectable file metadata
+- Improved contextual selection actions
