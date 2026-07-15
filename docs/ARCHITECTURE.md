@@ -4,9 +4,9 @@ Voyager is a single-activity Jetpack Compose application. `MainActivity` owns th
 
 ## UI and navigation
 
-`AppNavigation` defines Home, Browser, Remote Connections, Trash, and Settings destinations. Home presents storage volumes, common folders, local bookmarks, document-tree access, active sessions, Trash, and remote connections. Browser renders a session-aware toolbar, breadcrumb navigation, search and type filters, list or grid content, selection actions, progress, empty states, and retryable errors.
+`AppNavigation` defines Home, Browser, Remote Connections, Trash, and Settings destinations. Home presents storage volumes, common folders, local bookmarks, document-tree access, active sessions, Trash, and remote connections. Browser renders a session-aware toolbar, breadcrumb navigation, search and type filters, list, compact-list, or grid content, contextual selection actions, progress, empty states, retryable errors, and a read-only details sheet.
 
-The UI uses Material 3 components and theme tokens from `ui/theme`. Destructive file deletion, permanent Trash deletion, emptying Trash, deleting saved connections, and saving a cleartext remote transport require explicit confirmation where appropriate.
+The UI uses Material 3 components and theme tokens from `ui/theme`. Direct-local deletion offers recoverable Trash and explicitly irreversible permanent deletion per operation. Permanent-only provider deletion, permanent Trash deletion, emptying Trash, deleting saved connections, and saving a cleartext remote transport require explicit confirmation where appropriate.
 
 ## Browser state and sessions
 
@@ -29,6 +29,8 @@ All storage backends implement `FileProvider`, which defines listing, metadata, 
 
 `FileOperationCoordinator` handles copy and move across different providers. It rejects destination conflicts, copies recursively, removes a newly created partial destination after failure, and deletes a move source only after the copy succeeds. Providers handle same-provider operations so they can use native rename or server-side copy behavior when available.
 
+Android sharing is intentionally limited to local and SAF files in the current implementation. `ShareIntentPlan` rejects directories and remote items, computes the narrowest common MIME type, and chooses `ACTION_SEND` or `ACTION_SEND_MULTIPLE`. `FileUtils` exposes local files through the app `FileProvider`, preserves SAF content URIs, grants read access through both the intent flag and `ClipData`, and opens the system chooser.
+
 ## Storage access
 
 On Android 11 and later, full local browsing uses `MANAGE_EXTERNAL_STORAGE`. A user who declines can explicitly enter limited mode, where SAF document trees and remote connections remain available. On older supported versions, Voyager requests legacy read and write storage permissions.
@@ -37,7 +39,7 @@ On Android 11 and later, full local browsing uses `MANAGE_EXTERNAL_STORAGE`. A u
 
 ## Trash
 
-Local deletion uses `LocalTrashManager` by default. Each configured volume has a hidden `.VoyagerTrash` directory containing one payload and metadata file per entry. A pending directory makes the move recoverable if finalization is interrupted. Restore recreates a missing parent directory but refuses to overwrite an existing destination. SAF and remote deletions remain permanent and use permanent-delete confirmation wording.
+Local deletion uses `LocalTrashManager` by default. Each configured volume has a hidden `.VoyagerTrash` directory containing one payload and metadata file per entry. A pending directory makes the move recoverable if finalization is interrupted. Restore recreates a missing parent directory but refuses to overwrite an existing destination. When Trash is enabled, direct-local deletion presents both Trash and permanent choices without mutating the saved preference. SAF and remote deletions remain permanent and use permanent-delete confirmation wording.
 
 ## Persistence and secrets
 
@@ -53,4 +55,4 @@ Filesystem and network work runs on `Dispatchers.IO`. `OperationState` serialize
 
 ## Tests
 
-JVM tests cover pure models, validation, operation safety, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, unavailable storage, destructive confirmation, search-to-folder Back behavior, selection-control accessibility, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.
+JVM tests cover pure models, sharing plans, validation, operation safety, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, unavailable storage, single and multiple share intents, contextual selection actions, per-operation deletion choices, compact-view persistence, file details, search-to-folder Back behavior, selection-control accessibility, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.
