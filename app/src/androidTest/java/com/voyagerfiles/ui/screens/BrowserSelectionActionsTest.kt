@@ -12,8 +12,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
+import com.voyagerfiles.data.local.PreferencesManager
+import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -40,6 +43,8 @@ class BrowserSelectionActionsTest {
     @After
     fun tearDown() {
         root.deleteRecursively()
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        runBlocking { PreferencesManager(application).setViewMode(ViewMode.LIST) }
     }
 
     @Test
@@ -89,6 +94,28 @@ class BrowserSelectionActionsTest {
             !root.resolve("notes.txt").exists()
         }
         composeTestRule.onNodeWithText("notes.txt").assertDoesNotExist()
+    }
+
+    @Test
+    fun viewOptionsExposeAndPersistCompactList() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+        composeTestRule.runOnIdle { viewModel.setViewMode(ViewMode.LIST) }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.browseState.value.viewMode == ViewMode.LIST
+        }
+
+        composeTestRule.onNodeWithContentDescription("View options, current List").performClick()
+        composeTestRule.onNodeWithText("List").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Compact list").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithContentDescription("View options, current Compact list")
+            .assertIsDisplayed()
+
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val restoredViewModel = FileBrowserViewModel(application)
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            restoredViewModel.browseState.value.viewMode == ViewMode.COMPACT
+        }
     }
 
     private fun launchBrowser(): FileBrowserViewModel {

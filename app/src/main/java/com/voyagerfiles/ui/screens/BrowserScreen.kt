@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -136,6 +138,7 @@ fun BrowserScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showViewMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
@@ -355,16 +358,46 @@ fun BrowserScreen(
                             IconButton(onClick = { viewModel.refresh() }) {
                                 Icon(Icons.Filled.Refresh, "Refresh")
                             }
-                            IconButton(onClick = {
-                                viewModel.setViewMode(
-                                    if (state.viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
-                                )
-                            }) {
-                                Icon(
-                                    if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView
-                                    else Icons.AutoMirrored.Filled.ViewList,
-                                    "Toggle view",
-                                )
+                            Box {
+                                IconButton(onClick = { showViewMenu = true }) {
+                                    Icon(
+                                        imageVector = when (state.viewMode) {
+                                            ViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
+                                            ViewMode.COMPACT -> Icons.Filled.ViewAgenda
+                                            ViewMode.GRID -> Icons.Filled.GridView
+                                        },
+                                        contentDescription = "View options, current ${state.viewMode.label}",
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showViewMenu,
+                                    onDismissRequest = { showViewMenu = false },
+                                ) {
+                                    ViewMode.entries.forEach { mode ->
+                                        DropdownMenuItem(
+                                            text = { Text(mode.label) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = when (mode) {
+                                                        ViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
+                                                        ViewMode.COMPACT -> Icons.Filled.ViewAgenda
+                                                        ViewMode.GRID -> Icons.Filled.GridView
+                                                    },
+                                                    contentDescription = null,
+                                                )
+                                            },
+                                            trailingIcon = {
+                                                if (state.viewMode == mode) {
+                                                    Icon(Icons.Filled.Check, contentDescription = "Selected")
+                                                }
+                                            },
+                                            onClick = {
+                                                viewModel.setViewMode(mode)
+                                                showViewMenu = false
+                                            },
+                                        )
+                                    }
+                                }
                             }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
@@ -641,13 +674,14 @@ fun BrowserScreen(
                     }
                 }
 
-                state.viewMode == ViewMode.LIST -> {
+                state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(state.visibleFiles, key = { it.path }) { file ->
                             FileListItem(
                                 file = file,
+                                compact = state.viewMode == ViewMode.COMPACT,
                                 isSelected = file.path in state.selectedFiles,
                                 isSelectionMode = isSelectionMode,
                                 onClick = {
@@ -899,7 +933,7 @@ data class BrowserToolbarModel(
                 primaryActions = listOf(
                     BrowserToolbarAction.SESSIONS,
                     BrowserToolbarAction.REFRESH,
-                    BrowserToolbarAction.TOGGLE_VIEW,
+                    BrowserToolbarAction.VIEW_OPTIONS,
                     BrowserToolbarAction.SORT,
                 ),
                 overflowActions = if (isRemote) {
@@ -914,7 +948,7 @@ data class BrowserToolbarModel(
 enum class BrowserToolbarAction {
     SESSIONS,
     REFRESH,
-    TOGGLE_VIEW,
+    VIEW_OPTIONS,
     SORT,
     DISCONNECT,
 }

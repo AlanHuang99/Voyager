@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +37,7 @@ fun FileListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -45,6 +47,11 @@ fun FileListItem(
         },
         label = "selection_bg",
     )
+    val horizontalPadding = if (compact) 8.dp else 16.dp
+    val verticalPadding = if (compact) 4.dp else 12.dp
+    val iconSize = if (compact) 32.dp else 40.dp
+    val iconSpacing = if (compact) 12.dp else 16.dp
+    val nameStyle = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
 
     Surface(
         color = backgroundColor,
@@ -57,7 +64,8 @@ fun FileListItem(
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .heightIn(min = 48.dp)
+                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isSelectionMode) {
@@ -71,9 +79,9 @@ fun FileListItem(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            FileThumbnailOrIcon(file = file, iconSize = 40.dp)
+            FileThumbnailOrIcon(file = file, iconSize = iconSize)
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(iconSpacing))
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -81,7 +89,7 @@ fun FileListItem(
             ) {
                 Text(
                     text = file.name,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = nameStyle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface,

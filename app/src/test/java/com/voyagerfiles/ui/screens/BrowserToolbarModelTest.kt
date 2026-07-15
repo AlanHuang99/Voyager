@@ -1,11 +1,19 @@
 package com.voyagerfiles.ui.screens
 
+import com.voyagerfiles.data.model.ViewMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BrowserToolbarModelTest {
+
+    @Test
+    fun viewModesHaveUserFacingLabels() {
+        assertEquals("List", ViewMode.LIST.label)
+        assertEquals("Compact list", ViewMode.COMPACT.label)
+        assertEquals("Grid", ViewMode.GRID.label)
+    }
 
     @Test
     fun remoteToolbarMovesDisconnectToOverflow() {
