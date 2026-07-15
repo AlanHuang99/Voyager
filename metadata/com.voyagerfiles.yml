@@ -69,9 +69,18 @@ Builds:
     gradleprops:
       - voyager.enableAbiSplits=false
 
+  - versionName: 1.4.0
+    versionCode: 12
+    commit: 8d8a2c760d697dd4223dfd93c1418e97451e25d8
+    subdir: app
+    gradle:
+      - yes
+    gradleprops:
+      - voyager.enableAbiSplits=false
+
 AllowedAPKSigningKeys: db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.3.0
-CurrentVersionCode: 11
+CurrentVersion: 1.4.0
+CurrentVersionCode: 12
