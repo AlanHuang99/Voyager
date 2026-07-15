@@ -1,5 +1,7 @@
 package com.voyagerfiles.util
 
+import android.app.Activity
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -134,19 +136,54 @@ object FileUtils {
     }
 
     fun shareFile(context: Context, file: FileItem) {
-        val javaFile = File(file.path)
-        val uri: Uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            javaFile,
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = file.mimeType
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Share"))
+        shareFiles(context, listOf(file)).getOrThrow()
     }
+
+    fun createShareIntent(context: Context, files: List<FileItem>): Result<Intent> = runCatching {
+        val plan = requireNotNull(ShareIntentPlan.forFiles(files)) {
+            "Select files stored on this device to share"
+        }
+        val uris = files.map { file ->
+            if (file.source == FileSource.SAF) {
+                Uri.parse(file.path)
+            } else {
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    File(file.path),
+                )
+            }
+        }
+        Intent(
+            if (plan.kind == ShareIntentKind.SINGLE) {
+                Intent.ACTION_SEND
+            } else {
+                Intent.ACTION_SEND_MULTIPLE
+            }
+        ).apply {
+            type = plan.mimeType
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newUri(
+                context.contentResolver,
+                files.first().name,
+                uris.first(),
+            ).also { clip ->
+                uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+            }
+            if (plan.kind == ShareIntentKind.SINGLE) {
+                putExtra(Intent.EXTRA_STREAM, uris.single())
+            } else {
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            }
+        }
+    }
+
+    fun shareFiles(context: Context, files: List<FileItem>): Result<Unit> =
+        createShareIntent(context, files).mapCatching { intent ->
+            val chooser = Intent.createChooser(intent, "Share")
+            if (context !is Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
 
     private fun discoverStorageRoots(primaryPath: String): List<String> =
         runCatching {

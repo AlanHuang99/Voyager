@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -101,6 +102,7 @@ import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
 import com.voyagerfiles.util.FileUtils
+import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
@@ -138,12 +140,16 @@ fun BrowserScreen(
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
+    val selectedItems = remember(state.files, state.selectedFiles) {
+        state.files.filter { it.path in state.selectedFiles }
+    }
+    val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
-    val selectionToolbarModel = remember(isNetwork, state.selectedFiles.size) {
+    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan) {
         SelectionToolbarModel.forState(
             isRemote = isNetwork,
-            selectionCount = state.selectedFiles.size,
-            canShare = false,
+            selectionCount = selectedItems.size,
+            canShare = sharePlan != null,
         )
     }
     val runningOperation = operationState as? OperationState.Running
@@ -169,6 +175,19 @@ fun BrowserScreen(
             showSessionsSheet = false
             onNavigateBack()
         }
+    }
+
+    fun shareSelected() {
+        FileUtils.shareFiles(context, selectedItems).fold(
+            onSuccess = { viewModel.clearSelection() },
+            onFailure = {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Could not share the selected files. Check that access is still available and try again."
+                    )
+                }
+            },
+        )
     }
 
     // Show snackbar messages from ViewModel
@@ -221,6 +240,14 @@ fun BrowserScreen(
                                 enabled = runningOperation == null,
                             ) {
                                 Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
+                            }
+                        }
+                        if (SelectionToolbarAction.SHARE in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = ::shareSelected,
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.Share, "Share")
                             }
                         }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {

@@ -314,7 +314,7 @@ private fun safFile(uri: Uri) = FileItem(
 
 - [ ] **Step 6: Run the Android intent test and confirm RED**
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.util.FileSharingTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.util.FileSharingTest connectedDebugAndroidTest`
 
 Expected: compilation fails because `createShareIntent` does not exist.
 
@@ -350,7 +350,7 @@ fun shareFiles(context: Context, files: List<FileItem>): Result<Unit> =
 
 Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.util.ShareIntentPlanTest`
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.util.FileSharingTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.util.FileSharingTest connectedDebugAndroidTest`
 
 Expected: both focused suites pass.
 
@@ -592,7 +592,7 @@ composeTestRule.onNodeWithText("Cancel").performClick()
 
 Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.ui.components.DeleteChoiceDialogModelTest`
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.ui.screens.BrowserSelectionActionsTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.screens.BrowserSelectionActionsTest connectedDebugAndroidTest`
 
 Expected: copy and Compose delete-choice assertions pass.
 
@@ -782,7 +782,7 @@ composeTestRule.waitUntil(timeoutMillis = 10_000) {
 
 Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.ui.screens.BrowserToolbarModelTest`
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.ui.screens.BrowserSelectionActionsTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.screens.BrowserSelectionActionsTest connectedDebugAndroidTest`
 
 Expected: view labels, menu behavior, and compact persistence assertions pass.
 
@@ -836,7 +836,7 @@ fun detailsShowsAvailableMetadata() {
 
 - [ ] **Step 2: Run the focused Compose test and confirm RED**
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.ui.components.FileDetailsSheetTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.components.FileDetailsSheetTest connectedDebugAndroidTest`
 
 Expected: compilation fails because `FileDetailsSheet` does not exist.
 
@@ -894,7 +894,7 @@ private val FileSource.displayLabel: String
 
 - [ ] **Step 4: Run the focused Compose test and confirm GREEN**
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.ui.components.FileDetailsSheetTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.components.FileDetailsSheetTest connectedDebugAndroidTest`
 
 Expected: all available labels and values are visible.
 
@@ -977,7 +977,7 @@ composeTestRule.onNodeWithContentDescription("Delete").assertIsDisplayed()
 
 Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.ui.screens.BrowserToolbarModelTest --tests com.voyagerfiles.util.ShareIntentPlanTest --tests com.voyagerfiles.ui.components.DeleteChoiceDialogModelTest`
 
-Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --tests com.voyagerfiles.util.FileSharingTest --tests com.voyagerfiles.ui.components.FileDetailsSheetTest --tests com.voyagerfiles.ui.screens.BrowserSelectionActionsTest`
+Run: `ANDROID_SERIAL=192.168.27.167:5555 ./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.util.FileSharingTest,com.voyagerfiles.ui.components.FileDetailsSheetTest,com.voyagerfiles.ui.screens.BrowserSelectionActionsTest connectedDebugAndroidTest`
 
 Expected: every focused test passes.
 
