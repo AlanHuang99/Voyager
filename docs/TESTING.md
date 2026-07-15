@@ -33,7 +33,7 @@ adb connect 192.168.27.167:5555
 ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --stacktrace
 ```
 
-Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise thumbnail fallback rendering, unavailable-storage presentation, saved-connection delete confirmation, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
+Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise thumbnail fallback rendering, unavailable-storage presentation, saved-connection and file-delete confirmations, single and multiple share intents, contextual selection actions, permanent local deletion, compact-view persistence, file details, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
 
 ## Protocol integration tests
 
@@ -63,11 +63,11 @@ Use disposable files and keep device orientation unlocked unless a case calls fo
 | Storage | Browse internal storage, an available removable volume, and an unavailable or unmounted volume if one is present. |
 | Navigation | Enter nested directories, use breadcrumbs and Back, switch sessions during a slow load, rotate the device, and confirm the latest location remains visible. |
 | Search and filters | Search case-insensitively, combine search with each type filter, select all visible results, clear filters, and test an empty result. |
-| File operations | Create, rename, copy, move, and delete files and directories; attempt a duplicate destination and a move into a descendant; verify the source survives failures. |
-| Trash | Move a local file to Trash, restore it, create a restore conflict, permanently delete an entry, empty Trash, and repeat with Trash disabled. |
+| File operations | Create, rename, copy, move, and delete files and directories; share one and several local or SAF files; inspect Details; attempt a duplicate destination and a move into a descendant; verify the source survives failures. |
+| Trash | For a direct-local selection, verify both Trash and permanent choices; move a file to Trash, restore it, create a restore conflict, permanently delete an entry, empty Trash, and repeat with Trash disabled. |
 | Error recovery | Remove or unmount a location while browsing, deny a SAF operation, open an unsupported file, use a bad remote hostname, and verify retry or actionable feedback. |
 | Remote | Verify SFTP first-use pinning and changed-key rejection, FTP cleartext confirmation, HTTPS WebDAV on a custom port, HTTP warning, large transfers, and a connection delete confirmation. |
-| Layout and accessibility | Test portrait and landscape, large font and display sizes, TalkBack labels, 48 dp touch targets, loading indicators, empty states, selection mode, dialogs, and keyboard focus where available. |
+| Layout and accessibility | Test portrait and landscape, large font and display sizes, List, Compact list, and Grid persistence, TalkBack labels, 48 dp touch targets, loading indicators, empty states, selection mode, view menus, details sheets, dialogs, and keyboard focus where available. |
 
 ## Useful device commands
 

@@ -1,0 +1,6 @@
+Release 1.4.0:
+- Share one or several local and document-tree files
+- Choose Trash or permanent deletion for each direct-local operation
+- Switch among persistent List, Compact list, and Grid layouts
+- Inspect selectable file metadata in a Details sheet
+- Find Share, Rename, and Delete faster in contextual selection actions

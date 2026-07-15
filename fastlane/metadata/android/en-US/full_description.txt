@@ -1,7 +1,9 @@
 Voyager is an open-source file manager for Android with built-in SFTP, FTP, SMB, and WebDAV access, built with Material Design 3 and Jetpack Compose.
 
 Features:
-• Local file browsing with file management (copy, move, rename, delete, create)
+• Local file browsing with file management (copy, move, rename, Trash, permanent delete, create)
+• Share one or several local and document-tree files through Android's system share sheet
+• File details with selectable metadata
 • Image thumbnails for local image files
 • Storage Access Framework document-tree browsing
 • SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication
@@ -15,7 +17,7 @@ Features:
 • 20 built-in themes including Catppuccin, Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, and High Contrast
 • Custom theme support
 • AMOLED black theme
-• List and grid view modes
+• List, compact list, and grid view modes
 • Bookmarks and quick access
 • Storage usage overview
 • Hidden files toggle

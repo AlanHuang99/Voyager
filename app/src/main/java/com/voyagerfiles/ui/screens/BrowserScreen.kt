@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
@@ -43,12 +44,15 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -87,6 +91,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
@@ -94,15 +99,20 @@ import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.components.CreateItemDialog
+import com.voyagerfiles.ui.components.DeleteChoiceDialog
+import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
+import com.voyagerfiles.ui.components.FileDetailsSheet
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
 import com.voyagerfiles.util.FileUtils
+import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.ClipboardOperation
+import com.voyagerfiles.viewmodel.DeleteMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
 import kotlinx.coroutines.launch
@@ -130,7 +140,9 @@ fun BrowserScreen(
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
+    var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showViewMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
@@ -138,9 +150,17 @@ fun BrowserScreen(
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
+    val selectedItems = remember(state.files, state.selectedFiles) {
+        state.files.filter { it.path in state.selectedFiles }
+    }
+    val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
-    val selectionToolbarModel = remember(isNetwork, state.selectedFiles.size) {
-        SelectionToolbarModel.forState(isNetwork, state.selectedFiles.size)
+    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan) {
+        SelectionToolbarModel.forState(
+            isRemote = isNetwork,
+            selectionCount = selectedItems.size,
+            canShare = sharePlan != null,
+        )
     }
     val runningOperation = operationState as? OperationState.Running
 
@@ -165,6 +185,19 @@ fun BrowserScreen(
             showSessionsSheet = false
             onNavigateBack()
         }
+    }
+
+    fun shareSelected() {
+        FileUtils.shareFiles(context, selectedItems).fold(
+            onSuccess = { viewModel.clearSelection() },
+            onFailure = {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Could not share the selected files. Check that access is still available and try again."
+                    )
+                }
+            },
+        )
     }
 
     // Show snackbar messages from ViewModel
@@ -211,6 +244,22 @@ fun BrowserScreen(
                                 Icon(Icons.Filled.ContentCut, "Cut")
                             }
                         }
+                        if (SelectionToolbarAction.RENAME in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = { showRenameDialog = state.selectedFiles.single() },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
+                            }
+                        }
+                        if (SelectionToolbarAction.SHARE in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = ::shareSelected,
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.Share, "Share")
+                            }
+                        }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
                             IconButton(
                                 onClick = { showDeleteDialog = true },
@@ -230,6 +279,26 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                if (SelectionToolbarAction.COPY in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Copy") },
+                                        leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                                        onClick = {
+                                            viewModel.copyToClipboard(state.selectedFiles.toList())
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.CUT in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Cut") },
+                                        leadingIcon = { Icon(Icons.Filled.ContentCut, null) },
+                                        onClick = {
+                                            viewModel.cutToClipboard(state.selectedFiles.toList())
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
                                 if (SelectionToolbarAction.SELECT_ALL in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
                                         text = { Text("Select all visible") },
@@ -256,6 +325,16 @@ fun BrowserScreen(
                                         leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, null) },
                                         onClick = {
                                             showRenameDialog = state.selectedFiles.first()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.DETAILS in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Details") },
+                                        leadingIcon = { Icon(Icons.Filled.Info, null) },
+                                        onClick = {
+                                            showDetailsFor = selectedItems.singleOrNull()
                                             showSelectionMoreMenu = false
                                         },
                                     )
@@ -293,16 +372,46 @@ fun BrowserScreen(
                             IconButton(onClick = { viewModel.refresh() }) {
                                 Icon(Icons.Filled.Refresh, "Refresh")
                             }
-                            IconButton(onClick = {
-                                viewModel.setViewMode(
-                                    if (state.viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
-                                )
-                            }) {
-                                Icon(
-                                    if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView
-                                    else Icons.AutoMirrored.Filled.ViewList,
-                                    "Toggle view",
-                                )
+                            Box {
+                                IconButton(onClick = { showViewMenu = true }) {
+                                    Icon(
+                                        imageVector = when (state.viewMode) {
+                                            ViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
+                                            ViewMode.COMPACT -> Icons.Filled.ViewAgenda
+                                            ViewMode.GRID -> Icons.Filled.GridView
+                                        },
+                                        contentDescription = "View options, current ${state.viewMode.label}",
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showViewMenu,
+                                    onDismissRequest = { showViewMenu = false },
+                                ) {
+                                    ViewMode.entries.forEach { mode ->
+                                        DropdownMenuItem(
+                                            text = { Text(mode.label) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = when (mode) {
+                                                        ViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
+                                                        ViewMode.COMPACT -> Icons.Filled.ViewAgenda
+                                                        ViewMode.GRID -> Icons.Filled.GridView
+                                                    },
+                                                    contentDescription = null,
+                                                )
+                                            },
+                                            trailingIcon = {
+                                                if (state.viewMode == mode) {
+                                                    Icon(Icons.Filled.Check, contentDescription = "Selected")
+                                                }
+                                            },
+                                            onClick = {
+                                                viewModel.setViewMode(mode)
+                                                showViewMenu = false
+                                            },
+                                        )
+                                    }
+                                }
                             }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
@@ -579,13 +688,14 @@ fun BrowserScreen(
                     }
                 }
 
-                state.viewMode == ViewMode.LIST -> {
+                state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(state.visibleFiles, key = { it.path }) { file ->
                             FileListItem(
                                 file = file,
+                                compact = state.viewMode == ViewMode.COMPACT,
                                 isSelected = file.path in state.selectedFiles,
                                 isSelectionMode = isSelectionMode,
                                 onClick = {
@@ -671,6 +781,13 @@ fun BrowserScreen(
         )
     }
 
+    showDetailsFor?.let { file ->
+        FileDetailsSheet(
+            file = file,
+            onDismiss = { showDetailsFor = null },
+        )
+    }
+
     // Dialogs
     if (showCreateFolderDialog) {
         CreateItemDialog(
@@ -697,18 +814,29 @@ fun BrowserScreen(
     if (showDeleteDialog) {
         val count = state.selectedFiles.size
         val fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: ""
-        DeleteConfirmDialog(
-            model = if (state.source == FileSource.LOCAL && useTrash) {
-                DeleteDialogModel.localTrash(count, fileName)
-            } else {
-                DeleteDialogModel.permanent(count, fileName)
-            },
-            onDismiss = { showDeleteDialog = false },
-            onConfirm = {
-                viewModel.deleteSelected()
-                showDeleteDialog = false
-            },
-        )
+        if (state.source == FileSource.LOCAL && useTrash) {
+            DeleteChoiceDialog(
+                model = DeleteChoiceDialogModel.local(count, fileName),
+                onDismiss = { showDeleteDialog = false },
+                onMoveToTrash = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.TRASH)
+                },
+                onDeletePermanently = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.PERMANENT)
+                },
+            )
+        } else {
+            DeleteConfirmDialog(
+                model = DeleteDialogModel.permanent(count, fileName),
+                onDismiss = { showDeleteDialog = false },
+                onConfirm = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.PERMANENT)
+                },
+            )
+        }
     }
 
     showRenameDialog?.let { path ->
@@ -826,7 +954,7 @@ data class BrowserToolbarModel(
                 primaryActions = listOf(
                     BrowserToolbarAction.SESSIONS,
                     BrowserToolbarAction.REFRESH,
-                    BrowserToolbarAction.TOGGLE_VIEW,
+                    BrowserToolbarAction.VIEW_OPTIONS,
                     BrowserToolbarAction.SORT,
                 ),
                 overflowActions = if (isRemote) {
@@ -841,7 +969,7 @@ data class BrowserToolbarModel(
 enum class BrowserToolbarAction {
     SESSIONS,
     REFRESH,
-    TOGGLE_VIEW,
+    VIEW_OPTIONS,
     SORT,
     DISCONNECT,
 }
@@ -851,19 +979,46 @@ data class SelectionToolbarModel(
     val overflowActions: List<SelectionToolbarAction>,
 ) {
     companion object {
-        fun forState(isRemote: Boolean, selectionCount: Int): SelectionToolbarModel =
-            SelectionToolbarModel(
-                primaryActions = listOf(
-                    SelectionToolbarAction.COPY,
-                    SelectionToolbarAction.CUT,
+        fun forState(
+            isRemote: Boolean,
+            selectionCount: Int,
+            canShare: Boolean,
+        ): SelectionToolbarModel {
+            val isSingle = selectionCount == 1
+            val primaryActions = when {
+                isSingle && canShare -> listOf(
+                    SelectionToolbarAction.SHARE,
+                    SelectionToolbarAction.RENAME,
                     SelectionToolbarAction.DELETE,
-                ),
+                )
+                isSingle -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.RENAME,
+                    SelectionToolbarAction.DELETE,
+                )
+                canShare -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.SHARE,
+                    SelectionToolbarAction.DELETE,
+                )
+                else -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.DELETE,
+                )
+            }
+            return SelectionToolbarModel(
+                primaryActions = primaryActions,
                 overflowActions = buildList {
+                    if (SelectionToolbarAction.COPY !in primaryActions) {
+                        add(SelectionToolbarAction.COPY)
+                    }
+                    add(SelectionToolbarAction.CUT)
                     add(SelectionToolbarAction.SELECT_ALL)
                     if (isRemote) add(SelectionToolbarAction.DOWNLOAD)
-                    if (selectionCount == 1) add(SelectionToolbarAction.RENAME)
+                    if (isSingle) add(SelectionToolbarAction.DETAILS)
                 },
             )
+        }
     }
 }
 
@@ -874,6 +1029,8 @@ enum class SelectionToolbarAction {
     SELECT_ALL,
     DOWNLOAD,
     RENAME,
+    SHARE,
+    DETAILS,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

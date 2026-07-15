@@ -144,7 +144,8 @@ data class BrowseState(
         }
 }
 
-enum class ViewMode {
-    LIST,
-    GRID,
+enum class ViewMode(val label: String) {
+    LIST("List"),
+    COMPACT("Compact list"),
+    GRID("Grid"),
 }

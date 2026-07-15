@@ -353,11 +353,20 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun deleteSelected() {
+    fun deleteSelected(mode: DeleteMode? = null) {
         val state = _browseState.value
         val selectedPaths = state.selectedFiles.toList()
         if (selectedPaths.isEmpty()) return
-        val moveToTrash = state.source == FileSource.LOCAL && useTrash.value
+        val resolvedMode = mode ?: if (state.source == FileSource.LOCAL && useTrash.value) {
+            DeleteMode.TRASH
+        } else {
+            DeleteMode.PERMANENT
+        }
+        if (resolvedMode == DeleteMode.TRASH && state.source != FileSource.LOCAL) {
+            showSnackbar("Trash is available only for direct local storage")
+            return
+        }
+        val moveToTrash = resolvedMode == DeleteMode.TRASH
         val provider = fileProvider
         launchOperation(if (moveToTrash) "Moving to Trash" else "Deleting") {
             val count = selectedPaths.size
