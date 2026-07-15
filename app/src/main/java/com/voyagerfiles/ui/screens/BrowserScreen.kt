@@ -95,6 +95,8 @@ import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.components.CreateItemDialog
+import com.voyagerfiles.ui.components.DeleteChoiceDialog
+import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
 import com.voyagerfiles.ui.components.FileGridItem
@@ -105,6 +107,7 @@ import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.ClipboardOperation
+import com.voyagerfiles.viewmodel.DeleteMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
 import kotlinx.coroutines.launch
@@ -756,18 +759,29 @@ fun BrowserScreen(
     if (showDeleteDialog) {
         val count = state.selectedFiles.size
         val fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: ""
-        DeleteConfirmDialog(
-            model = if (state.source == FileSource.LOCAL && useTrash) {
-                DeleteDialogModel.localTrash(count, fileName)
-            } else {
-                DeleteDialogModel.permanent(count, fileName)
-            },
-            onDismiss = { showDeleteDialog = false },
-            onConfirm = {
-                viewModel.deleteSelected()
-                showDeleteDialog = false
-            },
-        )
+        if (state.source == FileSource.LOCAL && useTrash) {
+            DeleteChoiceDialog(
+                model = DeleteChoiceDialogModel.local(count, fileName),
+                onDismiss = { showDeleteDialog = false },
+                onMoveToTrash = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.TRASH)
+                },
+                onDeletePermanently = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.PERMANENT)
+                },
+            )
+        } else {
+            DeleteConfirmDialog(
+                model = DeleteDialogModel.permanent(count, fileName),
+                onDismiss = { showDeleteDialog = false },
+                onConfirm = {
+                    showDeleteDialog = false
+                    viewModel.deleteSelected(DeleteMode.PERMANENT)
+                },
+            )
+        }
     }
 
     showRenameDialog?.let { path ->
