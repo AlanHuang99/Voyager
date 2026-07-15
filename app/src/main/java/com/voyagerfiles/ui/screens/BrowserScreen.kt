@@ -140,7 +140,11 @@ fun BrowserScreen(
     val isNetwork = state.source.isNetwork
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val selectionToolbarModel = remember(isNetwork, state.selectedFiles.size) {
-        SelectionToolbarModel.forState(isNetwork, state.selectedFiles.size)
+        SelectionToolbarModel.forState(
+            isRemote = isNetwork,
+            selectionCount = state.selectedFiles.size,
+            canShare = false,
+        )
     }
     val runningOperation = operationState as? OperationState.Running
 
@@ -211,6 +215,14 @@ fun BrowserScreen(
                                 Icon(Icons.Filled.ContentCut, "Cut")
                             }
                         }
+                        if (SelectionToolbarAction.RENAME in selectionToolbarModel.primaryActions) {
+                            IconButton(
+                                onClick = { showRenameDialog = state.selectedFiles.single() },
+                                enabled = runningOperation == null,
+                            ) {
+                                Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
+                            }
+                        }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
                             IconButton(
                                 onClick = { showDeleteDialog = true },
@@ -230,6 +242,26 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                if (SelectionToolbarAction.COPY in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Copy") },
+                                        leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                                        onClick = {
+                                            viewModel.copyToClipboard(state.selectedFiles.toList())
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.CUT in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Cut") },
+                                        leadingIcon = { Icon(Icons.Filled.ContentCut, null) },
+                                        onClick = {
+                                            viewModel.cutToClipboard(state.selectedFiles.toList())
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
                                 if (SelectionToolbarAction.SELECT_ALL in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
                                         text = { Text("Select all visible") },
@@ -851,19 +883,46 @@ data class SelectionToolbarModel(
     val overflowActions: List<SelectionToolbarAction>,
 ) {
     companion object {
-        fun forState(isRemote: Boolean, selectionCount: Int): SelectionToolbarModel =
-            SelectionToolbarModel(
-                primaryActions = listOf(
-                    SelectionToolbarAction.COPY,
-                    SelectionToolbarAction.CUT,
+        fun forState(
+            isRemote: Boolean,
+            selectionCount: Int,
+            canShare: Boolean,
+        ): SelectionToolbarModel {
+            val isSingle = selectionCount == 1
+            val primaryActions = when {
+                isSingle && canShare -> listOf(
+                    SelectionToolbarAction.SHARE,
+                    SelectionToolbarAction.RENAME,
                     SelectionToolbarAction.DELETE,
-                ),
+                )
+                isSingle -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.RENAME,
+                    SelectionToolbarAction.DELETE,
+                )
+                canShare -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.SHARE,
+                    SelectionToolbarAction.DELETE,
+                )
+                else -> listOf(
+                    SelectionToolbarAction.COPY,
+                    SelectionToolbarAction.DELETE,
+                )
+            }
+            return SelectionToolbarModel(
+                primaryActions = primaryActions,
                 overflowActions = buildList {
+                    if (SelectionToolbarAction.COPY !in primaryActions) {
+                        add(SelectionToolbarAction.COPY)
+                    }
+                    add(SelectionToolbarAction.CUT)
                     add(SelectionToolbarAction.SELECT_ALL)
                     if (isRemote) add(SelectionToolbarAction.DOWNLOAD)
-                    if (selectionCount == 1) add(SelectionToolbarAction.RENAME)
+                    if (isSingle) add(SelectionToolbarAction.DETAILS)
                 },
             )
+        }
     }
 }
 
@@ -874,6 +933,8 @@ enum class SelectionToolbarAction {
     SELECT_ALL,
     DOWNLOAD,
     RENAME,
+    SHARE,
+    DETAILS,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
