@@ -1,10 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:strokeColor="#34C5BE" android:strokeAlpha="0.65" android:strokeWidth="2.6" android:strokeLineCap="round" android:pathData="M18,73 q9,-5 18,0 t18,0 t18,0 t18,0" />
-    <path android:strokeColor="#34C5BE" android:strokeAlpha="0.39" android:strokeWidth="2.6" android:strokeLineCap="round" android:pathData="M23,80 q8,-4 16,0 t16,0 t16,0" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M34,65 L22,45 L40,49 L54,33 L68,49 L86,45 L74,65 Z" />
-    <path android:fillColor="#34C5BE" android:pathData="M54,33 L40,49 L68,49 Z" />
-    <path android:strokeColor="#5A3FA0" android:strokeAlpha="0.25" android:strokeWidth="1.4" android:strokeLineCap="round" android:pathData="M54,33 L54,49" />
+    <!-- water shadow under hull -->
+    <path android:fillColor="#3D33206B"
+        android:pathData="M33,69 a21,3.2 0 1 0 42,0 a21,3.2 0 1 0 -42,0" />
+    <!-- hull (rounded folds) -->
+    <path android:strokeWidth="4.6" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M36,66 L27,47 L41,50 L54,34 L67,50 L81,47 L72,66 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="30" android:startY="40" android:endX="80" android:endY="56"
+                android:startColor="#FFFFFFFF" android:endColor="#FFE8E2F3" />
+        </aapt:attr>
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="30" android:startY="40" android:endX="80" android:endY="56"
+                android:startColor="#FFFFFFFF" android:endColor="#FFE8E2F3" />
+        </aapt:attr>
+    </path>
+    <!-- sail -->
+    <path android:strokeWidth="4.6" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M54,34 L41,50 L67,50 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="44" android:startY="35" android:endX="64" android:endY="50"
+                android:startColor="#FF54DBD3" android:endColor="#FF1AA098" />
+        </aapt:attr>
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="44" android:startY="35" android:endX="64" android:endY="50"
+                android:startColor="#FF54DBD3" android:endColor="#FF1AA098" />
+        </aapt:attr>
+    </path>
+    <!-- waves -->
+    <path android:strokeColor="#34C5BE" android:strokeAlpha="0.62" android:strokeWidth="3.6" android:strokeLineCap="round"
+        android:pathData="M35,76 Q44.5,71.5 54,76 T73,76" />
+    <path android:strokeColor="#34C5BE" android:strokeAlpha="0.36" android:strokeWidth="3.4" android:strokeLineCap="round"
+        android:pathData="M45,82 Q54,78.5 63,82" />
 </vector>
