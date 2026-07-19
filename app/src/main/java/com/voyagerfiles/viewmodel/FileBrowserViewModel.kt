@@ -13,6 +13,8 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
+import com.voyagerfiles.data.model.HomeLayout
+import com.voyagerfiles.data.model.HomeSection
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.data.model.SortBy
@@ -99,6 +101,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         SharingStarted.Eagerly,
         SessionAutoCloseTimeout.FIFTEEN_MINUTES,
     )
+    val homeLayout = prefs.homeLayout.stateInWithLoading(viewModelScope)
     val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -884,6 +887,18 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setSessionAutoCloseTimeout(timeout: SessionAutoCloseTimeout) {
         viewModelScope.launch { prefs.setSessionAutoCloseTimeout(timeout) }
+    }
+
+    fun setHomeSectionVisible(section: HomeSection, visible: Boolean) {
+        viewModelScope.launch { prefs.setHomeSectionVisible(section, visible) }
+    }
+
+    fun moveHomeSection(section: HomeSection, offset: Int) {
+        viewModelScope.launch { prefs.moveHomeSection(section, offset) }
+    }
+
+    fun resetHomeLayout() {
+        viewModelScope.launch { prefs.setHomeLayout(HomeLayout.DEFAULT) }
     }
 
     fun setLimitedAccessAccepted(accepted: Boolean) {

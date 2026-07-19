@@ -3,6 +3,7 @@ package com.voyagerfiles.data.local
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -10,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
+import com.voyagerfiles.data.model.HomeLayout
+import com.voyagerfiles.data.model.HomeSection
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.theme.AppTheme
@@ -31,6 +34,8 @@ class PreferencesManager(private val context: Context) {
         val DEFAULT_PATH = stringPreferencesKey("default_path")
         val AUTO_CLOSE_SESSIONS = booleanPreferencesKey("auto_close_sessions")
         val SESSION_AUTO_CLOSE_TIMEOUT = stringPreferencesKey("session_auto_close_timeout")
+        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
+        val HOME_HIDDEN_SECTIONS = stringPreferencesKey("home_hidden_sections")
         val CUSTOM_PRIMARY = longPreferencesKey("custom_primary")
         val CUSTOM_BACKGROUND = longPreferencesKey("custom_background")
         val CUSTOM_SURFACE = longPreferencesKey("custom_surface")
@@ -78,6 +83,8 @@ class PreferencesManager(private val context: Context) {
     val sessionAutoCloseTimeout: Flow<SessionAutoCloseTimeout> = context.dataStore.data.map { prefs ->
         SessionAutoCloseTimeout.fromName(prefs[Keys.SESSION_AUTO_CLOSE_TIMEOUT])
     }
+
+    val homeLayout: Flow<HomeLayout> = context.dataStore.data.map(::homeLayoutFromPreferences)
 
     val customPrimary: Flow<Long> = context.dataStore.data.map { prefs ->
         prefs[Keys.CUSTOM_PRIMARY] ?: 0xFF6750A4
@@ -131,11 +138,47 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { it[Keys.SESSION_AUTO_CLOSE_TIMEOUT] = timeout.name }
     }
 
+    suspend fun setHomeSectionVisible(section: HomeSection, visible: Boolean) {
+        context.dataStore.edit { preferences ->
+            saveHomeLayout(
+                preferences = preferences,
+                layout = homeLayoutFromPreferences(preferences).withVisibility(section, visible),
+            )
+        }
+    }
+
+    suspend fun moveHomeSection(section: HomeSection, offset: Int) {
+        context.dataStore.edit { preferences ->
+            saveHomeLayout(
+                preferences = preferences,
+                layout = homeLayoutFromPreferences(preferences).move(section, offset),
+            )
+        }
+    }
+
+    suspend fun setHomeLayout(layout: HomeLayout) {
+        context.dataStore.edit { preferences -> saveHomeLayout(preferences, layout) }
+    }
+
     suspend fun setCustomColors(primary: Long, background: Long, surface: Long) {
         context.dataStore.edit { prefs ->
             prefs[Keys.CUSTOM_PRIMARY] = primary
             prefs[Keys.CUSTOM_BACKGROUND] = background
             prefs[Keys.CUSTOM_SURFACE] = surface
         }
+    }
+
+    private fun homeLayoutFromPreferences(preferences: Preferences): HomeLayout =
+        HomeLayout.fromPersisted(
+            order = preferences[Keys.HOME_SECTION_ORDER],
+            hidden = preferences[Keys.HOME_HIDDEN_SECTIONS],
+        )
+
+    private fun saveHomeLayout(
+        preferences: MutablePreferences,
+        layout: HomeLayout,
+    ) {
+        preferences[Keys.HOME_SECTION_ORDER] = layout.persistedOrder
+        preferences[Keys.HOME_HIDDEN_SECTIONS] = layout.persistedHidden
     }
 }

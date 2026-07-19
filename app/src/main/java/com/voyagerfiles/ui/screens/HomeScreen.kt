@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.HomeSection
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.StorageInfo
 import com.voyagerfiles.util.StorageVolumeInfo
@@ -78,6 +79,7 @@ fun HomeScreen(
     val bookmarks by viewModel.bookmarks.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val homeLayout by viewModel.homeLayout.collectAsState()
     val context = LocalContext.current
     val safTreeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -125,247 +127,261 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            if (hasAllFilesAccess) {
-                item {
-                    Text(
-                        "Storage",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items(
-                    items = storageVolumes,
-                    key = { "${it.description}:${it.path}:${it.isPrimary}" },
-                ) { volume ->
-                    StorageVolumeCard(
-                        volume = volume,
-                        storageInfo = volume.path?.let(storageInfoByPath::get),
-                        onClick = { volume.path?.let(onNavigateToBrowser) },
-                    )
-                }
-            } else {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onRequestAllFilesAccess),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        ),
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Limited storage access",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                "Document trees and remote servers remain available. Grant full access to browse device storage directly.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
+            homeLayout?.visibleSections?.forEach { section ->
+                when (section) {
+                    HomeSection.STORAGE -> {
+                        if (hasAllFilesAccess) {
+                            item(key = "storage-header") {
+                                Text(
+                                    "Storage",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            items(
+                                items = storageVolumes,
+                                key = { "storage:${it.description}:${it.path}:${it.isPrimary}" },
+                            ) { volume ->
+                                StorageVolumeCard(
+                                    volume = volume,
+                                    storageInfo = volume.path?.let(storageInfoByPath::get),
+                                    onClick = { volume.path?.let(onNavigateToBrowser) },
+                                )
+                            }
+                        } else {
+                            item(key = "limited-storage") {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(onClick = onRequestAllFilesAccess),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    ),
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(
+                                            "Limited storage access",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                        Text(
+                                            "Document trees and remote servers remain available. Grant full access to browse device storage directly.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item(key = "document-tree") {
+                            SafAccessCard(onClick = { safTreeLauncher.launch(null) })
+                        }
+
+                        if (hasAllFilesAccess) {
+                            item(key = "trash") {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(onClick = onNavigateToTrash),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    ),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.DeleteOutline,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(28.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text("Trash", style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                "Restore or permanently delete local items",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            item {
-                SafAccessCard(onClick = { safTreeLauncher.launch(null) })
-            }
-
-            if (hasAllFilesAccess) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onNavigateToTrash),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Filled.DeleteOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Trash", style = MaterialTheme.typography.titleMedium)
+                    HomeSection.ACTIVE_SESSIONS -> {
+                        if (visibleSessions.isNotEmpty()) {
+                            item(key = "active-sessions-header") {
                                 Text(
-                                    "Restore or permanently delete local items",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    "Active Sessions",
+                                    style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                            items(visibleSessions, key = { "session:${it.id}" }) { session ->
+                                ActiveSessionRow(
+                                    session = session,
+                                    isActive = session.id == activeSession?.id,
+                                    onClick = { onNavigateToSession(session.id, session.currentPath) },
                                 )
                             }
                         }
                     }
-                }
-            }
 
-            if (visibleSessions.isNotEmpty()) {
-                item {
-                    Text(
-                        "Active Sessions",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                items(visibleSessions, key = { it.id }) { session ->
-                    ActiveSessionRow(
-                        session = session,
-                        isActive = session.id == activeSession?.id,
-                        onClick = { onNavigateToSession(session.id, session.currentPath) },
-                    )
-                }
-            }
+                    HomeSection.QUICK_ACCESS -> {
+                        if (hasAllFilesAccess) {
+                            item(key = "quick-access-header") {
+                                Text(
+                                    "Quick Access",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
 
-            if (hasAllFilesAccess) {
-                item {
-                    Text(
-                        "Quick Access",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        QuickAccessCard(
-                            icon = Icons.Filled.Download,
-                            label = "Downloads",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
-                        )
-                        QuickAccessCard(
-                            icon = Icons.Filled.Image,
-                            label = "Pictures",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
-                        )
-                        QuickAccessCard(
-                            icon = Icons.Filled.MusicNote,
-                            label = "Music",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
-                        )
-                        QuickAccessCard(
-                            icon = Icons.Filled.VideoLibrary,
-                            label = "Videos",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
-                        )
-                    }
-                }
-            }
-
-            // Network
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToConnections() },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Filled.Cloud,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Remote Connections",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                            Text(
-                                "SFTP, FTP, SMB, WebDAV",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-                            )
+                            item(key = "quick-access-cards") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    QuickAccessCard(
+                                        icon = Icons.Filled.Download,
+                                        label = "Downloads",
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
+                                    )
+                                    QuickAccessCard(
+                                        icon = Icons.Filled.Image,
+                                        label = "Pictures",
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
+                                    )
+                                    QuickAccessCard(
+                                        icon = Icons.Filled.MusicNote,
+                                        label = "Music",
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
+                                    )
+                                    QuickAccessCard(
+                                        icon = Icons.Filled.VideoLibrary,
+                                        label = "Videos",
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
+                                    )
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            // Bookmarks
-            if (hasAllFilesAccess && localBookmarks.isNotEmpty()) {
-                item {
-                    Text(
-                        "Bookmarks",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                items(localBookmarks) { bookmark ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToBrowser(bookmark.path) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Filled.Bookmark,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(bookmark.name, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                bookmark.path,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                    HomeSection.REMOTE_CONNECTIONS -> {
+                        item(key = "remote-connections") {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigateToConnections() },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Cloud,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(28.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            "Remote Connections",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        )
+                                        Text(
+                                            "SFTP, FTP, SMB, WebDAV",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            if (hasAllFilesAccess) {
-                item {
-                    Text(
-                        "Folders",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                items(directories) { dir ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToBrowser(dir.path) }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                    HomeSection.BOOKMARKS -> {
+                        if (hasAllFilesAccess && localBookmarks.isNotEmpty()) {
+                            item(key = "bookmarks-header") {
+                                Text(
+                                    "Bookmarks",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                            items(localBookmarks, key = { "bookmark:${it.id}" }) { bookmark ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToBrowser(bookmark.path) }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Bookmark,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(bookmark.name, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            bookmark.path,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HomeSection.FOLDERS -> {
+                        if (hasAllFilesAccess) {
+                            item(key = "folders-header") {
+                                Text(
+                                    "Folders",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                            items(directories, key = { "folder:${it.path}" }) { dir ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToBrowser(dir.path) }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
                     }
                 }
             }
