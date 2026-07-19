@@ -10,6 +10,37 @@ class DestinationConflictException(val path: String) :
 object FileOperationCoordinator {
     private const val BUFFER_SIZE = 64 * 1024
 
+    suspend fun uploadFile(
+        source: UploadSource,
+        destinationProvider: FileProvider,
+        destinationDirectoryPath: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val targetPath = joinPath(destinationDirectoryPath, source.name)
+            if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
+
+            var targetCreated = false
+            try {
+                source.openInputStream().use { input ->
+                    destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
+                        targetCreated = true
+                        input.copyTo(output, BUFFER_SIZE)
+                    }
+                }
+            } catch (error: Throwable) {
+                if (targetCreated) {
+                    runCatching {
+                        if (destinationProvider.exists(targetPath)) {
+                            destinationProvider.delete(targetPath).getOrThrow()
+                        }
+                    }.onFailure(error::addSuppressed)
+                }
+                throw error
+            }
+            Unit
+        }
+    }
+
     suspend fun copyPath(
         sourceProvider: FileProvider,
         destinationProvider: FileProvider,

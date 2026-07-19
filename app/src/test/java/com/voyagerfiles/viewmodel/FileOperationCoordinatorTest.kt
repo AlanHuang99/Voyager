@@ -20,6 +20,56 @@ import java.util.concurrent.atomic.AtomicReference
 class FileOperationCoordinatorTest {
 
     @Test
+    fun uploadStreamsSelectedDocumentOffTheCallingThread() = runBlocking {
+        val callerThread = Thread.currentThread().name
+        val openThread = AtomicReference<String?>(null)
+        val writeThread = AtomicReference<String?>(null)
+        val destination = ThreadRecordingProvider(writeThread).apply { putDirectory("/remote") }
+        val source = UploadSource("report.txt") {
+            openThread.set(Thread.currentThread().name)
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        FileOperationCoordinator.uploadFile(source, destination, "/remote").getOrThrow()
+
+        assertEquals("report", destination.readFile("/remote/report.txt"))
+        assertNotEquals(callerThread, openThread.get())
+        assertNotEquals(callerThread, writeThread.get())
+    }
+
+    @Test
+    fun uploadRefusesExistingFileWithoutOpeningOrOverwritingIt() = runBlocking {
+        var sourceOpened = false
+        val destination = MemoryProvider().apply {
+            putDirectory("/remote")
+            putFile("/remote/report.txt", "existing")
+        }
+        val source = UploadSource("report.txt") {
+            sourceOpened = true
+            ByteArrayInputStream("replacement".toByteArray())
+        }
+
+        val result = FileOperationCoordinator.uploadFile(source, destination, "/remote")
+
+        assertTrue(result.exceptionOrNull() is DestinationConflictException)
+        assertFalse(sourceOpened)
+        assertEquals("existing", destination.readFile("/remote/report.txt"))
+    }
+
+    @Test
+    fun failedUploadRemovesPartialTarget() = runBlocking {
+        val destination = FailingWriteProvider().apply { putDirectory("/remote") }
+        val source = UploadSource("report.txt") {
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        val result = FileOperationCoordinator.uploadFile(source, destination, "/remote")
+
+        assertTrue(result.isFailure)
+        assertFalse(destination.exists("/remote/report.txt"))
+    }
+
+    @Test
     fun copyStreamsFileBetweenDifferentProviders() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
