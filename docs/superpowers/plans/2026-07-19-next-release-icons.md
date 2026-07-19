@@ -38,9 +38,9 @@ package com.voyagerfiles.ui
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.DataInputStream
 import java.io.File
 import java.security.MessageDigest
-import javax.imageio.ImageIO
 
 class IconResourceContractTest {
 
@@ -91,9 +91,12 @@ class IconResourceContractTest {
     }
 
     private fun assertSquarePng(file: File, expectedSize: Int) {
-        val image = ImageIO.read(file)
-        assertEquals("Unexpected width for ${file.path}", expectedSize, image.width)
-        assertEquals("Unexpected height for ${file.path}", expectedSize, image.height)
+        val (width, height) = DataInputStream(file.inputStream()).use { input ->
+            assertEquals("Unexpected PNG header for ${file.path}", 16, input.skipBytes(16))
+            input.readInt() to input.readInt()
+        }
+        assertEquals("Unexpected width for ${file.path}", expectedSize, width)
+        assertEquals("Unexpected height for ${file.path}", expectedSize, height)
     }
 
     private fun repositoryRoot(): File {
