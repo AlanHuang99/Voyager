@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -77,6 +78,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         hasStoragePermission.value = checkStoragePermission()
+        viewModel.onAppForegrounded(SystemClock.elapsedRealtime())
+    }
+
+    override fun onStop() {
+        viewModel.onAppBackgrounded(SystemClock.elapsedRealtime())
+        super.onStop()
     }
 
     private fun checkStoragePermission(): Boolean {

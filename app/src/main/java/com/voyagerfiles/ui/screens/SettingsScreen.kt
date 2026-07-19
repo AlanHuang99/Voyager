@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,20 +33,25 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.BuildConfig
+import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.theme.BlackColors
 import com.voyagerfiles.ui.theme.DarkColors
@@ -78,7 +85,10 @@ fun SettingsScreen(
     val currentTheme by viewModel.theme.collectAsState()
     val browseState by viewModel.browseState.collectAsState()
     val useTrash by viewModel.useTrash.collectAsState()
+    val autoCloseSessions by viewModel.autoCloseSessions.collectAsState()
+    val sessionAutoCloseTimeout by viewModel.sessionAutoCloseTimeout.collectAsState()
     var selectedThemeCategoryIndex by rememberSaveable { mutableIntStateOf(0) }
+    var timeoutMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val selectedThemeCategory = themeCategories[selectedThemeCategoryIndex]
 
     Scaffold(
@@ -161,6 +171,77 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             Button(onClick = onRequestAllFilesAccess) {
                 Text(if (hasAllFilesAccess) "Manage access" else "Grant full access")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "Sessions",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Close inactive sessions", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Close all sessions after Voyager stays in the background",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = autoCloseSessions,
+                    onCheckedChange = viewModel::setAutoCloseSessions,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Auto-close sessions"
+                    },
+                )
+            }
+
+            if (autoCloseSessions) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Close after", style = MaterialTheme.typography.bodyLarge)
+                    Box {
+                        TextButton(
+                            onClick = { timeoutMenuExpanded = true },
+                            modifier = Modifier.semantics {
+                                contentDescription =
+                                    "Session timeout, current ${sessionAutoCloseTimeout.label}"
+                            },
+                        ) {
+                            Text(sessionAutoCloseTimeout.label)
+                        }
+                        DropdownMenu(
+                            expanded = timeoutMenuExpanded,
+                            onDismissRequest = { timeoutMenuExpanded = false },
+                        ) {
+                            SessionAutoCloseTimeout.entries.forEach { timeout ->
+                                DropdownMenuItem(
+                                    text = { Text(timeout.label) },
+                                    onClick = {
+                                        timeoutMenuExpanded = false
+                                        viewModel.setSessionAutoCloseTimeout(timeout)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
