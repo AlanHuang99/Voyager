@@ -14,6 +14,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.TrashEntry
@@ -58,6 +59,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private var browserSessionRootPath: String? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
     private val loadGuard = DirectoryLoadGuard()
+    private val sessionAutoCloseTracker = SessionAutoCloseTracker()
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
@@ -81,11 +83,20 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
     val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
 
+    private val _sessionClosureGeneration = MutableStateFlow(0L)
+    val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
+
     private val _trashState = MutableStateFlow(TrashState())
     val trashState: StateFlow<TrashState> = _trashState.asStateFlow()
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val autoCloseSessions = prefs.autoCloseSessions.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val sessionAutoCloseTimeout = prefs.sessionAutoCloseTimeout.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SessionAutoCloseTimeout.FIFTEEN_MINUTES,
+    )
     val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -480,6 +491,20 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         clipboardProvider = null
     }
 
+    fun onAppBackgrounded(nowMillis: Long) {
+        sessionAutoCloseTracker.onBackgrounded(nowMillis)
+    }
+
+    fun onAppForegrounded(nowMillis: Long) {
+        val shouldClose = sessionAutoCloseTracker.onForegrounded(
+            nowMillis = nowMillis,
+            enabled = autoCloseSessions.value,
+            timeoutMillis = sessionAutoCloseTimeout.value.durationMillis,
+            operationRunning = _operationState.value is OperationState.Running,
+        )
+        if (shouldClose) closeAllSessionsAfterInactivity()
+    }
+
     fun paste() {
         val paths = _clipboardPaths.value.toList()
         val operation = _clipboardOperation.value
@@ -756,6 +781,12 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 showSnackbar(OperationMessages.failure(label, error))
             } finally {
                 _operationState.value = OperationState.Idle
+                if (
+                    autoCloseSessions.value &&
+                    sessionAutoCloseTracker.consumePendingAfterOperation()
+                ) {
+                    closeAllSessionsAfterInactivity()
+                }
             }
         }
     }
@@ -836,6 +867,15 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { prefs.setUseTrash(useTrash) }
     }
 
+    fun setAutoCloseSessions(enabled: Boolean) {
+        if (!enabled) sessionAutoCloseTracker.cancelPending()
+        viewModelScope.launch { prefs.setAutoCloseSessions(enabled) }
+    }
+
+    fun setSessionAutoCloseTimeout(timeout: SessionAutoCloseTimeout) {
+        viewModelScope.launch { prefs.setSessionAutoCloseTimeout(timeout) }
+    }
+
     fun setLimitedAccessAccepted(accepted: Boolean) {
         viewModelScope.launch { prefs.setLimitedAccessAccepted(accepted) }
     }
@@ -912,6 +952,36 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 searchQuery = "",
                 fileTypeFilter = FileTypeFilter.ALL,
             )
+        }
+    }
+
+    private fun closeAllSessionsAfterInactivity() {
+        val sessionCount = _sessions.value.size
+        if (sessionCount == 0) return
+        val providers = sessionProviders.values.toSet()
+        sessionProviders.clear()
+        loadGuard.nextRequest(null)
+        fileProvider = FileProviderFactory.createLocal()
+        browserSessionRootPath = null
+        _sessions.value = emptyList()
+        _activeSession.value = null
+        clearClipboard()
+        _browseState.update {
+            it.copy(
+                currentPath = "/",
+                files = emptyList(),
+                isLoading = false,
+                error = null,
+                selectedFiles = emptySet(),
+                source = FileSource.LOCAL,
+                searchQuery = "",
+                fileTypeFilter = FileTypeFilter.ALL,
+            )
+        }
+        _sessionClosureGeneration.value += 1L
+        showSnackbar("Closed $sessionCount inactive session${if (sessionCount == 1) "" else "s"}")
+        viewModelScope.launch {
+            providers.forEach { provider -> runCatching { provider.disconnect() } }
         }
     }
 
