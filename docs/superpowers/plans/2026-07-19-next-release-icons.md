@@ -6,7 +6,7 @@
 
 **Architecture:** Treat the supplied archive as an immutable approved asset set identified by its SHA-256 digest. Add a JVM resource-contract test that validates every approved file hash, adaptive monochrome wiring, density dimensions, and store icon dimensions; then copy only the production assets from the archive, excluding previews and archive documentation. Verify with focused tests, Android resource compilation, the full project gate, installed APK resource inspection, and screenshots from a physical Android 16 device.
 
-**Tech Stack:** Android XML resources, adaptive icons, PNG mipmaps, Kotlin/JUnit 4, Java ImageIO, Gradle/AGP, adb, uiautomator
+**Tech Stack:** Android XML resources, adaptive icons, PNG mipmaps, Kotlin/JUnit 4, Java DataInputStream, Gradle/AGP, adb, uiautomator
 
 ## Global Constraints
 
