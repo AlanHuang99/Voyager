@@ -66,7 +66,7 @@ class HomeLayoutSettingsTest {
             .assertIsOn()
             .performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            HomeSection.QUICK_ACCESS in viewModel.homeLayout.value.hiddenSections
+            HomeSection.QUICK_ACCESS in (viewModel.homeLayout.value?.hiddenSections ?: emptySet())
         }
         composeTestRule.onNodeWithContentDescription("Show Quick access on Home")
             .assertIsOff()
@@ -75,13 +75,13 @@ class HomeLayoutSettingsTest {
             .assertIsEnabled()
             .performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            val order = viewModel.homeLayout.value.sectionOrder
+            val order = viewModel.homeLayout.value?.sectionOrder ?: return@waitUntil false
             order.indexOf(HomeSection.FOLDERS) < order.indexOf(HomeSection.BOOKMARKS)
         }
 
         val restoredViewModel = FileBrowserViewModel(application)
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            val restored = restoredViewModel.homeLayout.value
+            val restored = restoredViewModel.homeLayout.value ?: return@waitUntil false
             HomeSection.QUICK_ACCESS in restored.hiddenSections &&
                 restored.sectionOrder.indexOf(HomeSection.FOLDERS) <
                 restored.sectionOrder.indexOf(HomeSection.BOOKMARKS)

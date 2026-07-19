@@ -64,7 +64,7 @@ class CustomHomeLayoutTest {
             }
         }
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            viewModel.homeLayout.value.visibleSections.first() == HomeSection.REMOTE_CONNECTIONS
+            viewModel.homeLayout.value?.visibleSections?.firstOrNull() == HomeSection.REMOTE_CONNECTIONS
         }
 
         composeTestRule.onNodeWithText("Quick Access").assertDoesNotExist()

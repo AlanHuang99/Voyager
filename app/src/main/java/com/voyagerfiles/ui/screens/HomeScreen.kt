@@ -127,7 +127,7 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            homeLayout.visibleSections.forEach { section ->
+            homeLayout?.visibleSections?.forEach { section ->
                 when (section) {
                     HomeSection.STORAGE -> {
                         if (hasAllFilesAccess) {

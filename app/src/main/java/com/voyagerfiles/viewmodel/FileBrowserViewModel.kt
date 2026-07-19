@@ -101,11 +101,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         SharingStarted.Eagerly,
         SessionAutoCloseTimeout.FIFTEEN_MINUTES,
     )
-    val homeLayout = prefs.homeLayout.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        HomeLayout.DEFAULT,
-    )
+    val homeLayout = prefs.homeLayout.stateInWithLoading(viewModelScope)
     val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())

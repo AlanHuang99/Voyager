@@ -178,70 +178,72 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Home layout",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                TextButton(
-                    onClick = viewModel::resetHomeLayout,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Reset Home layout"
-                    },
-                ) {
-                    Text("Reset")
-                }
-            }
-            Text(
-                "Choose which sections appear and arrange their order",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            homeLayout.sectionOrder.forEachIndexed { index, section ->
+            homeLayout?.let { layout ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        section.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
+                        "Home layout",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
                     )
-                    Switch(
-                        checked = section !in homeLayout.hiddenSections,
-                        onCheckedChange = { visible ->
-                            viewModel.setHomeSectionVisible(section, visible)
-                        },
+                    TextButton(
+                        onClick = viewModel::resetHomeLayout,
                         modifier = Modifier.semantics {
-                            contentDescription = "Show ${section.label} on Home"
+                            contentDescription = "Reset Home layout"
                         },
-                    )
-                    IconButton(
-                        onClick = { viewModel.moveHomeSection(section, -1) },
-                        enabled = index > 0,
                     ) {
-                        Icon(
-                            Icons.Filled.KeyboardArrowUp,
-                            contentDescription = "Move ${section.label} up",
-                        )
+                        Text("Reset")
                     }
-                    IconButton(
-                        onClick = { viewModel.moveHomeSection(section, 1) },
-                        enabled = index < homeLayout.sectionOrder.lastIndex,
+                }
+                Text(
+                    "Choose which sections appear and arrange their order",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                layout.sectionOrder.forEachIndexed { index, section ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            Icons.Filled.KeyboardArrowDown,
-                            contentDescription = "Move ${section.label} down",
+                        Text(
+                            section.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
                         )
+                        Switch(
+                            checked = section !in layout.hiddenSections,
+                            onCheckedChange = { visible ->
+                                viewModel.setHomeSectionVisible(section, visible)
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = "Show ${section.label} on Home"
+                            },
+                        )
+                        IconButton(
+                            onClick = { viewModel.moveHomeSection(section, -1) },
+                            enabled = index > 0,
+                        ) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowUp,
+                                contentDescription = "Move ${section.label} up",
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.moveHomeSection(section, 1) },
+                            enabled = index < layout.sectionOrder.lastIndex,
+                        ) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = "Move ${section.label} down",
+                            )
+                        }
                     }
                 }
             }
