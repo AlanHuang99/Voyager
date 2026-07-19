@@ -13,7 +13,7 @@
 - Default to disabled and retain the selected interval when disabled.
 - Measure only time between Activity `onStop` and `onResume` using a monotonic clock.
 - Do not interrupt active operations.
-- Disconnect every provider and clear provider-backed clipboard references.
+- Disconnect every provider that belonged to a session present at `onStop`, preserve sessions created by returning Activity Result callbacks, and clear provider-backed clipboard references.
 - Preserve view, sort, hidden-file, and theme preferences.
 - Keep prose in Markdown as one paragraph per physical line and do not add AI-authorship markers.
 
@@ -38,8 +38,8 @@
 - Modify: `app/src/main/java/com/voyagerfiles/viewmodel/FileBrowserViewModel.kt`
 - Create: `app/src/androidTest/java/com/voyagerfiles/viewmodel/SessionAutoCloseTest.kt`
 
-- [ ] Write a failing Android test that enables auto-close, opens a session, populates clipboard state, simulates the threshold, and asserts complete cleanup plus a generation increment.
-- [ ] Expose preference StateFlows and setters, add lifecycle entry points, defer closure while `OperationState.Running`, and implement one-pass provider cleanup.
+- [ ] Write failing Android tests that enable auto-close, open a session, populate clipboard state, simulate the threshold, and assert complete cleanup plus a generation increment, then verify closure waits for an active operation.
+- [ ] Expose preference StateFlows and setters, snapshot session IDs at `onStop`, add lifecycle entry points, defer closure while `OperationState.Running`, and implement one-pass provider cleanup.
 - [ ] Run the focused Android test and verify GREEN.
 - [ ] Commit view-model cleanup.
 
@@ -52,7 +52,7 @@
 - Create: `app/src/androidTest/java/com/voyagerfiles/ui/screens/SessionAutoCloseSettingsTest.kt`
 - Create: `app/src/androidTest/java/com/voyagerfiles/ui/screens/SessionAutoCloseNavigationTest.kt`
 
-- [ ] Write failing Compose tests for the toggle, timeout selection, persisted flows, and Browser-to-Home navigation after closure.
+- [ ] Write failing Compose tests for the toggle, timeout selection, persisted flows, Browser-to-Home navigation after closure, and preservation of a session created by a returning picker result.
 - [ ] Report `elapsedRealtime()` from MainActivity `onStop` and `onResume`.
 - [ ] Add a Sessions settings section with an accessible toggle and interval dropdown.
 - [ ] Observe the closure generation and navigate Home only from Browser.

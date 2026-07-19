@@ -84,6 +84,7 @@ class SessionAutoCloseTest {
         assertNull(viewModel.activeSession.value)
         assertTrue(viewModel.clipboardPaths.value.isEmpty())
         assertEquals(ClipboardOperation.NONE, viewModel.clipboardOperation.value)
+        assertNull(viewModel.snackbarMessage.value)
         assertEquals(FileSource.LOCAL, viewModel.browseState.value.source)
         assertTrue(viewModel.browseState.value.files.isEmpty())
     }

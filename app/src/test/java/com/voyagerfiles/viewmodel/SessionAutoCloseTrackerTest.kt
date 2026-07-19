@@ -1,7 +1,6 @@
 package com.voyagerfiles.viewmodel
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SessionAutoCloseTrackerTest {
@@ -12,7 +11,8 @@ class SessionAutoCloseTrackerTest {
     fun foregroundBelowThresholdKeepsSessionsOpen() {
         tracker.onBackgrounded(nowMillis = 1_000L)
 
-        assertFalse(
+        assertEquals(
+            SessionAutoCloseDecision.KEEP_OPEN,
             tracker.onForegrounded(
                 nowMillis = 1_000L + TIMEOUT_MILLIS - 1L,
                 enabled = true,
@@ -26,7 +26,8 @@ class SessionAutoCloseTrackerTest {
     fun foregroundAtThresholdClosesSessions() {
         tracker.onBackgrounded(nowMillis = 1_000L)
 
-        assertTrue(
+        assertEquals(
+            SessionAutoCloseDecision.CLOSE_NOW,
             tracker.onForegrounded(
                 nowMillis = 1_000L + TIMEOUT_MILLIS,
                 enabled = true,
@@ -40,7 +41,8 @@ class SessionAutoCloseTrackerTest {
     fun disabledSettingKeepsSessionsOpen() {
         tracker.onBackgrounded(nowMillis = 1_000L)
 
-        assertFalse(
+        assertEquals(
+            SessionAutoCloseDecision.KEEP_OPEN,
             tracker.onForegrounded(
                 nowMillis = 1_000L + TIMEOUT_MILLIS,
                 enabled = false,
@@ -54,7 +56,8 @@ class SessionAutoCloseTrackerTest {
     fun clockRollbackKeepsSessionsOpen() {
         tracker.onBackgrounded(nowMillis = 2_000L)
 
-        assertFalse(
+        assertEquals(
+            SessionAutoCloseDecision.KEEP_OPEN,
             tracker.onForegrounded(
                 nowMillis = 1_000L,
                 enabled = true,
@@ -68,7 +71,8 @@ class SessionAutoCloseTrackerTest {
     fun expiredIntervalDefersWhileOperationRuns() {
         tracker.onBackgrounded(nowMillis = 1_000L)
 
-        assertFalse(
+        assertEquals(
+            SessionAutoCloseDecision.DEFER_UNTIL_OPERATION_FINISHES,
             tracker.onForegrounded(
                 nowMillis = 1_000L + TIMEOUT_MILLIS,
                 enabled = true,
@@ -76,12 +80,10 @@ class SessionAutoCloseTrackerTest {
                 operationRunning = true,
             )
         )
-        assertTrue(tracker.consumePendingAfterOperation())
-        assertFalse(tracker.consumePendingAfterOperation())
     }
 
     @Test
-    fun canceledPendingClosureIsNotConsumed() {
+    fun deferredDecisionIsNotReusedOnAnotherForegroundEvent() {
         tracker.onBackgrounded(nowMillis = 1_000L)
         tracker.onForegrounded(
             nowMillis = 1_000L + TIMEOUT_MILLIS,
@@ -90,14 +92,21 @@ class SessionAutoCloseTrackerTest {
             operationRunning = true,
         )
 
-        tracker.cancelPending()
-
-        assertFalse(tracker.consumePendingAfterOperation())
+        assertEquals(
+            SessionAutoCloseDecision.KEEP_OPEN,
+            tracker.onForegrounded(
+                nowMillis = 1_000L + TIMEOUT_MILLIS,
+                enabled = true,
+                timeoutMillis = TIMEOUT_MILLIS,
+                operationRunning = false,
+            ),
+        )
     }
 
     @Test
     fun foregroundWithoutBackgroundEventKeepsSessionsOpen() {
-        assertFalse(
+        assertEquals(
+            SessionAutoCloseDecision.KEEP_OPEN,
             tracker.onForegrounded(
                 nowMillis = TIMEOUT_MILLIS,
                 enabled = true,

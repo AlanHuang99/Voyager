@@ -26,6 +26,7 @@ class SessionAutoCloseNavigationTest {
     private lateinit var application: Application
     private lateinit var preferences: PreferencesManager
     private lateinit var root: File
+    private lateinit var returningRoot: File
 
     @Before
     fun setUp() {
@@ -39,11 +40,16 @@ class SessionAutoCloseNavigationTest {
             deleteRecursively()
             mkdirs()
         }
+        returningRoot = File(application.cacheDir, "session-auto-close-returning-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
     }
 
     @After
     fun tearDown() {
         root.deleteRecursively()
+        returningRoot.deleteRecursively()
         runBlocking {
             preferences.setAutoCloseSessions(false)
             preferences.setSessionAutoCloseTimeout(SessionAutoCloseTimeout.FIFTEEN_MINUTES)
@@ -85,5 +91,51 @@ class SessionAutoCloseNavigationTest {
         }
         composeTestRule.onNodeWithText("Voyager").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionCreatedByReturningPickerResultRemainsOpen() {
+        val viewModel = FileBrowserViewModel(application)
+        composeTestRule.setContent {
+            MaterialTheme {
+                AppNavigation(
+                    viewModel = viewModel,
+                    hasAllFilesAccess = true,
+                    onRequestAllFilesAccess = {},
+                )
+            }
+        }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.autoCloseSessions.value
+        }
+        composeTestRule.runOnIdle { viewModel.openLocalRoot(root.absolutePath) }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.sessions.value.size == 1 && !viewModel.browseState.value.isLoading
+        }
+        composeTestRule.onNodeWithText(root.name).assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+        val previousGeneration = viewModel.sessionClosureGeneration.value
+
+        composeTestRule.runOnIdle {
+            viewModel.onAppBackgrounded(nowMillis = 1_000L)
+            viewModel.openLocalRoot(returningRoot.absolutePath)
+        }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.sessions.value.size == 2 &&
+                viewModel.activeSession.value?.rootPath == returningRoot.absolutePath &&
+                !viewModel.browseState.value.isLoading
+        }
+        composeTestRule.runOnIdle {
+            viewModel.onAppForegrounded(
+                nowMillis = 1_000L + SessionAutoCloseTimeout.FIVE_MINUTES.durationMillis,
+            )
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.sessionClosureGeneration.value == previousGeneration + 1L &&
+                viewModel.sessions.value.singleOrNull()?.rootPath == returningRoot.absolutePath
+        }
+        composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Voyager").assertDoesNotExist()
     }
 }

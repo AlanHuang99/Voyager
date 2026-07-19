@@ -10,7 +10,8 @@ Voyager keeps browser sessions and their local, SAF, FTP, SFTP, SMB, or WebDAV p
 - Let users choose 5, 15, 30, or 60 minutes while retaining the last choice when the toggle is disabled.
 - Define inactivity as time during which Voyager is fully backgrounded and not visible.
 - Use a monotonic clock so wall-clock changes cannot trigger or postpone closure.
-- Close every browser session once the configured interval has elapsed.
+- Close every browser session that was already open when Voyager entered the background once the configured interval has elapsed.
+- Preserve a session created by an Activity Result callback while Voyager is returning from the system picker.
 - Never interrupt an active file operation. If the interval expires during an operation, close sessions immediately after the operation finishes.
 - Return an open Browser destination to Home after automatic closure while leaving unrelated Settings, Connections, or Trash navigation intact.
 - Disconnect each provider, clear stale clipboard references, and reset browser state without changing display preferences.
@@ -33,11 +34,11 @@ MainActivity records `SystemClock.elapsedRealtime()` in `onStop` and asks the vi
 
 `SessionAutoCloseTimeout` is a persisted enum with labels and durations for 5, 15, 30, and 60 minutes. `PreferencesManager` stores an enable flag and the selected enum name. `FileBrowserViewModel` exposes both as eager StateFlows and supplies setters for Settings.
 
-`SessionAutoCloseTracker` is a pure Kotlin state machine. It records the most recent background timestamp, compares the elapsed duration on foreground, and returns whether sessions should close. If the timeout expired while an operation is running, the tracker records a pending closure. The operation launcher consumes that pending closure from its `finally` block after changing the operation state to Idle. Disabling the preference cancels pending closure.
+`SessionAutoCloseTracker` is a pure Kotlin state machine. It records the most recent background timestamp, compares the elapsed duration on foreground, and returns whether sessions should remain open, close now, or close after an operation. The view model snapshots the IDs of sessions present at `onStop`, so an SAF session created by the returning picker callback before `onResume` is not treated as stale. If the timeout expired while an operation is running, the operation launcher consumes the snapshotted IDs from its `finally` block after changing the operation state to Idle. Disabling the preference cancels deferred closure.
 
 `MainActivity.onStop` reports the monotonic background timestamp. `onResume` reports the foreground timestamp after Activity Result callbacks have had an opportunity to start a picker-driven upload. The Activity remains responsible only for lifecycle observation; timeout policy and session mutation stay in the view model.
 
-Automatic closure snapshots and clears all session providers before disconnecting them, replaces the active provider with a fresh local provider, clears sessions, active session, clipboard, and transient browser contents, then increments a closure generation. `AppNavigation` observes that generation and navigates to Home only when Browser is the current route. The generation is an event counter rather than a one-shot boolean, so each closure is observable without resetting shared state.
+Automatic closure removes and disconnects the snapshotted session providers, clears provider-backed clipboard and snackbar state, and preserves any session created while returning from a picker. If no sessions remain, it replaces the active provider with a fresh local provider and clears transient browser contents. It then increments a closure generation. `AppNavigation` observes that generation and navigates to Home only when Browser is the current route and no session remains. The generation is an event counter rather than a one-shot boolean, so each closure is observable without resetting shared state.
 
 ## Testing
 
@@ -46,6 +47,8 @@ Automatic closure snapshots and clears all session providers before disconnectin
 - Add an Android view-model test that persists the setting, opens a local session, simulates an expired background interval, and verifies that sessions and clipboard state are cleared and the closure generation increments.
 - Add a Settings Compose test that enables auto-close, changes the timeout, and verifies persistence through the view-model flows.
 - Add an AppNavigation Compose test that verifies an automatically closed Browser returns to Home.
+- Add an AppNavigation regression test that creates a session between the background and foreground callbacks, then verifies that only the pre-existing session closes and Browser remains open.
+- Verify that automatic closure clears stale snackbar state before a later Browser can consume it.
 - Run the full unit, lint, debug assembly, release assembly, and connected-device test gates.
 
 ## Non-goals

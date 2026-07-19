@@ -2,7 +2,6 @@ package com.voyagerfiles.viewmodel
 
 class SessionAutoCloseTracker {
     private var backgroundedAtMillis: Long? = null
-    private var pendingAfterOperation = false
 
     fun onBackgrounded(nowMillis: Long) {
         backgroundedAtMillis = nowMillis
@@ -13,30 +12,25 @@ class SessionAutoCloseTracker {
         enabled: Boolean,
         timeoutMillis: Long,
         operationRunning: Boolean,
-    ): Boolean {
-        val backgroundedAt = backgroundedAtMillis ?: return false
+    ): SessionAutoCloseDecision {
+        val backgroundedAt = backgroundedAtMillis ?: return SessionAutoCloseDecision.KEEP_OPEN
         backgroundedAtMillis = null
-        if (!enabled) {
-            pendingAfterOperation = false
-            return false
-        }
+        if (!enabled) return SessionAutoCloseDecision.KEEP_OPEN
 
         val elapsedMillis = nowMillis - backgroundedAt
-        if (elapsedMillis < timeoutMillis || elapsedMillis < 0L) return false
-        if (operationRunning) {
-            pendingAfterOperation = true
-            return false
+        if (elapsedMillis < timeoutMillis || elapsedMillis < 0L) {
+            return SessionAutoCloseDecision.KEEP_OPEN
         }
-        return true
+        return if (operationRunning) {
+            SessionAutoCloseDecision.DEFER_UNTIL_OPERATION_FINISHES
+        } else {
+            SessionAutoCloseDecision.CLOSE_NOW
+        }
     }
+}
 
-    fun consumePendingAfterOperation(): Boolean {
-        val pending = pendingAfterOperation
-        pendingAfterOperation = false
-        return pending
-    }
-
-    fun cancelPending() {
-        pendingAfterOperation = false
-    }
+enum class SessionAutoCloseDecision {
+    KEEP_OPEN,
+    CLOSE_NOW,
+    DEFER_UNTIL_OPERATION_FINISHES,
 }

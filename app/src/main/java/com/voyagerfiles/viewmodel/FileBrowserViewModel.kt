@@ -60,6 +60,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private val sessionProviders = mutableMapOf<String, FileProvider>()
     private val loadGuard = DirectoryLoadGuard()
     private val sessionAutoCloseTracker = SessionAutoCloseTracker()
+    private var backgroundedSessionIds = emptySet<String>()
+    private var deferredAutoCloseSessionIds = emptySet<String>()
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
@@ -493,16 +495,25 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun onAppBackgrounded(nowMillis: Long) {
         sessionAutoCloseTracker.onBackgrounded(nowMillis)
+        backgroundedSessionIds = _sessions.value.mapTo(mutableSetOf()) { it.id }
     }
 
     fun onAppForegrounded(nowMillis: Long) {
-        val shouldClose = sessionAutoCloseTracker.onForegrounded(
+        val sessionIds = backgroundedSessionIds
+        backgroundedSessionIds = emptySet()
+        val decision = sessionAutoCloseTracker.onForegrounded(
             nowMillis = nowMillis,
             enabled = autoCloseSessions.value,
             timeoutMillis = sessionAutoCloseTimeout.value.durationMillis,
             operationRunning = _operationState.value is OperationState.Running,
         )
-        if (shouldClose) closeAllSessionsAfterInactivity()
+        when (decision) {
+            SessionAutoCloseDecision.KEEP_OPEN -> Unit
+            SessionAutoCloseDecision.CLOSE_NOW -> closeSessionsAfterInactivity(sessionIds)
+            SessionAutoCloseDecision.DEFER_UNTIL_OPERATION_FINISHES -> {
+                deferredAutoCloseSessionIds = deferredAutoCloseSessionIds + sessionIds
+            }
+        }
     }
 
     fun paste() {
@@ -781,11 +792,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 showSnackbar(OperationMessages.failure(label, error))
             } finally {
                 _operationState.value = OperationState.Idle
-                if (
-                    autoCloseSessions.value &&
-                    sessionAutoCloseTracker.consumePendingAfterOperation()
-                ) {
-                    closeAllSessionsAfterInactivity()
+                if (autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
+                    val sessionIds = deferredAutoCloseSessionIds
+                    deferredAutoCloseSessionIds = emptySet()
+                    closeSessionsAfterInactivity(sessionIds)
                 }
             }
         }
@@ -868,7 +878,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setAutoCloseSessions(enabled: Boolean) {
-        if (!enabled) sessionAutoCloseTracker.cancelPending()
+        if (!enabled) deferredAutoCloseSessionIds = emptySet()
         viewModelScope.launch { prefs.setAutoCloseSessions(enabled) }
     }
 
@@ -955,33 +965,62 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    private fun closeAllSessionsAfterInactivity() {
-        val sessionCount = _sessions.value.size
-        if (sessionCount == 0) return
-        val providers = sessionProviders.values.toSet()
-        sessionProviders.clear()
-        loadGuard.nextRequest(null)
-        fileProvider = FileProviderFactory.createLocal()
-        browserSessionRootPath = null
-        _sessions.value = emptyList()
-        _activeSession.value = null
+    private fun closeSessionsAfterInactivity(sessionIds: Set<String>) {
+        val closedSessions = _sessions.value.filter { it.id in sessionIds }
+        if (closedSessions.isEmpty()) return
+        val closedProviders = closedSessions.mapNotNull { session ->
+            sessionProviders.remove(session.id)
+        }.toSet()
+        val remainingSessions = _sessions.value.filterNot { it.id in sessionIds }
+        val activeSessionWasClosed = _activeSession.value?.id?.let { it in sessionIds } == true
+        _sessions.value = remainingSessions
         clearClipboard()
-        _browseState.update {
-            it.copy(
-                currentPath = "/",
-                files = emptyList(),
-                isLoading = false,
-                error = null,
-                selectedFiles = emptySet(),
-                source = FileSource.LOCAL,
-                searchQuery = "",
-                fileTypeFilter = FileTypeFilter.ALL,
-            )
+        _snackbarMessage.value = null
+
+        if (activeSessionWasClosed) {
+            val nextSession = remainingSessions.lastOrNull()
+            if (nextSession == null) {
+                loadGuard.nextRequest(null)
+                fileProvider = FileProviderFactory.createLocal()
+                browserSessionRootPath = null
+                _activeSession.value = null
+                _browseState.update {
+                    it.copy(
+                        currentPath = "/",
+                        files = emptyList(),
+                        isLoading = false,
+                        error = null,
+                        selectedFiles = emptySet(),
+                        source = FileSource.LOCAL,
+                        searchQuery = "",
+                        fileTypeFilter = FileTypeFilter.ALL,
+                    )
+                }
+            } else {
+                val nextProvider = checkNotNull(sessionProviders[nextSession.id])
+                fileProvider = nextProvider
+                browserSessionRootPath = nextSession.rootPath
+                _activeSession.value = nextSession
+                _browseState.update {
+                    it.copy(
+                        currentPath = nextSession.currentPath,
+                        source = nextSession.source,
+                        selectedFiles = emptySet(),
+                        error = null,
+                        searchQuery = "",
+                        fileTypeFilter = FileTypeFilter.ALL,
+                    )
+                }
+                viewModelScope.launch {
+                    loadFiles(nextSession.currentPath, nextSession.id, nextProvider)
+                }
+            }
+        } else {
+            refreshActiveSessionSnapshot()
         }
         _sessionClosureGeneration.value += 1L
-        showSnackbar("Closed $sessionCount inactive session${if (sessionCount == 1) "" else "s"}")
         viewModelScope.launch {
-            providers.forEach { provider -> runCatching { provider.disconnect() } }
+            closedProviders.forEach { provider -> runCatching { provider.disconnect() } }
         }
     }
 

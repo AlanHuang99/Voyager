@@ -41,6 +41,7 @@ fun AppNavigation(
     LaunchedEffect(sessionClosureGeneration) {
         if (
             sessionClosureGeneration > 0L &&
+            viewModel.sessions.value.isEmpty() &&
             navController.currentDestination?.route == Screen.Browser.route
         ) {
             navController.navigateHome()
