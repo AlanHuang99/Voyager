@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.BookmarkAdd
@@ -155,6 +154,7 @@ fun BrowserScreen(
     }
     val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
+    val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
     val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan) {
         SelectionToolbarModel.forState(
             isRemote = isNetwork,
@@ -564,35 +564,24 @@ fun BrowserScreen(
         floatingActionButton = {
             if (!isSelectionMode && runningOperation == null) {
                 Box {
-                    if (!isNetwork) {
-                        FloatingActionButton(
-                            onClick = { showCreateMenu = true },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(Icons.Filled.CreateNewFolder, "Create")
-                        }
-                        DropdownMenu(
-                            expanded = showCreateMenu,
-                            onDismissRequest = { showCreateMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("New Folder") },
-                                leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
-                                onClick = {
-                                    showCreateMenu = false
-                                    showCreateFolderDialog = true
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("New File") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, null) },
-                                onClick = {
-                                    showCreateMenu = false
-                                    showCreateFileDialog = true
-                                },
-                            )
-                        }
+                    FloatingActionButton(
+                        onClick = { showCreateMenu = true },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Icon(Icons.Filled.CreateNewFolder, "Create")
                     }
+                    BrowserCreateMenu(
+                        expanded = showCreateMenu,
+                        model = createMenuModel,
+                        onDismiss = { showCreateMenu = false },
+                        onAction = { action ->
+                            when (action) {
+                                BrowserCreateAction.NEW_FOLDER -> showCreateFolderDialog = true
+                                BrowserCreateAction.NEW_FILE -> showCreateFileDialog = true
+                                BrowserCreateAction.UPLOAD_FILES -> Unit
+                            }
+                        },
+                    )
                 }
             }
         },
