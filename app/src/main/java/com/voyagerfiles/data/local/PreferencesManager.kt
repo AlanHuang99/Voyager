@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
+import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.theme.AppTheme
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +29,8 @@ class PreferencesManager(private val context: Context) {
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val VIEW_MODE = stringPreferencesKey("view_mode")
         val DEFAULT_PATH = stringPreferencesKey("default_path")
+        val AUTO_CLOSE_SESSIONS = booleanPreferencesKey("auto_close_sessions")
+        val SESSION_AUTO_CLOSE_TIMEOUT = stringPreferencesKey("session_auto_close_timeout")
         val CUSTOM_PRIMARY = longPreferencesKey("custom_primary")
         val CUSTOM_BACKGROUND = longPreferencesKey("custom_background")
         val CUSTOM_SURFACE = longPreferencesKey("custom_surface")
@@ -66,6 +69,14 @@ class PreferencesManager(private val context: Context) {
 
     val defaultPath: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[Keys.DEFAULT_PATH] ?: "/storage/emulated/0"
+    }
+
+    val autoCloseSessions: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.AUTO_CLOSE_SESSIONS] ?: false
+    }
+
+    val sessionAutoCloseTimeout: Flow<SessionAutoCloseTimeout> = context.dataStore.data.map { prefs ->
+        SessionAutoCloseTimeout.fromName(prefs[Keys.SESSION_AUTO_CLOSE_TIMEOUT])
     }
 
     val customPrimary: Flow<Long> = context.dataStore.data.map { prefs ->
@@ -110,6 +121,14 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setDefaultPath(path: String) {
         context.dataStore.edit { it[Keys.DEFAULT_PATH] = path }
+    }
+
+    suspend fun setAutoCloseSessions(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_CLOSE_SESSIONS] = enabled }
+    }
+
+    suspend fun setSessionAutoCloseTimeout(timeout: SessionAutoCloseTimeout) {
+        context.dataStore.edit { it[Keys.SESSION_AUTO_CLOSE_TIMEOUT] = timeout.name }
     }
 
     suspend fun setCustomColors(primary: Long, background: Long, surface: Long) {
