@@ -1,0 +1,6 @@
+Release 1.5.0:
+- Create files and folders and upload Android documents in SFTP, FTP, SMB, and WebDAV sessions
+- Automatically close inactive sessions after a chosen time in the background
+- Show, hide, reorder, and reset Home sections
+- Keep dark navigation backgrounds consistent during transitions
+- Reconnect stale FTP sessions before operations
