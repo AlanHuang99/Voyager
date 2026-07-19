@@ -1,6 +1,8 @@
 package com.voyagerfiles.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -134,6 +136,11 @@ fun BrowserScreen(
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uploadLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        viewModel.uploadDocuments(uris)
+    }
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -578,7 +585,7 @@ fun BrowserScreen(
                             when (action) {
                                 BrowserCreateAction.NEW_FOLDER -> showCreateFolderDialog = true
                                 BrowserCreateAction.NEW_FILE -> showCreateFileDialog = true
-                                BrowserCreateAction.UPLOAD_FILES -> Unit
+                                BrowserCreateAction.UPLOAD_FILES -> uploadLauncher.launch(arrayOf("*/*"))
                             }
                         },
                     )

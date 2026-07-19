@@ -30,6 +30,8 @@ import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
+import com.voyagerfiles.util.UploadSourceFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -350,6 +353,50 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 },
                 onFailure = { showSnackbar(OperationMessages.failure("Create file", it)) },
             )
+        }
+    }
+
+    fun uploadDocuments(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val destinationProvider = fileProvider
+        val destinationPath = _browseState.value.currentPath
+        val contentResolver = getApplication<Application>().contentResolver
+        launchOperation(if (uris.size == 1) "Uploading file" else "Uploading ${uris.size} files") {
+            val sources = withContext(Dispatchers.IO) {
+                uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
+            }
+            val validatedSources = sources.map { source ->
+                when (val result = FileNameValidator.validate(source.name)) {
+                    is FileNameValidationResult.Valid -> source.copy(name = result.name)
+                    is FileNameValidationResult.Invalid -> throw IllegalArgumentException(result.message)
+                }
+            }
+            var failed = 0
+            var firstError: Throwable? = null
+            for (source in validatedSources) {
+                FileOperationCoordinator.uploadFile(
+                    source = source,
+                    destinationProvider = destinationProvider,
+                    destinationDirectoryPath = destinationPath,
+                ).onFailure { error ->
+                    failed++
+                    if (firstError == null) firstError = error
+                }
+            }
+            refreshFiles()
+            if (failed > 0) {
+                showSnackbar(
+                    OperationMessages.partial(
+                        failed = failed,
+                        total = validatedSources.size,
+                        action = "uploaded",
+                        error = checkNotNull(firstError),
+                    )
+                )
+            } else {
+                val count = validatedSources.size
+                showSnackbar("Uploaded $count file${if (count == 1) "" else "s"}")
+            }
         }
     }
 
