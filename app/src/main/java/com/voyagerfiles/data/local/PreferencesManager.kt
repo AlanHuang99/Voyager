@@ -156,6 +156,10 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
+    suspend fun setHomeLayout(layout: HomeLayout) {
+        context.dataStore.edit { preferences -> saveHomeLayout(preferences, layout) }
+    }
+
     suspend fun setCustomColors(primary: Long, background: Long, surface: Long) {
         context.dataStore.edit { prefs ->
             prefs[Keys.CUSTOM_PRIMARY] = primary

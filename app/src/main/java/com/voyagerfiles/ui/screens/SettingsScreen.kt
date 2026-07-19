@@ -21,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -87,6 +89,7 @@ fun SettingsScreen(
     val useTrash by viewModel.useTrash.collectAsState()
     val autoCloseSessions by viewModel.autoCloseSessions.collectAsState()
     val sessionAutoCloseTimeout by viewModel.sessionAutoCloseTimeout.collectAsState()
+    val homeLayout by viewModel.homeLayout.collectAsState()
     var selectedThemeCategoryIndex by rememberSaveable { mutableIntStateOf(0) }
     var timeoutMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val selectedThemeCategory = themeCategories[selectedThemeCategoryIndex]
@@ -171,6 +174,76 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             Button(onClick = onRequestAllFilesAccess) {
                 Text(if (hasAllFilesAccess) "Manage access" else "Grant full access")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Home layout",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                TextButton(
+                    onClick = viewModel::resetHomeLayout,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Reset Home layout"
+                    },
+                ) {
+                    Text("Reset")
+                }
+            }
+            Text(
+                "Choose which sections appear and arrange their order",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            homeLayout.sectionOrder.forEachIndexed { index, section ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        section.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = section !in homeLayout.hiddenSections,
+                        onCheckedChange = { visible ->
+                            viewModel.setHomeSectionVisible(section, visible)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Show ${section.label} on Home"
+                        },
+                    )
+                    IconButton(
+                        onClick = { viewModel.moveHomeSection(section, -1) },
+                        enabled = index > 0,
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowUp,
+                            contentDescription = "Move ${section.label} up",
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.moveHomeSection(section, 1) },
+                        enabled = index < homeLayout.sectionOrder.lastIndex,
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = "Move ${section.label} down",
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
