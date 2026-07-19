@@ -26,30 +26,38 @@ class FtpFileProvider(
 
     private var ftpClient: FTPClient? = null
 
-    private suspend fun ensureConnected() {
-        val client = ftpClient
-        if (client != null && client.isConnected) return
-        withContext(Dispatchers.IO) {
-            val ftp = FTPClient().apply {
-                connectTimeout = 30000
-                defaultTimeout = 30000
-            }
+    private suspend fun ensureConnected() = withContext(Dispatchers.IO) {
+        val existingClient = ftpClient
+        if (existingClient != null) {
+            val connectionIsHealthy = existingClient.isConnected &&
+                runCatching { existingClient.sendNoOp() }.getOrDefault(false)
+            if (connectionIsHealthy) return@withContext
+            runCatching { existingClient.disconnect() }
+            ftpClient = null
+        }
+
+        val ftp = FTPClient().apply {
+            connectTimeout = 30000
+            defaultTimeout = 30000
+        }
+        try {
             ftp.connect(connection.host, connection.port)
 
             val reply = ftp.replyCode
             if (!FTPReply.isPositiveCompletion(reply)) {
-                ftp.disconnect()
                 throw IllegalStateException("FTP server refused connection: $reply")
             }
 
             if (!ftp.login(connection.username, connection.password)) {
-                ftp.disconnect()
                 throw IllegalStateException("FTP login failed")
             }
 
             ftp.enterLocalPassiveMode()
             ftp.setFileType(FTP.BINARY_FILE_TYPE)
             ftpClient = ftp
+        } catch (error: Throwable) {
+            runCatching { if (ftp.isConnected) ftp.disconnect() }
+            throw error
         }
     }
 

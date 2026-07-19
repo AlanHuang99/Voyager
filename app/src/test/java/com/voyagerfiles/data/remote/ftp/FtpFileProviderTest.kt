@@ -61,6 +61,21 @@ class FtpFileProviderTest {
     }
 
     @Test
+    fun reconnectsAfterServerDropsTheControlConnection() = runBlocking {
+        val server = startServer()
+        val provider = createProvider(server.port)
+        provider.listFiles("/").getOrThrow()
+        servers.removeAt(servers.lastIndex).stop()
+        startServer(server.root, server.port)
+
+        provider.getOutputStream("/reconnected.txt").getOrThrow().use { stream ->
+            stream.write("reconnected".toByteArray())
+        }
+
+        assertEquals("reconnected", String(Files.readAllBytes(server.root.resolve("reconnected.txt"))))
+    }
+
+    @Test
     fun fileDownloaderSavesFileToLocalDirectory() = runBlocking {
         val server = startServer()
         Files.write(server.root.resolve("remote.txt"), "ftp download".toByteArray())
@@ -146,7 +161,10 @@ class FtpFileProviderTest {
     private fun startServer(): RunningServer {
         val root = temp.newFolder("ftp-root-${servers.size}").toPath()
         val port = freePort()
+        return startServer(root, port)
+    }
 
+    private fun startServer(root: Path, port: Int): RunningServer {
         val user = BaseUser().apply {
             name = USERNAME
             password = PASSWORD

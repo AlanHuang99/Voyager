@@ -16,6 +16,7 @@
 - Refuse destination conflicts and preserve existing content.
 - Validate every selected display name before starting any transfer.
 - Run resolver and stream I/O on Dispatchers.IO.
+- Validate an existing FTP control connection with NOOP and reconnect before reuse when the peer has closed it.
 - Keep prose in Markdown as one paragraph per physical line and do not add AI-authorship markers.
 
 ---
@@ -208,13 +209,50 @@ git add app/src/main/java/com/voyagerfiles/util/UploadSourceFactory.kt app/src/m
 git commit -m "feat: upload selected documents to remote sessions"
 ```
 
-### Task 4: Verify the complete issue fix
+### Task 4: Recover an FTP session after the document picker
+
+**Files:**
+- Modify: `app/src/main/java/com/voyagerfiles/data/remote/ftp/FtpFileProvider.kt`
+- Test: `app/src/test/java/com/voyagerfiles/data/remote/ftp/FtpFileProviderTest.kt`
+
+**Interfaces:**
+- Consumes: Apache Commons Net `FTPClient.sendNoOp()`, `FTPClient.disconnect()`, and the existing FTP login sequence.
+- Produces: `FtpFileProvider.ensureConnected()` that validates and replaces a stale control connection before provider operations.
+
+- [ ] **Step 1: Write a failing dropped-connection test**
+
+Connect a provider to the in-process FTP server, stop that server while retaining the provider, restart a server on the same port and root, then request an output stream and assert that the uploaded bytes arrive through a replacement connection.
+
+- [ ] **Step 2: Run the focused test and verify RED**
+
+Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.data.remote.ftp.FtpFileProviderTest.reconnectsAfterServerDropsTheControlConnection --stacktrace`
+
+Expected: FAIL with FTPConnectionClosedException because `isConnected` does not prove the peer socket is usable.
+
+- [ ] **Step 3: Validate and replace stale clients**
+
+In ensureConnected, call sendNoOp for a non-null connected client. Return only when NOOP succeeds. Otherwise disconnect that client, clear the field, and run the existing connect, reply validation, login, passive-mode, and binary-mode sequence. Disconnect a partially initialized replacement if setup throws.
+
+- [ ] **Step 4: Run all FTP provider tests and verify GREEN**
+
+Run: `./gradlew testDebugUnitTest --tests com.voyagerfiles.data.remote.ftp.FtpFileProviderTest --stacktrace`
+
+Expected: all FTP provider tests pass, including the dropped-control-connection regression.
+
+- [ ] **Step 5: Commit stale-session recovery**
+
+```bash
+git add app/src/main/java/com/voyagerfiles/data/remote/ftp/FtpFileProvider.kt app/src/test/java/com/voyagerfiles/data/remote/ftp/FtpFileProviderTest.kt docs/superpowers/specs/2026-07-19-remote-create-upload-design.md docs/superpowers/plans/2026-07-19-remote-create-upload.md
+git commit -m "fix: reconnect stale FTP sessions"
+```
+
+### Task 5: Verify the complete issue fix
 
 **Files:**
 - Modify only if verification finds a defect in files already listed above.
 
 **Interfaces:**
-- Consumes: all production and test interfaces introduced in Tasks 1 through 3.
+- Consumes: all production and test interfaces introduced in Tasks 1 through 4.
 - Produces: a clean branch with reproducible local, device, and CI evidence.
 
 - [ ] **Step 1: Run the complete local gate**
