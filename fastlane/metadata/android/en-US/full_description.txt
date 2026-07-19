@@ -11,14 +11,16 @@ Features:
 • SMB/CIFS network share browsing
 • WebDAV remote access
 • Copy and move files between local storage and a remote server, in both directions
+• Create remote files and folders, and upload documents through Android's system picker
 • Download remote files and folders to the device
 • Multiple browser sessions for local and remote locations, with a session switcher
+• Optional automatic closure of inactive sessions after Voyager remains in the background
 • Mounted external storage volumes, such as SD cards and USB/OTG, listed alongside internal storage
 • 20 built-in themes including Catppuccin, Nord, Solarized, Gruvbox, Rosé Pine, Tokyo Night, and High Contrast
 • Custom theme support
 • AMOLED black theme
 • List, compact list, and grid view modes
-• Bookmarks and quick access
+• Bookmarks, quick access, and customizable Home section visibility and order
 • Storage usage overview
 • Hidden files toggle
 • Multiple sort options (name, size, date, type)

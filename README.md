@@ -30,8 +30,9 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
 - Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
-- Bookmark local folders, open common media locations, and keep several local, document-tree, or remote browser sessions open.
-- Connect to SFTP, FTP, SMB, and WebDAV servers and download remote files or directories to Android's Downloads folder.
+- Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
+- Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
+- Connect to SFTP, FTP, SMB, and WebDAV servers, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder.
 - Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair.
 - Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
 
