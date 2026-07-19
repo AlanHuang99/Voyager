@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
@@ -33,6 +36,16 @@ fun AppNavigation(
     onRequestAllFilesAccess: () -> Unit,
 ) {
     val navController = rememberNavController()
+    val sessionClosureGeneration by viewModel.sessionClosureGeneration.collectAsState()
+
+    LaunchedEffect(sessionClosureGeneration) {
+        if (
+            sessionClosureGeneration > 0L &&
+            navController.currentDestination?.route == Screen.Browser.route
+        ) {
+            navController.navigateHome()
+        }
+    }
 
     NavHost(
         navController = navController,

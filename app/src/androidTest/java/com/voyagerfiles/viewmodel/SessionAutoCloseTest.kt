@@ -87,4 +87,38 @@ class SessionAutoCloseTest {
         assertEquals(FileSource.LOCAL, viewModel.browseState.value.source)
         assertTrue(viewModel.browseState.value.files.isEmpty())
     }
+
+    @Test
+    fun expiredIntervalWaitsForAnActiveOperationToFinish() {
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val viewModel = FileBrowserViewModel(application)
+        composeTestRule.setContent {}
+        composeTestRule.runOnIdle {
+            viewModel.openLocalRoot(root.absolutePath)
+            viewModel.setAutoCloseSessions(true)
+        }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.autoCloseSessions.value &&
+                viewModel.sessions.value.size == 1 &&
+                !viewModel.browseState.value.isLoading
+        }
+        val previousGeneration = viewModel.sessionClosureGeneration.value
+
+        composeTestRule.runOnIdle {
+            viewModel.createFile("completed-before-close.txt")
+            assertTrue(viewModel.operationState.value is OperationState.Running)
+            viewModel.onAppBackgrounded(nowMillis = 1_000L)
+            viewModel.onAppForegrounded(
+                nowMillis = 1_000L + SessionAutoCloseTimeout.FIVE_MINUTES.durationMillis,
+            )
+            assertEquals(1, viewModel.sessions.value.size)
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.operationState.value == OperationState.Idle &&
+                viewModel.sessions.value.isEmpty() &&
+                viewModel.sessionClosureGeneration.value == previousGeneration + 1L
+        }
+        assertTrue(root.resolve("completed-before-close.txt").exists())
+    }
 }
