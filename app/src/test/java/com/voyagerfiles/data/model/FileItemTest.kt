@@ -47,4 +47,13 @@ class FileItemTest {
         assertFalse(pdf.copy(name = "PDF files", isDirectory = true).isPdf)
         assertFalse(pdf.copy(name = "Report.pdf.txt").isPdf)
     }
+
+    @Test
+    fun compressedTarAliasesAreRecognizedAsArchives() {
+        val tgz = FileItem(name = "backup.tgz", path = "/backup.tgz", isDirectory = false)
+        val tbz2 = FileItem(name = "backup.tbz2", path = "/backup.tbz2", isDirectory = false)
+
+        assertTrue(tgz.isArchive)
+        assertTrue(tbz2.isArchive)
+    }
 }
