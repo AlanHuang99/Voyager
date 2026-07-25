@@ -26,14 +26,16 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 
 - Browse internal storage and mounted external volumes such as SD cards and USB/OTG media.
 - Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
-- Switch among list, compact list, and grid layouts, view image thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
+- Switch among list, compact list, and grid layouts, view image and first-page PDF thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
-- Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers.
+- Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with visible progress.
+- Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
+- Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
 - Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
 - Connect to SFTP, FTP, SMB, and WebDAV servers, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder.
-- Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair.
+- Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
 - Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
 
 Network connections are user-initiated. The app contains no analytics or tracking, and local browsing needs no network access.
@@ -43,6 +45,8 @@ Network connections are user-initiated. The app contains no analytics or trackin
 Full local browsing uses Android's all-files special access. If that access is denied, Voyager remains usable for document trees and remote servers. The Home and Settings screens explain the active access mode and provide a route back to Android's permission settings.
 
 Saved remote passwords are encrypted with AES-GCM using a device-bound Android Keystore key. The connection database, settings, generated SSH keys, and SFTP known-host data are excluded from Android cloud backup and device transfer. SFTP uses trust on first use and rejects a server whose saved host key changes.
+
+Generated SFTP private keys remain in app-private storage. Voyager displays the corresponding OpenSSH public key and provides Copy and Save actions so it can be installed on a server without exposing the private key.
 
 SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager does not force SMB transport encryption; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
 
@@ -88,6 +92,7 @@ See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/AR
 | SMB | smbj |
 | WebDAV | Sardine-android and OkHttp |
 | Images | Coil |
+| Archives | Apache Commons Compress |
 | Concurrency | Kotlin Coroutines |
 
 All runtime dependencies are open source and license-compatible with GPLv3; the app ships with no proprietary libraries.
