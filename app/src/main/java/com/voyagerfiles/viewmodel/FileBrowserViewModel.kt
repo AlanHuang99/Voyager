@@ -5,6 +5,9 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.ArchiveProgress
+import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.local.AppDatabase
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.Bookmark
@@ -35,6 +38,7 @@ import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.UploadSourceFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -63,6 +67,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
     private var browserSessionRootPath: String? = null
+    private var initialNavigationJob: Job? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
     private val loadGuard = DirectoryLoadGuard()
     private val sessionAutoCloseTracker = SessionAutoCloseTracker()
@@ -141,13 +146,14 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
         // Load initial path
-        viewModelScope.launch {
+        initialNavigationJob = viewModelScope.launch {
             val defaultPath = prefs.defaultPath.first()
             navigateToPath(defaultPath)
         }
     }
 
     fun navigateTo(path: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
             val rootPath = browserSessionRootPath
@@ -164,6 +170,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun openLocalRoot(path: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
             val sessionId = localSessionId(normalizedPath)
@@ -190,6 +197,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun openSafRoot(treeUri: Uri) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val rootPath = SafFileProvider.rootDocumentUri(treeUri).toString()
             val sessionId = safSessionId(rootPath)
@@ -478,6 +486,77 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun createZipFromSelection(archiveName: String) {
+        val validatedName = validFileNameOrNotify(archiveName) ?: return
+        if ('\\' in validatedName) {
+            showSnackbar("Names cannot contain backslashes")
+            return
+        }
+        if (ArchiveFormat.detect(validatedName) != ArchiveFormat.ZIP) {
+            showSnackbar("Name must end with .zip")
+            return
+        }
+        val state = _browseState.value
+        val selectedItems = state.files.filter { it.path in state.selectedFiles }
+        if (selectedItems.isEmpty()) return
+        val provider = fileProvider
+        val destinationDirectory = state.currentPath
+        val publishProgress = archiveProgressPublisher("Compressing")
+
+        launchOperation("Compressing") {
+            ArchiveService.createZip(
+                provider = provider,
+                selectedItems = selectedItems,
+                destinationDirectory = destinationDirectory,
+                archiveName = validatedName,
+                onProgress = publishProgress,
+            ).fold(
+                onSuccess = { archive ->
+                    clearSelection()
+                    refreshFiles()
+                    showSnackbar("Created ${archive.name}")
+                },
+                onFailure = { error ->
+                    showSnackbar(OperationMessages.failure("Compress", error))
+                },
+            )
+        }
+    }
+
+    fun extractSelectedArchive() {
+        val state = _browseState.value
+        if (state.selectedFiles.size != 1) {
+            showSnackbar("Select one archive to extract")
+            return
+        }
+        val archive = state.files.firstOrNull { it.path in state.selectedFiles }
+        if (archive == null) {
+            showSnackbar("The selected archive is no longer available. Refresh the folder and try again.")
+            return
+        }
+        val provider = fileProvider
+        val destinationDirectory = state.currentPath
+        val publishProgress = archiveProgressPublisher("Extracting")
+
+        launchOperation("Extracting") {
+            ArchiveService.extract(
+                provider = provider,
+                archive = archive,
+                destinationDirectory = destinationDirectory,
+                onProgress = publishProgress,
+            ).fold(
+                onSuccess = { extractionRoot ->
+                    clearSelection()
+                    refreshFiles()
+                    showSnackbar("Extracted to ${extractionRoot.name}")
+                },
+                onFailure = { error ->
+                    showSnackbar(OperationMessages.failure("Extract", error))
+                },
+            )
+        }
+    }
+
     fun copyToClipboard(paths: List<String>) {
         _clipboardPaths.value = paths
         _clipboardOperation.value = ClipboardOperation.COPY
@@ -718,6 +797,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     // Connection management
     fun connectToRemote(connection: RemoteConnection) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val sessionId = remoteSessionId(connection.id)
             if (_sessions.value.none { it.id == sessionId }) {
@@ -749,6 +829,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun activateSession(sessionId: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             activateSessionInternal(sessionId)
         }
@@ -902,6 +983,49 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private fun updateOperationProgress(progress: TransferProgress) {
         if (_operationState.value is OperationState.Running) {
             _operationState.value = OperationState.Running(progress)
+        }
+    }
+
+    private fun cancelInitialNavigation() {
+        initialNavigationJob?.cancel()
+        initialNavigationJob = null
+    }
+
+    private fun archiveProgressPublisher(label: String): (ArchiveProgress) -> Unit {
+        var lastEntryName: String? = null
+        var lastCompletedEntries = -1
+        var lastPublishedBytes = 0L
+        return { progress ->
+            val entryChanged = progress.currentEntryName != lastEntryName
+            val completedEntriesChanged = progress.completedEntries != lastCompletedEntries
+            val reachedKnownTotal = progress.totalBytes
+                ?.takeIf { it > 0 }
+                ?.let { total ->
+                    progress.processedBytes >= total &&
+                        (entryChanged || lastPublishedBytes < total)
+                }
+                ?: false
+            val crossedPublicationThreshold = !entryChanged &&
+                progress.processedBytes - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
+            if (
+                entryChanged ||
+                completedEntriesChanged ||
+                reachedKnownTotal ||
+                crossedPublicationThreshold
+            ) {
+                lastEntryName = progress.currentEntryName
+                lastCompletedEntries = progress.completedEntries
+                lastPublishedBytes = progress.processedBytes
+                updateOperationProgress(
+                    TransferProgress(
+                        label = label,
+                        completedItems = progress.completedEntries,
+                        currentItemName = progress.currentEntryName?.substringAfterLast('/'),
+                        copiedBytes = progress.processedBytes,
+                        totalBytes = progress.totalBytes,
+                    )
+                )
+            }
         }
     }
 

@@ -36,6 +36,8 @@ class BrowserSelectionActionsTest {
             deleteRecursively()
             mkdirs()
             resolve("notes.txt").writeText("notes")
+            resolve("archive.zip").writeBytes(byteArrayOf())
+            resolve("legacy.rar").writeBytes(byteArrayOf())
             resolve("Folder").mkdirs()
         }
     }
@@ -130,6 +132,46 @@ class BrowserSelectionActionsTest {
 
         composeTestRule.onNodeWithText("Details").assertIsDisplayed()
         composeTestRule.onNodeWithText(root.resolve("notes.txt").absolutePath).assertIsDisplayed()
+    }
+
+    @Test
+    fun selectedFileCanOpenCompressionDialogWithSafeDefaultName() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+        composeTestRule.onNodeWithText("Compress to ZIP").assertIsDisplayed().performClick()
+
+        composeTestRule.onNodeWithText("Compress to ZIP").assertIsDisplayed()
+        composeTestRule.onNodeWithText("notes.zip").assertIsDisplayed()
+    }
+
+    @Test
+    fun supportedArchiveOffersExtraction() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("archive.zip") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+
+        composeTestRule.onNodeWithText("Extract here").assertIsDisplayed()
+    }
+
+    @Test
+    fun rarExplainsThatExtractionIsUnavailable() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("legacy.rar") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+
+        composeTestRule.onNodeWithText("Extract here").assertIsDisplayed()
+        composeTestRule.onNodeWithText("RAR extraction is not available in this build")
+            .assertIsDisplayed()
     }
 
     private fun launchBrowser(): FileBrowserViewModel {

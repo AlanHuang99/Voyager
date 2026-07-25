@@ -1,5 +1,6 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.archive.ArchiveConflictException
 import java.io.FileNotFoundException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
@@ -18,7 +19,9 @@ object OperationMessages {
 
     fun reason(error: Throwable): String {
         val causes = generateSequence(error) { it.cause }.toList()
-        val conflict = causes.filterIsInstance<DestinationConflictException>().firstOrNull()
+        val conflict = causes.firstOrNull {
+            it is DestinationConflictException || it is ArchiveConflictException
+        }
         return when {
             conflict != null -> "${conflict.message}. Rename or remove it, then try again."
             causes.any { it is SecurityException } ->

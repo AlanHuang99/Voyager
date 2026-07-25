@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -100,6 +101,7 @@ import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
+import com.voyagerfiles.ui.components.ArchiveNameDialog
 import com.voyagerfiles.ui.components.CreateItemDialog
 import com.voyagerfiles.ui.components.DeleteChoiceDialog
 import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
@@ -154,11 +156,15 @@ fun BrowserScreen(
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var showSessionsSheet by remember { mutableStateOf(false) }
+    var archiveNameDialogDefault by remember { mutableStateOf<String?>(null) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
     val selectedItems = remember(state.files, state.selectedFiles) {
         state.files.filter { it.path in state.selectedFiles }
+    }
+    val archiveActions = remember(selectedItems) {
+        BrowserArchiveActions.forSelection(selectedItems)
     }
     val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
@@ -287,6 +293,51 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                if (BrowserArchiveAction.COMPRESS_TO_ZIP in archiveActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Compress to ZIP") },
+                                        leadingIcon = { Icon(Icons.Filled.Archive, null) },
+                                        onClick = {
+                                            archiveNameDialogDefault =
+                                                BrowserArchiveActions.defaultZipName(
+                                                    selectedItems = selectedItems,
+                                                    existingNames = state.files
+                                                        .mapTo(mutableSetOf()) { it.name },
+                                                )
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (BrowserArchiveAction.EXTRACT_HERE in archiveActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Extract here") },
+                                        leadingIcon = { Icon(Icons.Filled.FolderOpen, null) },
+                                        onClick = {
+                                            viewModel.extractSelectedArchive()
+                                            showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (BrowserArchiveAction.EXTRACTION_UNSUPPORTED in archiveActions) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("Extract here")
+                                                BrowserArchiveActions
+                                                    .unsupportedExtractionReason(selectedItems)
+                                                    ?.let { reason ->
+                                                        Text(
+                                                            text = reason,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                        )
+                                                    }
+                                            }
+                                        },
+                                        leadingIcon = { Icon(Icons.Filled.FolderOpen, null) },
+                                        enabled = false,
+                                        onClick = {},
+                                    )
+                                }
                                 if (SelectionToolbarAction.COPY in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
                                         text = { Text("Copy") },
@@ -798,6 +849,17 @@ fun BrowserScreen(
             onCreate = { name ->
                 viewModel.createFile(name)
                 showCreateFileDialog = false
+            },
+        )
+    }
+
+    archiveNameDialogDefault?.let { initialName ->
+        ArchiveNameDialog(
+            initialName = initialName,
+            onDismiss = { archiveNameDialogDefault = null },
+            onCreate = { name ->
+                viewModel.createZipFromSelection(name)
+                archiveNameDialogDefault = null
             },
         )
     }
