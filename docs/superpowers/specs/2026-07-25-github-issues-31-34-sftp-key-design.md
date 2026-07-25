@@ -12,9 +12,9 @@ This batch contains five independently testable deliverables:
 2. Let Android honor or establish default apps for file types.
 3. Render the first page of local and Storage Access Framework PDF files as thumbnails.
 4. Show useful progress during copy and move operations.
-5. Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, BZ2, and RAR archives.
+5. Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 archives while recognizing unsupported RAR files with an actionable message.
 
-Archive support means create and extract operations. It does not include browsing an archive as a virtual directory, editing entries in place, creating RAR or compressed TAR archives, password-protected archives, split archives, or preserving Unix ownership and special file nodes.
+Archive support means create and extract operations. It does not include browsing an archive as a virtual directory, editing entries in place, RAR extraction or creation, creating compressed TAR archives, password-protected archives, split archives, or preserving Unix ownership and special file nodes.
 
 ## Design Principles
 
@@ -58,15 +58,15 @@ An application-scoped, byte-bounded LRU cache will key rendered bitmaps by sourc
 `ArchiveService` will provide two operations:
 
 - `createZip(provider, selectedItems, destinationDirectory, archiveName, progress)` streams entries through `ZipOutputStream` into a newly created provider output stream. It recursively lists selected directories, writes explicit directory entries, rejects duplicate entry names, and removes a partially written archive after failure.
-- `extract(provider, archiveItem, destinationDirectory, progress)` creates one new sibling directory derived from the archive filename, then writes validated entries beneath it. ZIP and TAR-family readers stream from provider input where supported. RAR input is copied into a unique cache directory for seekable access. Plain GZ and BZ2 inputs produce one file named from the archive stem. Any failure removes the newly created extraction tree.
+- `extract(provider, archiveItem, destinationDirectory, progress)` creates one new sibling directory derived from the archive filename, then writes validated entries beneath it. ZIP and TAR-family readers stream from provider input. Plain GZ and BZ2 inputs produce one file named from the archive stem. Any failure removes the newly created extraction tree.
 
-Extraction rejects symbolic links, hard links, device entries, encrypted or split RAR archives, duplicate normalized paths, path type conflicts, and existing destination roots. Individual files are created only after their parent directories exist. A failed entry write removes its partial file before the enclosing extraction root is cleaned.
+Extraction rejects symbolic links, hard links, device entries, encrypted archives, duplicate normalized paths, path type conflicts, and existing destination roots. Individual files are created only after their parent directories exist. A failed entry write removes its partial file before the enclosing extraction root is cleaned. Selecting a RAR archive reports that Voyager cannot safely extract RAR in this build.
 
 The browser selection UI will expose Compress to ZIP for one or more selected items and Extract here for exactly one supported archive. Both operations reuse the existing operation-state presentation and refresh the directory after completion. Archive actions remain unavailable while another operation is running.
 
 ## Dependencies
 
-The Java standard library supplies ZIP support. Apache Commons Compress supplies TAR, GZIP, and BZIP2 codecs. Junrar supplies read-only RAR extraction. Dependency versions and licenses must be verified from primary project and Maven metadata before addition, and Android lint plus release minification must validate compatibility.
+Apache Commons Compress 1.28.0 supplies ZIP, TAR, GZIP, and BZIP2 codecs under Apache-2.0. Junrar is excluded because the UnRAR license is not FLOSS-compatible for F-Droid. Android libarchive 1.1.6 is excluded because it bundles libarchive 3.8.1, whose RAR5 reader is affected by CVE-2026-14164, and no patched Android release is available as of 2026-07-25. Android lint plus release minification must validate Commons Compress compatibility.
 
 ## Error Handling and User Feedback
 
@@ -74,7 +74,7 @@ New domain exceptions will distinguish destination conflicts, unsafe archive ent
 
 ## Verification
 
-- Unit tests cover public-key content access, open-intent policy, progress fraction rules, progress callbacks, archive-format recognition, unsafe path rejection, ZIP round trips, TAR-family and RAR extraction, overwrite protection, and cleanup after failure.
+- Unit tests cover public-key content access, open-intent policy, progress fraction rules, progress callbacks, archive-format recognition, unsafe path rejection, ZIP round trips, TAR-family extraction, RAR rejection, overwrite protection, and cleanup after failure.
 - Android instrumentation tests cover generated-key Copy and Save affordances, direct `ACTION_VIEW` intent construction, valid PDF rendering, malformed PDF fallback, and progress UI semantics.
 - A disposable Docker OpenSSH server accepts only the generated public key. The JVM SFTP client test lists and transfers a file with an empty password, proving the exported public key matches the app-owned private key.
 - The full local gate remains `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace`.
