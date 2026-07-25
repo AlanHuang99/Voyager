@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -702,12 +703,14 @@ fun BrowserScreen(
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        try {
-                                            FileUtils.openFile(context, file)
-                                        } catch (e: Exception) {
+                                        FileUtils.openFile(context, file).onFailure { error ->
                                             scope.launch {
                                                 snackbarHostState.showSnackbar(
-                                                    "No app found to open this file"
+                                                    if (error is ActivityNotFoundException) {
+                                                        "No app can open this file type"
+                                                    } else {
+                                                        "Could not open this file"
+                                                    }
                                                 )
                                             }
                                         }
@@ -742,12 +745,14 @@ fun BrowserScreen(
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        try {
-                                            FileUtils.openFile(context, file)
-                                        } catch (e: Exception) {
+                                        FileUtils.openFile(context, file).onFailure { error ->
                                             scope.launch {
                                                 snackbarHostState.showSnackbar(
-                                                    "No app found to open this file"
+                                                    if (error is ActivityNotFoundException) {
+                                                        "No app can open this file type"
+                                                    } else {
+                                                        "Could not open this file"
+                                                    }
                                                 )
                                             }
                                         }
