@@ -58,6 +58,12 @@
 -dontwarn javax.el.**
 -dontwarn net.engio.mbassy.**
 
+# Commons Compress optional XZ and Zstandard codecs are not enabled
+-dontwarn com.github.luben.zstd.ZstdInputStream
+-dontwarn org.tukaani.xz.MemoryLimitException
+-dontwarn org.tukaani.xz.SingleXZInputStream
+-dontwarn org.tukaani.xz.XZInputStream
+
 # Keep Room entities
 -keep class com.voyagerfiles.data.model.** { *; }
 -keep class com.voyagerfiles.data.local.** { *; }

@@ -4,7 +4,7 @@ Voyager is a single-activity Jetpack Compose application. `MainActivity` owns th
 
 ## UI and navigation
 
-`AppNavigation` defines Home, Browser, Remote Connections, Trash, and Settings destinations. Home presents storage volumes, common folders, local bookmarks, document-tree access, active sessions, Trash, and remote connections. Browser renders a session-aware toolbar, breadcrumb navigation, search and type filters, list, compact-list, or grid content, contextual selection actions, progress, empty states, retryable errors, and a read-only details sheet.
+`AppNavigation` defines Home, Browser, Remote Connections, Trash, and Settings destinations. Home presents storage volumes, common folders, local bookmarks, document-tree access, active sessions, Trash, and remote connections. Browser renders a session-aware toolbar, breadcrumb navigation, search and type filters, list, compact-list, or grid content, contextual selection actions including archive creation and extraction, progress, empty states, retryable errors, and a read-only details sheet.
 
 The UI uses Material 3 components and theme tokens from `ui/theme`. Direct-local deletion offers recoverable Trash and explicitly irreversible permanent deletion per operation. Permanent-only provider deletion, permanent Trash deletion, emptying Trash, deleting saved connections, and saving a cleartext remote transport require explicit confirmation where appropriate.
 
@@ -12,7 +12,7 @@ The UI uses Material 3 components and theme tokens from `ui/theme`. Direct-local
 
 `FileBrowserViewModel` exposes immutable `StateFlow` values to Compose. Each open location is represented by a `BrowserSession` with a stable ID, source, root boundary, current path, and optional remote connection metadata. A provider instance is retained per session so local, SAF, and remote state cannot be accidentally mixed.
 
-Directory requests use `DirectoryLoadGuard` tokens. Only the newest request for the active session may update the visible file list, which prevents a slow response from overwriting a later navigation result. Search and type filtering are derived from the loaded directory in `BrowseState`; sorting preserves directories before files.
+Directory requests use `DirectoryLoadGuard` tokens. Only the newest request for the active session may update the visible file list, which prevents a slow response from overwriting a later navigation result. The asynchronous default-folder load is canceled when explicit local, document-tree, session, or remote navigation begins, so startup work cannot replace the user's chosen location. Search and type filtering are derived from the loaded directory in `BrowseState`; sorting preserves directories before files.
 
 ## File providers
 
@@ -29,7 +29,13 @@ All storage backends implement `FileProvider`, which defines listing, metadata, 
 
 `FileOperationCoordinator` handles copy and move across different providers. It rejects destination conflicts, copies recursively, removes a newly created partial destination after failure, and deletes a move source only after the copy succeeds. Providers handle same-provider operations so they can use native rename or server-side copy behavior when available.
 
-Android sharing is intentionally limited to local and SAF files in the current implementation. `ShareIntentPlan` rejects directories and remote items, computes the narrowest common MIME type, and chooses `ACTION_SEND` or `ACTION_SEND_MULTIPLE`. `FileUtils` exposes local files through the app `FileProvider`, preserves SAF content URIs, grants read access through both the intent flag and `ClipData`, and opens the system chooser.
+Android sharing is intentionally limited to local and SAF files in the current implementation. `ShareIntentPlan` rejects directories and remote items, computes the narrowest common MIME type, and chooses `ACTION_SEND` or `ACTION_SEND_MULTIPLE`. `FileUtils` exposes local files through the app `FileProvider`, preserves SAF content URIs, and grants read access through both the intent flag and `ClipData`. Opening a local or SAF file sends `ACTION_VIEW` directly so Android can apply its resolver and saved default-app behavior.
+
+## Archives
+
+`ArchiveService` operates only through `FileProvider` streams and create, list, metadata, and delete methods, so the same workflow applies to local storage, SAF document trees, SFTP, FTP, SMB, and WebDAV. It creates ZIP files and extracts ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ2, GZ, and BZ2 inputs. RAR is recognized but intentionally unsupported.
+
+Archive extraction creates a new sibling directory and never overwrites an existing item. Entry paths reject absolute paths, drive and UNC paths, blank or dot segments, traversal, and NUL characters. ZIP and TAR links, special files, unreadable or encrypted ZIP entries, duplicate normalized paths, conflicting entry types, and corrupt archives fail closed. Failed creation or extraction removes the partial archive or extraction root. ZIP input is staged through a bounded-memory copy to an app-private temporary file so central-directory metadata, including Unix link modes, can be checked before each entry is written.
 
 ## Storage access
 
@@ -47,12 +53,12 @@ Room stores remote connection records and local bookmarks. DataStore stores them
 
 `AndroidCredentialCipher` uses AES-GCM with a random IV and a non-exportable Android Keystore key. If an encrypted value cannot be decrypted, the repository exposes an empty password so the user can edit and save the connection again. Android backup rules exclude Room databases, DataStore, generated SSH material, and SFTP known hosts because Keystore keys are device-bound and connection state is sensitive.
 
-SFTP stores first-seen host keys in `files/ssh/known_hosts` and rejects changed keys. WebDAV transport is explicit and supports HTTPS on any port. FTP and HTTP WebDAV are cleartext and require a warning confirmation in the connection editor. SMB encryption depends on server negotiation and is not enforced by Voyager.
+SFTP stores first-seen host keys in `files/ssh/known_hosts` and rejects changed keys. Generated private keys stay in app-private storage while the corresponding OpenSSH public key is exposed through explicit Copy and Save actions. WebDAV transport is explicit and supports HTTPS on any port. FTP and HTTP WebDAV are cleartext and require a warning confirmation in the connection editor. SMB encryption depends on server negotiation and is not enforced by Voyager.
 
 ## Concurrency and failure handling
 
-Filesystem and network work runs on `Dispatchers.IO`. `OperationState` serializes user-initiated mutations and drives an accessible progress indicator. Provider references and operation inputs are captured before asynchronous work begins so switching locations cannot redirect an in-flight mutation. `OperationMessages` maps conflicts, permission denial, missing items, unreachable hosts, and timeouts to recovery-oriented feedback.
+Filesystem and network work runs on `Dispatchers.IO`. `OperationState` serializes user-initiated mutations and drives an accessible progress indicator. Cross-provider copy and move operations publish bounded-stream byte progress, and archive operations publish per-entry byte progress; ViewModel updates are throttled while preserving item changes and completion. Determinate progress is shown only when a trustworthy byte or item total is available. Provider references and operation inputs are captured before asynchronous work begins so switching locations cannot redirect an in-flight mutation. `OperationMessages` maps conflicts, permission denial, missing items, unreachable hosts, timeouts, and archive failures to recovery-oriented feedback.
 
 ## Tests
 
-JVM tests cover pure models, sharing plans, validation, operation safety, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, unavailable storage, single and multiple share intents, contextual selection actions, per-operation deletion choices, compact-view persistence, file details, search-to-folder Back behavior, selection-control accessibility, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.
+JVM tests cover pure models, sharing plans, validation, operation safety, archive formats and hostile entry handling, Trash recovery, credentials, storage adapters, navigation races, and embedded FTP, SFTP, and WebDAV servers. An opt-in Docker test authenticates to an OpenSSH-backed SFTP server with a key generated by Voyager, transfers a probe file, and performs a remote ZIP create/extract round trip. SMB integration tests run when server credentials are supplied through environment variables. Android instrumentation tests cover Compose rendering, Android file-open intents, image and PDF thumbnails, generated public-key export, operation progress, archive menus and round trips, unavailable storage, single and multiple share intents, contextual selection actions, per-operation deletion choices, compact-view persistence, file details, search-to-folder Back behavior, selection-control accessibility, and Android Keystore behavior. See [TESTING.md](TESTING.md) for commands and the manual regression matrix.

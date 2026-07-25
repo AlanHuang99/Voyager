@@ -46,9 +46,16 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        onProgress: (StreamCopyProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath)
+            copyPathInternal(
+                sourceProvider,
+                destinationProvider,
+                sourcePath,
+                destinationDirectoryPath,
+                onProgress,
+            )
         }
     }
 
@@ -57,9 +64,16 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        onProgress: (StreamCopyProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath)
+            copyPathInternal(
+                sourceProvider,
+                destinationProvider,
+                sourcePath,
+                destinationDirectoryPath,
+                onProgress,
+            )
             sourceProvider.delete(sourcePath).getOrThrow()
         }
     }
@@ -69,6 +83,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        onProgress: (StreamCopyProgress) -> Unit,
     ) {
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
         val targetPath = joinPath(destinationDirectoryPath, item.name)
@@ -80,7 +95,13 @@ object FileOperationCoordinator {
                 destinationProvider.createDirectory(destinationDirectoryPath, item.name).getOrThrow()
                 targetCreated = true
                 sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
-                    copyPathInternal(sourceProvider, destinationProvider, child.path, targetPath)
+                    copyPathInternal(
+                        sourceProvider,
+                        destinationProvider,
+                        child.path,
+                        targetPath,
+                        onProgress,
+                    )
                 }
                 return
             }
@@ -88,7 +109,13 @@ object FileOperationCoordinator {
             sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
                 destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
                     targetCreated = true
-                    input.copyTo(output, BUFFER_SIZE)
+                    copyStream(
+                        input = input,
+                        output = output,
+                        path = sourcePath,
+                        totalBytes = item.size.takeIf { it >= 0 },
+                        onProgress = onProgress,
+                    )
                 }
             }
         } catch (error: Throwable) {
@@ -100,6 +127,42 @@ object FileOperationCoordinator {
                 }.onFailure(error::addSuppressed)
             }
             throw error
+        }
+    }
+
+    private fun copyStream(
+        input: java.io.InputStream,
+        output: java.io.OutputStream,
+        path: String,
+        totalBytes: Long?,
+        onProgress: (StreamCopyProgress) -> Unit,
+    ) {
+        val buffer = ByteArray(BUFFER_SIZE)
+        var bytesCopied = 0L
+        var reported = false
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (read == 0) continue
+            output.write(buffer, 0, read)
+            bytesCopied += read
+            reported = true
+            onProgress(
+                StreamCopyProgress(
+                    path = path,
+                    bytesCopied = bytesCopied,
+                    totalBytes = totalBytes,
+                )
+            )
+        }
+        if (!reported) {
+            onProgress(
+                StreamCopyProgress(
+                    path = path,
+                    bytesCopied = 0,
+                    totalBytes = totalBytes,
+                )
+            )
         }
     }
 

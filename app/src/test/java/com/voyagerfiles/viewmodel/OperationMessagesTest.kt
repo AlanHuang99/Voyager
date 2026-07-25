@@ -1,5 +1,8 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.archive.ArchiveConflictException
+import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.UnsupportedArchiveException
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.FileNotFoundException
@@ -15,6 +18,29 @@ class OperationMessagesTest {
         assertEquals(
             "Paste failed: An item named report.pdf already exists in this folder. Rename or remove it, then try again.",
             OperationMessages.failure("Paste", error),
+        )
+    }
+
+    @Test
+    fun archiveConflictSuggestsHowToRecover() {
+        val error = ArchiveConflictException("/target/backup.zip")
+
+        assertEquals(
+            "Compress failed: An item named backup.zip already exists in this folder. Rename or remove it, then try again.",
+            OperationMessages.failure("Compress", error),
+        )
+    }
+
+    @Test
+    fun unsupportedArchivePreservesActionableReason() {
+        val error = UnsupportedArchiveException(
+            format = ArchiveFormat.RAR_UNSUPPORTED,
+            message = "RAR extraction is not available in this build",
+        )
+
+        assertEquals(
+            "Extract failed: RAR extraction is not available in this build",
+            OperationMessages.failure("Extract", error),
         )
     }
 

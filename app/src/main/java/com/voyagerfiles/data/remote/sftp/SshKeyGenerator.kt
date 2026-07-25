@@ -32,6 +32,7 @@ object SshKeyGenerator {
         return GeneratedSshKeyPair(
             privateKeyFile = privateKeyFile,
             publicKeyFile = publicKeyFile,
+            publicKey = publicKeyFile.readText().trimEnd('\r', '\n'),
         )
     }
 
@@ -61,4 +62,5 @@ object SshKeyGenerator {
 data class GeneratedSshKeyPair(
     val privateKeyFile: File,
     val publicKeyFile: File,
+    val publicKey: String,
 )

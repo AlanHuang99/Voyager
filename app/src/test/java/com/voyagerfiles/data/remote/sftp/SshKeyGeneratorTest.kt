@@ -28,6 +28,7 @@ class SshKeyGeneratorTest {
         assertTrue(privateKey.contains("BEGIN RSA PRIVATE KEY"))
         assertTrue(publicKey.startsWith("ssh-rsa "))
         assertTrue(publicKey.trim().endsWith("voyager-test"))
+        assertEquals(publicKey.trimEnd('\r', '\n'), generated.publicKey)
     }
 
     @Test

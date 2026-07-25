@@ -10,6 +10,7 @@ import com.voyagerfiles.data.model.FileSource
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,6 +51,32 @@ class FileSharingTest {
         assertEquals(Intent.ACTION_SEND, intent.action)
         assertEquals(uri, intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
         assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
+    }
+
+    @Test
+    fun localPdfBuildsDirectViewIntentThatAllowsAndroidDefaults() {
+        val file = createLocalFile("report.pdf")
+
+        val intent = FileUtils.createOpenFileIntent(context, file).getOrThrow()
+
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertNotEquals(Intent.ACTION_CHOOSER, intent.action)
+        assertEquals("application/pdf", intent.type)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals("${context.packageName}.fileprovider", intent.data?.authority)
+    }
+
+    @Test
+    fun safPdfBuildsDirectViewIntentWithOriginalContentUri() {
+        val uri = Uri.parse("content://documents/tree/root/document/report.pdf")
+
+        val intent = FileUtils.createOpenFileIntent(context, safFile(uri)).getOrThrow()
+
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertNotEquals(Intent.ACTION_CHOOSER, intent.action)
+        assertEquals(uri, intent.data)
+        assertEquals("application/pdf", intent.type)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
     }
 
     private fun createLocalFile(name: String): FileItem {

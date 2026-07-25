@@ -40,6 +40,9 @@ data class FileItem(
     val isApk: Boolean
         get() = extension.equals("apk", ignoreCase = true)
 
+    val isPdf: Boolean
+        get() = !isDirectory && extension.equals("pdf", ignoreCase = true)
+
     val usesLocalImageThumbnail: Boolean
         get() = source == FileSource.LOCAL && isImage
 
@@ -55,7 +58,7 @@ data class FileItem(
         )
 
         private val archiveExtensions = setOf(
-            "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "zst",
+            "zip", "tar", "tgz", "gz", "tbz2", "bz2", "xz", "7z", "rar", "zst",
         )
 
         private val mimeTypeOverrides = mapOf(

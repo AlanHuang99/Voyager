@@ -163,6 +163,9 @@ dependencies {
     // DocumentFile for SAF
     implementation("androidx.documentfile:documentfile:1.0.1")
 
+    // Archive formats - Apache Commons Compress (Apache 2.0)
+    implementation("org.apache.commons:commons-compress:1.28.0")
+
     // Splash screen
     implementation("androidx.core:core-splashscreen:1.0.1")
 

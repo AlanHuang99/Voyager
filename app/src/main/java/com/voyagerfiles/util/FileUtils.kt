@@ -117,23 +117,30 @@ object FileUtils {
         StorageDirectory("DCIM", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath),
     )
 
-    fun openFile(context: Context, file: FileItem) {
-        val uri: Uri = if (file.source == FileSource.SAF) {
+    fun createOpenFileIntent(context: Context, file: FileItem): Result<Intent> = runCatching {
+        require(file.source == FileSource.LOCAL || file.source == FileSource.SAF) {
+            "Only files stored on this device can be opened"
+        }
+        val uri = if (file.source == FileSource.SAF) {
             Uri.parse(file.path)
         } else {
-            val javaFile = File(file.path)
             FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
-                javaFile,
+                File(file.path),
             )
         }
-        val intent = Intent(Intent.ACTION_VIEW).apply {
+        Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, file.mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Open with"))
     }
+
+    fun openFile(context: Context, file: FileItem): Result<Unit> =
+        createOpenFileIntent(context, file).mapCatching { intent ->
+            if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        }
 
     fun shareFile(context: Context, file: FileItem) {
         shareFiles(context, listOf(file)).getOrThrow()

@@ -5,6 +5,9 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.ArchiveProgress
+import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.local.AppDatabase
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.Bookmark
@@ -35,6 +38,7 @@ import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.UploadSourceFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +52,10 @@ import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
 
+    private companion object {
+        const val PROGRESS_PUBLICATION_BYTES = 256L * 1024L
+    }
+
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
     private val connectionDao = db.connectionDao()
@@ -59,6 +67,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     private var fileProvider: FileProvider = FileProviderFactory.createLocal()
     private var browserSessionRootPath: String? = null
+    private var initialNavigationJob: Job? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
     private val loadGuard = DirectoryLoadGuard()
     private val sessionAutoCloseTracker = SessionAutoCloseTracker()
@@ -137,13 +146,14 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
         // Load initial path
-        viewModelScope.launch {
+        initialNavigationJob = viewModelScope.launch {
             val defaultPath = prefs.defaultPath.first()
             navigateToPath(defaultPath)
         }
     }
 
     fun navigateTo(path: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
             val rootPath = browserSessionRootPath
@@ -160,6 +170,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun openLocalRoot(path: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
             val sessionId = localSessionId(normalizedPath)
@@ -186,6 +197,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun openSafRoot(treeUri: Uri) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val rootPath = SafFileProvider.rootDocumentUri(treeUri).toString()
             val sessionId = safSessionId(rootPath)
@@ -474,6 +486,77 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun createZipFromSelection(archiveName: String) {
+        val validatedName = validFileNameOrNotify(archiveName) ?: return
+        if ('\\' in validatedName) {
+            showSnackbar("Names cannot contain backslashes")
+            return
+        }
+        if (ArchiveFormat.detect(validatedName) != ArchiveFormat.ZIP) {
+            showSnackbar("Name must end with .zip")
+            return
+        }
+        val state = _browseState.value
+        val selectedItems = state.files.filter { it.path in state.selectedFiles }
+        if (selectedItems.isEmpty()) return
+        val provider = fileProvider
+        val destinationDirectory = state.currentPath
+        val publishProgress = archiveProgressPublisher("Compressing")
+
+        launchOperation("Compressing") {
+            ArchiveService.createZip(
+                provider = provider,
+                selectedItems = selectedItems,
+                destinationDirectory = destinationDirectory,
+                archiveName = validatedName,
+                onProgress = publishProgress,
+            ).fold(
+                onSuccess = { archive ->
+                    clearSelection()
+                    refreshFiles()
+                    showSnackbar("Created ${archive.name}")
+                },
+                onFailure = { error ->
+                    showSnackbar(OperationMessages.failure("Compress", error))
+                },
+            )
+        }
+    }
+
+    fun extractSelectedArchive() {
+        val state = _browseState.value
+        if (state.selectedFiles.size != 1) {
+            showSnackbar("Select one archive to extract")
+            return
+        }
+        val archive = state.files.firstOrNull { it.path in state.selectedFiles }
+        if (archive == null) {
+            showSnackbar("The selected archive is no longer available. Refresh the folder and try again.")
+            return
+        }
+        val provider = fileProvider
+        val destinationDirectory = state.currentPath
+        val publishProgress = archiveProgressPublisher("Extracting")
+
+        launchOperation("Extracting") {
+            ArchiveService.extract(
+                provider = provider,
+                archive = archive,
+                destinationDirectory = destinationDirectory,
+                onProgress = publishProgress,
+            ).fold(
+                onSuccess = { extractionRoot ->
+                    clearSelection()
+                    refreshFiles()
+                    showSnackbar("Extracted to ${extractionRoot.name}")
+                },
+                onFailure = { error ->
+                    showSnackbar(OperationMessages.failure("Extract", error))
+                },
+            )
+        }
+    }
+
     fun copyToClipboard(paths: List<String>) {
         _clipboardPaths.value = paths
         _clipboardOperation.value = ClipboardOperation.COPY
@@ -526,26 +609,117 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val destPath = _browseState.value.currentPath
         val sourceProvider = clipboardProvider ?: fileProvider
         val destinationProvider = fileProvider
-        launchOperation("Pasting") {
+        val progressLabel = when (operation) {
+            ClipboardOperation.COPY -> "Copying"
+            ClipboardOperation.CUT -> "Moving"
+            ClipboardOperation.NONE -> "Pasting"
+        }
+        launchOperation(progressLabel) {
             var failed = 0
             var firstError: Throwable? = null
+            var completed = 0
+            val itemResults = buildMap {
+                for (sourcePath in paths) {
+                    val visibleItem = _browseState.value.files.firstOrNull { it.path == sourcePath }
+                    put(
+                        sourcePath,
+                        visibleItem?.let { Result.success(it) }
+                            ?: sourceProvider.getFileInfo(sourcePath),
+                    )
+                }
+            }
             for (sourcePath in paths) {
+                val itemResult = itemResults.getValue(sourcePath)
+                val item = itemResult.getOrNull()
+                updateOperationProgress(
+                    TransferProgress(
+                        label = progressLabel,
+                        completedItems = completed,
+                        totalItems = paths.size,
+                        currentItemName = item?.name ?: sourcePath.substringAfterLast('/'),
+                    )
+                )
+                if (item == null) {
+                    failed++
+                    if (firstError == null) {
+                        firstError = itemResult.exceptionOrNull()
+                            ?: IllegalStateException("The source item is unavailable")
+                    }
+                    continue
+                }
+
+                var lastPath = item.path
+                var lastPublishedBytes = 0L
+                var latestStreamProgress: StreamCopyProgress? = null
+                val publishStreamProgress: (StreamCopyProgress) -> Unit = { streamProgress ->
+                    latestStreamProgress = streamProgress
+                    val pathChanged = streamProgress.path != lastPath
+                    val reachedKnownTotal = streamProgress.totalBytes
+                        ?.takeIf { it > 0 }
+                        ?.let {
+                            streamProgress.bytesCopied >= it &&
+                                lastPublishedBytes < it
+                        }
+                        ?: false
+                    val crossedPublicationThreshold =
+                        streamProgress.bytesCopied - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
+                    if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
+                        lastPath = streamProgress.path
+                        lastPublishedBytes = streamProgress.bytesCopied
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = progressLabel,
+                                completedItems = completed,
+                                totalItems = paths.size,
+                                currentItemName = streamProgress.path.substringAfterLast('/'),
+                                copiedBytes = streamProgress.bytesCopied,
+                                totalBytes = streamProgress.totalBytes,
+                            )
+                        )
+                    }
+                }
                 val result = when (operation) {
                     ClipboardOperation.COPY -> {
                         if (sourceProvider === destinationProvider) {
                             destinationProvider.copy(sourcePath, destPath)
                         } else {
-                            FileOperationCoordinator.copyPath(sourceProvider, destinationProvider, sourcePath, destPath)
+                            FileOperationCoordinator.copyPath(
+                                sourceProvider,
+                                destinationProvider,
+                                sourcePath,
+                                destPath,
+                                publishStreamProgress,
+                            )
                         }
                     }
                     ClipboardOperation.CUT -> {
                         if (sourceProvider === destinationProvider) {
                             destinationProvider.move(sourcePath, destPath)
                         } else {
-                            FileOperationCoordinator.movePath(sourceProvider, destinationProvider, sourcePath, destPath)
+                            FileOperationCoordinator.movePath(
+                                sourceProvider,
+                                destinationProvider,
+                                sourcePath,
+                                destPath,
+                                publishStreamProgress,
+                            )
                         }
                     }
                     ClipboardOperation.NONE -> Result.success(Unit)
+                }
+                result.onSuccess {
+                    completed++
+                    val streamProgress = latestStreamProgress
+                    updateOperationProgress(
+                        TransferProgress(
+                            label = progressLabel,
+                            completedItems = completed,
+                            totalItems = paths.size,
+                            currentItemName = item.name,
+                            copiedBytes = streamProgress?.bytesCopied ?: 0,
+                            totalBytes = streamProgress?.totalBytes,
+                        )
+                    )
                 }
                 result.onFailure { error ->
                     failed++
@@ -623,6 +797,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     // Connection management
     fun connectToRemote(connection: RemoteConnection) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             val sessionId = remoteSessionId(connection.id)
             if (_sessions.value.none { it.id == sessionId }) {
@@ -654,6 +829,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun activateSession(sessionId: String) {
+        cancelInitialNavigation()
         viewModelScope.launch {
             activateSessionInternal(sessionId)
         }
@@ -787,7 +963,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             showSnackbar("${active.label} is already in progress")
             return
         }
-        _operationState.value = OperationState.Running(label)
+        _operationState.value = OperationState.Running(TransferProgress(label))
         viewModelScope.launch {
             try {
                 block()
@@ -800,6 +976,55 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     deferredAutoCloseSessionIds = emptySet()
                     closeSessionsAfterInactivity(sessionIds)
                 }
+            }
+        }
+    }
+
+    private fun updateOperationProgress(progress: TransferProgress) {
+        if (_operationState.value is OperationState.Running) {
+            _operationState.value = OperationState.Running(progress)
+        }
+    }
+
+    private fun cancelInitialNavigation() {
+        initialNavigationJob?.cancel()
+        initialNavigationJob = null
+    }
+
+    private fun archiveProgressPublisher(label: String): (ArchiveProgress) -> Unit {
+        var lastEntryName: String? = null
+        var lastCompletedEntries = -1
+        var lastPublishedBytes = 0L
+        return { progress ->
+            val entryChanged = progress.currentEntryName != lastEntryName
+            val completedEntriesChanged = progress.completedEntries != lastCompletedEntries
+            val reachedKnownTotal = progress.totalBytes
+                ?.takeIf { it > 0 }
+                ?.let { total ->
+                    progress.processedBytes >= total &&
+                        (entryChanged || lastPublishedBytes < total)
+                }
+                ?: false
+            val crossedPublicationThreshold = !entryChanged &&
+                progress.processedBytes - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
+            if (
+                entryChanged ||
+                completedEntriesChanged ||
+                reachedKnownTotal ||
+                crossedPublicationThreshold
+            ) {
+                lastEntryName = progress.currentEntryName
+                lastCompletedEntries = progress.completedEntries
+                lastPublishedBytes = progress.processedBytes
+                updateOperationProgress(
+                    TransferProgress(
+                        label = label,
+                        completedItems = progress.completedEntries,
+                        currentItemName = progress.currentEntryName?.substringAfterLast('/'),
+                        copiedBytes = progress.processedBytes,
+                        totalBytes = progress.totalBytes,
+                    )
+                )
             }
         }
     }
