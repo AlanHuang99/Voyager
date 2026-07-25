@@ -40,6 +40,9 @@ data class FileItem(
     val isApk: Boolean
         get() = extension.equals("apk", ignoreCase = true)
 
+    val isPdf: Boolean
+        get() = !isDirectory && extension.equals("pdf", ignoreCase = true)
+
     val usesLocalImageThumbnail: Boolean
         get() = source == FileSource.LOCAL && isImage
 

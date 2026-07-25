@@ -34,4 +34,17 @@ class FileItemTest {
         assertFalse(remoteImage.usesLocalImageThumbnail)
         assertFalse(localFolder.usesLocalImageThumbnail)
     }
+
+    @Test
+    fun pdfDetectionIsCaseInsensitiveAndExcludesDirectories() {
+        val pdf = FileItem(
+            name = "Report.PDF",
+            path = "/storage/emulated/0/Documents/Report.PDF",
+            isDirectory = false,
+        )
+
+        assertTrue(pdf.isPdf)
+        assertFalse(pdf.copy(name = "PDF files", isDirectory = true).isPdf)
+        assertFalse(pdf.copy(name = "Report.pdf.txt").isPdf)
+    }
 }
