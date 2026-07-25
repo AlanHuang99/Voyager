@@ -1,5 +1,10 @@
 package com.voyagerfiles.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -155,6 +160,9 @@ fun ConnectionDialog(
     var password by remember { mutableStateOf(existingConnection?.password ?: "") }
     var privateKeyPath by remember { mutableStateOf(existingConnection?.privateKeyPath ?: "") }
     var keyGenerationMessage by remember { mutableStateOf<String?>(null) }
+    var generatedPublicKey by remember { mutableStateOf<String?>(null) }
+    var generatedPublicKeyFileName by remember { mutableStateOf("id_voyager_key.pub") }
+    var pendingPublicKeySave by remember { mutableStateOf<String?>(null) }
     var isGeneratingKey by remember { mutableStateOf(false) }
     var remotePath by remember { mutableStateOf(existingConnection?.remotePath ?: "/") }
     var shareName by remember { mutableStateOf(existingConnection?.shareName ?: "") }
@@ -164,6 +172,31 @@ fun ConnectionDialog(
     var showCleartextConfirmation by remember { mutableStateOf(false) }
     val validation = ConnectionFormValidator.validate(protocol, host, port, shareName)
     val transportWarning = connectionTransportWarning(protocol, useTls)
+    val publicKeySaveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        val publicKey = pendingPublicKeySave
+        pendingPublicKeySave = null
+        if (uri != null && publicKey != null) {
+            coroutineScope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        checkNotNull(context.contentResolver.openOutputStream(uri, "w")) {
+                            "The selected document could not be opened"
+                        }.bufferedWriter(Charsets.UTF_8).use { writer ->
+                            writer.write(publicKey)
+                            writer.newLine()
+                        }
+                    }
+                }.fold(
+                    onSuccess = { keyGenerationMessage = "Public key saved" },
+                    onFailure = { error ->
+                        keyGenerationMessage = "Public key save failed: ${error.message ?: "unknown error"}"
+                    },
+                )
+            }
+        }
+    }
 
     fun connectionFromFields(): RemoteConnection = RemoteConnection(
         id = existingConnection?.id ?: 0,
@@ -330,7 +363,9 @@ fun ConnectionDialog(
                                 }.fold(
                                     onSuccess = { generated ->
                                         privateKeyPath = generated.privateKeyFile.absolutePath
-                                        keyGenerationMessage = "Public key saved to ${generated.publicKeyFile.absolutePath}"
+                                        generatedPublicKey = generated.publicKey
+                                        generatedPublicKeyFileName = generated.publicKeyFile.name
+                                        keyGenerationMessage = "Private key created in app storage"
                                     },
                                     onFailure = { error ->
                                         keyGenerationMessage = "Key generation failed: ${error.message ?: "unknown error"}"
@@ -419,4 +454,60 @@ fun ConnectionDialog(
             },
         )
     }
+
+    generatedPublicKey?.let { publicKey ->
+        GeneratedPublicKeyDialog(
+            publicKey = publicKey,
+            onCopy = {
+                runCatching {
+                    val clipboard = checkNotNull(context.getSystemService(ClipboardManager::class.java))
+                    clipboard.setPrimaryClip(ClipData.newPlainText("SFTP public key", publicKey))
+                }.fold(
+                    onSuccess = { keyGenerationMessage = "Public key copied" },
+                    onFailure = { error ->
+                        keyGenerationMessage = "Public key copy failed: ${error.message ?: "unknown error"}"
+                    },
+                )
+            },
+            onSave = {
+                pendingPublicKeySave = publicKey
+                publicKeySaveLauncher.launch(generatedPublicKeyFileName)
+            },
+            onDismiss = { generatedPublicKey = null },
+        )
+    }
+}
+
+@Composable
+internal fun GeneratedPublicKeyDialog(
+    publicKey: String,
+    onCopy: () -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Install this public key") },
+        text = {
+            Column {
+                Text("Copy or save this public key, then add it to the SFTP account's authorized keys. The private key stays protected inside Voyager.")
+                Spacer(modifier = Modifier.height(12.dp))
+                SelectionContainer {
+                    Text(
+                        text = publicKey,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                TextButton(onClick = onCopy) { Text("Copy") }
+                TextButton(onClick = onSave) { Text("Save") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        },
+    )
 }
