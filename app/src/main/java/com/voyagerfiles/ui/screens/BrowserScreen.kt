@@ -600,17 +600,7 @@ fun BrowserScreen(
                 .padding(padding),
         ) {
             runningOperation?.let { operation ->
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { stateDescription = operation.label },
-                )
-                Text(
-                    operation.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                OperationProgressContent(operation)
             }
             when {
                 state.isLoading -> {
@@ -850,6 +840,45 @@ fun BrowserScreen(
                 viewModel.clearSelection()
             },
         )
+    }
+}
+
+@Composable
+internal fun OperationProgressContent(
+    operation: OperationState.Running,
+    modifier: Modifier = Modifier,
+) {
+    val progress = operation.progress
+    Column(
+        modifier = modifier.semantics {
+            stateDescription = progress.stateDescription
+        },
+    ) {
+        val fraction = progress.fraction
+        if (fraction != null) {
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        Text(
+            progress.label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        progress.detailText?.let { detail ->
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 

@@ -169,6 +169,116 @@ class FileOperationCoordinatorTest {
         assertTrue(source.exists("/local/report.txt"))
     }
 
+    @Test
+    fun copyReportsMonotonicBytesAfterSuccessfulWrites() = runBlocking {
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
+        val source = MemoryProvider().apply { putFile("/local/large.bin", payload) }
+        val destination = MemoryProvider().apply { putDirectory("/remote") }
+        val events = mutableListOf<StreamCopyProgress>()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/large.bin",
+            destinationDirectoryPath = "/remote",
+            onProgress = events::add,
+        ).getOrThrow()
+
+        assertTrue(events.size >= 3)
+        assertTrue(events.zipWithNext().all { (first, second) -> first.bytesCopied < second.bytesCopied })
+        assertTrue(events.all { it.path == "/local/large.bin" })
+        assertTrue(events.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), events.last().bytesCopied)
+        assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
+    }
+
+    @Test
+    fun recursiveCopyReportsEachActiveFile() = runBlocking {
+        val source = MemoryProvider().apply {
+            putDirectory("/local/folder")
+            putFile("/local/folder/first.txt", "first")
+            putDirectory("/local/folder/nested")
+            putFile("/local/folder/nested/second.txt", "second")
+        }
+        val destination = MemoryProvider().apply { putDirectory("/remote") }
+        val events = mutableListOf<StreamCopyProgress>()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/folder",
+            destinationDirectoryPath = "/remote",
+            onProgress = events::add,
+        ).getOrThrow()
+
+        assertEquals(
+            setOf("/local/folder/first.txt", "/local/folder/nested/second.txt"),
+            events.mapTo(mutableSetOf()) { it.path },
+        )
+    }
+
+    @Test
+    fun failedWriteDoesNotReportUnwrittenBytes() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = FailingWriteProvider().apply { putDirectory("/remote") }
+        val events = mutableListOf<StreamCopyProgress>()
+
+        val result = FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/report.txt",
+            destinationDirectoryPath = "/remote",
+            onProgress = events::add,
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun zeroByteFileReportsKnownZeroTotal() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/empty.txt", byteArrayOf()) }
+        val destination = MemoryProvider().apply { putDirectory("/remote") }
+        val events = mutableListOf<StreamCopyProgress>()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/empty.txt",
+            destinationDirectoryPath = "/remote",
+            onProgress = events::add,
+        ).getOrThrow()
+
+        assertEquals(
+            listOf(
+                StreamCopyProgress(
+                    path = "/local/empty.txt",
+                    bytesCopied = 0,
+                    totalBytes = 0,
+                )
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun negativeProviderSizeIsReportedAsUnknownRatherThanZero() = runBlocking {
+        val source = UnknownSizeProvider().apply { putFile("/local/unknown.bin", "contents") }
+        val destination = MemoryProvider().apply { putDirectory("/remote") }
+        val events = mutableListOf<StreamCopyProgress>()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/unknown.bin",
+            destinationDirectoryPath = "/remote",
+            onProgress = events::add,
+        ).getOrThrow()
+
+        assertTrue(events.isNotEmpty())
+        assertTrue(events.all { it.totalBytes == null })
+    }
+
     private class FailingWriteProvider : MemoryProvider() {
         override suspend fun getOutputStream(path: String): Result<OutputStream> =
             Result.success(
@@ -207,6 +317,11 @@ class FileOperationCoordinatorTest {
         }
     }
 
+    private class UnknownSizeProvider : MemoryProvider() {
+        override suspend fun getFileInfo(path: String): Result<FileItem> =
+            super.getFileInfo(path).map { it.copy(size = -1) }
+    }
+
     private open class MemoryProvider : FileProvider {
         private val entries = mutableMapOf<String, Entry>("/" to Entry.Directory)
 
@@ -215,11 +330,18 @@ class FileOperationCoordinatorTest {
         }
 
         fun putFile(path: String, contents: String) {
-            entries[path.normalized()] = Entry.File(contents.toByteArray())
+            putFile(path, contents.toByteArray())
+        }
+
+        fun putFile(path: String, contents: ByteArray) {
+            entries[path.normalized()] = Entry.File(contents)
         }
 
         fun readFile(path: String): String =
-            String((entries.getValue(path.normalized()) as Entry.File).contents)
+            String(readFileBytes(path))
+
+        fun readFileBytes(path: String): ByteArray =
+            (entries.getValue(path.normalized()) as Entry.File).contents
 
         override suspend fun listFiles(path: String): Result<List<FileItem>> = runCatching {
             val parent = path.normalized()
@@ -231,6 +353,7 @@ class FileOperationCoordinatorTest {
                         name = name,
                         path = childPath,
                         isDirectory = entries.getValue(childPath) is Entry.Directory,
+                        size = (entries.getValue(childPath) as? Entry.File)?.contents?.size?.toLong() ?: 0,
                         source = FileSource.LOCAL,
                     )
                 }
@@ -281,12 +404,13 @@ class FileOperationCoordinatorTest {
 
         override suspend fun exists(path: String): Boolean = entries.containsKey(path.normalized())
 
-        override suspend fun getFileInfo(path: String): Result<FileItem> = runCatching {
+        open override suspend fun getFileInfo(path: String): Result<FileItem> = runCatching {
             val normalizedPath = path.normalized()
             FileItem(
                 name = normalizedPath.substringAfterLast("/").ifEmpty { "/" },
                 path = normalizedPath,
                 isDirectory = entries.getValue(normalizedPath) is Entry.Directory,
+                size = (entries.getValue(normalizedPath) as? Entry.File)?.contents?.size?.toLong() ?: 0,
                 source = FileSource.LOCAL,
             )
         }

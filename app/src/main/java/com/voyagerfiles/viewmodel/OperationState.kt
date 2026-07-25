@@ -5,7 +5,10 @@ import com.voyagerfiles.data.model.TrashEntry
 sealed interface OperationState {
     data object Idle : OperationState
 
-    data class Running(val label: String) : OperationState
+    data class Running(val progress: TransferProgress) : OperationState {
+        val label: String
+            get() = progress.label
+    }
 }
 
 data class TrashState(
