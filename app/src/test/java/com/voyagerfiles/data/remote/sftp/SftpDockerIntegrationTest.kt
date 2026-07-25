@@ -1,5 +1,6 @@
 package com.voyagerfiles.data.remote.sftp
 
+import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import kotlinx.coroutines.delay
@@ -75,6 +76,23 @@ class SftpDockerIntegrationTest {
                 listOf("probe.txt"),
                 provider.listFiles("/upload").getOrThrow().map { it.name },
             )
+
+            val archive = ArchiveService.createZip(
+                provider = provider,
+                selectedItems = listOf(provider.getFileInfo("/upload/probe.txt").getOrThrow()),
+                destinationDirectory = "/upload",
+                archiveName = "probe.zip",
+            ).getOrThrow()
+            val extracted = ArchiveService.extract(
+                provider = provider,
+                archive = archive,
+                destinationDirectory = "/upload",
+            ).getOrThrow()
+            val extractedPayload = provider.getInputStream("${extracted.path}/probe.txt")
+                .getOrThrow()
+                .use { input -> input.readBytes() }
+
+            assertEquals(payload.toList(), extractedPayload.toList())
         } finally {
             provider?.disconnect()
             docker("rm", "--force", containerName, allowFailure = true)
