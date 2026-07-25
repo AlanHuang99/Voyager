@@ -1,0 +1,6 @@
+Voyager 1.6.0:
+- Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files
+- Show first-page PDF thumbnails and file-operation progress
+- Honor Android default file handlers
+- Copy or save generated SFTP public keys
+- Connect to OpenSSH servers restricted to ML-KEM or SNTRUP hybrid key exchange

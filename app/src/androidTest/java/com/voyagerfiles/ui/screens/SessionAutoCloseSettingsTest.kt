@@ -68,10 +68,10 @@ class SessionAutoCloseSettingsTest {
             .performScrollTo()
             .assertIsOff()
             .performClick()
-            .assertIsOn()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             viewModel.autoCloseSessions.value
         }
+        composeTestRule.onNodeWithContentDescription("Auto-close sessions").assertIsOn()
         composeTestRule.onNodeWithContentDescription("Session timeout, current 15 minutes")
             .performScrollTo()
             .assertIsDisplayed()
