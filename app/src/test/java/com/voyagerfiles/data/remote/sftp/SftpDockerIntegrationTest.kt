@@ -19,13 +19,25 @@ class SftpDockerIntegrationTest {
     val temp = TemporaryFolder()
 
     @Test
-    fun generatedKeyAuthenticatesAgainstContainerizedSftpServer() = runBlocking {
+    fun generatedKeyAuthenticatesAgainstPostQuantumOnlySftpServer() = runBlocking {
         assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
         val generated = SshKeyGenerator.generateToDirectory(
             directory = temp.newFolder("keys"),
             baseName = "id_voyager_docker",
             comment = "voyager-docker-test",
         )
+        val restrictKeyExchange = temp.newFile("restrict-key-exchange.sh").apply {
+            writeText(
+                """
+                |#!/bin/sh
+                |set -eu
+                |sed -i '/^[[:space:]]*KexAlgorithms[[:space:]]/d' /etc/ssh/sshd_config
+                |printf '%s\n' 'KexAlgorithms $POST_QUANTUM_KEY_EXCHANGES' >> /etc/ssh/sshd_config
+                |/usr/sbin/sshd -t
+                |""".trimMargin()
+            )
+            check(setExecutable(true)) { "Could not make the OpenSSH setup script executable" }
+        }
         val containerName = "voyager-sftp-test-${System.nanoTime()}"
         var provider: SftpFileProvider? = null
 
@@ -39,6 +51,8 @@ class SftpDockerIntegrationTest {
                 "127.0.0.1::22",
                 "--mount",
                 "type=bind,src=${generated.publicKeyFile.absolutePath},dst=/home/voyager/.ssh/keys/id_rsa.pub,readonly",
+                "--mount",
+                "type=bind,src=${restrictKeyExchange.absolutePath},dst=/etc/sftp.d/restrict-key-exchange.sh,readonly",
                 "atmoz/sftp:alpine",
                 "$USERNAME::1001:1001:upload",
             )
@@ -131,5 +145,7 @@ class SftpDockerIntegrationTest {
     private companion object {
         const val USERNAME = "voyager"
         const val DOCKER_TIMEOUT_SECONDS = 60L
+        const val POST_QUANTUM_KEY_EXCHANGES =
+            "mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com"
     }
 }

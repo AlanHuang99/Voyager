@@ -28,8 +28,8 @@ android {
         applicationId = "com.voyagerfiles"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.5.0"
+        versionCode = 14
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -106,6 +106,7 @@ android {
                 "META-INF/*.SF",
                 "META-INF/*.DSA",
                 "META-INF/*.RSA",
+                "META-INF/versions/*/OSGI-INF/MANIFEST.MF",
             )
         }
     }
@@ -143,7 +144,10 @@ dependencies {
 
     // Network protocols - all FOSS-compatible
     // SFTP/SSH - JSch fork (BSD/ISC)
-    implementation("com.github.mwiede:jsch:2.28.2")
+    implementation("com.github.mwiede:jsch:2.28.5")
+
+    // Hybrid post-quantum SSH key exchange - Bouncy Castle (MIT)
+    implementation("org.bouncycastle:bcprov-jdk18on:1.85")
 
     // FTP - Apache Commons Net (Apache 2.0)
     implementation("commons-net:commons-net:3.11.1")
