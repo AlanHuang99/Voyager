@@ -1,6 +1,8 @@
 package com.voyagerfiles.viewmodel
 
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -50,7 +52,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit = {},
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             copyPathInternal(
@@ -68,7 +70,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit = {},
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             copyPathInternal(
@@ -87,7 +89,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit,
+        onProgress: (StreamTransferProgress) -> Unit,
     ) {
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
         requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
@@ -117,7 +119,7 @@ object FileOperationCoordinator {
                 .path
             sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
                 destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
-                    copyStream(
+                    StreamTransfer.copy(
                         input = input,
                         output = output,
                         path = sourcePath,
@@ -135,42 +137,6 @@ object FileOperationCoordinator {
                 }.onFailure(error::addSuppressed)
             }
             throw error
-        }
-    }
-
-    private fun copyStream(
-        input: java.io.InputStream,
-        output: java.io.OutputStream,
-        path: String,
-        totalBytes: Long?,
-        onProgress: (StreamCopyProgress) -> Unit,
-    ) {
-        val buffer = ByteArray(BUFFER_SIZE)
-        var bytesCopied = 0L
-        var reported = false
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            if (read == 0) continue
-            output.write(buffer, 0, read)
-            bytesCopied += read
-            reported = true
-            onProgress(
-                StreamCopyProgress(
-                    path = path,
-                    bytesCopied = bytesCopied,
-                    totalBytes = totalBytes,
-                )
-            )
-        }
-        if (!reported) {
-            onProgress(
-                StreamCopyProgress(
-                    path = path,
-                    bytesCopied = 0,
-                    totalBytes = totalBytes,
-                )
-            )
         }
     }
 

@@ -26,11 +26,12 @@ import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
+import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
-import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.LocalTrashManager
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.security.AndroidCredentialCipher
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
@@ -675,29 +676,30 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
                 var lastPath = item.path
                 var lastPublishedBytes = 0L
-                var latestStreamProgress: StreamCopyProgress? = null
-                val publishStreamProgress: (StreamCopyProgress) -> Unit = { streamProgress ->
+                var latestStreamProgress: StreamTransferProgress? = null
+                val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
                     latestStreamProgress = streamProgress
                     val pathChanged = streamProgress.path != lastPath
                     val reachedKnownTotal = streamProgress.totalBytes
                         ?.takeIf { it > 0 }
                         ?.let {
-                            streamProgress.bytesCopied >= it &&
+                            streamProgress.bytesTransferred >= it &&
                                 lastPublishedBytes < it
                         }
                         ?: false
                     val crossedPublicationThreshold =
-                        streamProgress.bytesCopied - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
+                        streamProgress.bytesTransferred - lastPublishedBytes >=
+                            PROGRESS_PUBLICATION_BYTES
                     if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
                         lastPath = streamProgress.path
-                        lastPublishedBytes = streamProgress.bytesCopied
+                        lastPublishedBytes = streamProgress.bytesTransferred
                         updateOperationProgress(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
                                 totalItems = paths.size,
                                 currentItemName = streamProgress.path.substringAfterLast('/'),
-                                copiedBytes = streamProgress.bytesCopied,
+                                copiedBytes = streamProgress.bytesTransferred,
                                 totalBytes = streamProgress.totalBytes,
                             )
                         )
@@ -741,7 +743,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                             completedItems = completed,
                             totalItems = paths.size,
                             currentItemName = item.name,
-                            copiedBytes = streamProgress?.bytesCopied ?: 0,
+                            copiedBytes = streamProgress?.bytesTransferred ?: 0,
                             totalBytes = streamProgress?.totalBytes,
                         )
                     )

@@ -56,15 +56,3 @@ data class TransferProgress(
             percentageText?.let(::add)
         }.joinToString(", ")
 }
-
-data class StreamCopyProgress(
-    val path: String,
-    val bytesCopied: Long,
-    val totalBytes: Long?,
-) {
-    init {
-        require(path.isNotBlank()) { "Progress path must not be blank" }
-        require(bytesCopied >= 0) { "Copied byte count must not be negative" }
-        require(totalBytes == null || totalBytes >= 0) { "Total byte count must not be negative" }
-    }
-}

@@ -3,6 +3,7 @@ package com.voyagerfiles.viewmodel
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -247,7 +248,7 @@ class FileOperationCoordinatorTest {
         val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
         val source = MemoryProvider().apply { putFile("/local/large.bin", payload) }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -258,10 +259,14 @@ class FileOperationCoordinatorTest {
         ).getOrThrow()
 
         assertTrue(events.size >= 3)
-        assertTrue(events.zipWithNext().all { (first, second) -> first.bytesCopied < second.bytesCopied })
+        assertTrue(
+            events.zipWithNext().all { (first, second) ->
+                first.bytesTransferred < second.bytesTransferred
+            },
+        )
         assertTrue(events.all { it.path == "/local/large.bin" })
         assertTrue(events.all { it.totalBytes == payload.size.toLong() })
-        assertEquals(payload.size.toLong(), events.last().bytesCopied)
+        assertEquals(payload.size.toLong(), events.last().bytesTransferred)
         assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
     }
 
@@ -274,7 +279,7 @@ class FileOperationCoordinatorTest {
             putFile("/local/folder/nested/second.txt", "second")
         }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -294,7 +299,7 @@ class FileOperationCoordinatorTest {
     fun failedWriteDoesNotReportUnwrittenBytes() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
         val destination = FailingWriteProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         val result = FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -312,7 +317,7 @@ class FileOperationCoordinatorTest {
     fun zeroByteFileReportsKnownZeroTotal() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/empty.txt", byteArrayOf()) }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -322,23 +327,18 @@ class FileOperationCoordinatorTest {
             onProgress = events::add,
         ).getOrThrow()
 
-        assertEquals(
-            listOf(
-                StreamCopyProgress(
-                    path = "/local/empty.txt",
-                    bytesCopied = 0,
-                    totalBytes = 0,
-                )
-            ),
-            events,
-        )
+        assertEquals(1, events.size)
+        assertEquals("/local/empty.txt", events.single().path)
+        assertEquals(0L, events.single().bytesTransferred)
+        assertEquals(0L, events.single().totalBytes)
+        assertTrue(events.single().elapsedNanos >= 0)
     }
 
     @Test
     fun negativeProviderSizeIsReportedAsUnknownRatherThanZero() = runBlocking {
         val source = UnknownSizeProvider().apply { putFile("/local/unknown.bin", "contents") }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
