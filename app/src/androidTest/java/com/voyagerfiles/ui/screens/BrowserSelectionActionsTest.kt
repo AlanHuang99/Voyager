@@ -2,6 +2,9 @@ package com.voyagerfiles.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
@@ -12,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.ViewMode
@@ -22,6 +26,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Rule
@@ -69,6 +74,40 @@ class BrowserSelectionActionsTest {
         composeTestRule.onNodeWithContentDescription("Share").assertExists()
         composeTestRule.onNodeWithContentDescription("Rename").assertExists()
         composeTestRule.onNodeWithContentDescription("Delete").assertExists()
+    }
+
+    @Test
+    fun firstSelectionPerformsOneHapticInListAndGridModes() {
+        val haptics = RecordingHapticFeedback()
+        val viewModel = launchBrowser(haptics)
+        waitForRoot(viewModel)
+        composeTestRule.runOnIdle { viewModel.setViewMode(ViewMode.LIST) }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.browseState.value.viewMode == ViewMode.LIST
+        }
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            assertEquals(listOf(HapticFeedbackType.LongPress), haptics.events)
+            viewModel.clearSelection()
+            viewModel.setViewMode(ViewMode.GRID)
+        }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.browseState.value.viewMode == ViewMode.GRID &&
+                viewModel.browseState.value.selectedFiles.isEmpty()
+        }
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            assertEquals(
+                listOf(HapticFeedbackType.LongPress, HapticFeedbackType.LongPress),
+                haptics.events,
+            )
+        }
     }
 
     @Test
@@ -240,15 +279,26 @@ class BrowserSelectionActionsTest {
             .assertIsDisplayed()
     }
 
-    private fun launchBrowser(): FileBrowserViewModel {
+    private fun launchBrowser(
+        hapticFeedback: HapticFeedback? = null,
+    ): FileBrowserViewModel {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(application)
         composeTestRule.setContent {
             MaterialTheme {
-                BrowserScreen(
-                    viewModel = viewModel,
-                    onNavigateBack = {},
-                )
+                if (hapticFeedback == null) {
+                    BrowserScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = {},
+                    )
+                } else {
+                    CompositionLocalProvider(LocalHapticFeedback provides hapticFeedback) {
+                        BrowserScreen(
+                            viewModel = viewModel,
+                            onNavigateBack = {},
+                        )
+                    }
+                }
             }
         }
         composeTestRule.runOnIdle {
@@ -263,5 +313,13 @@ class BrowserSelectionActionsTest {
                 !viewModel.browseState.value.isLoading
         }
         composeTestRule.onNodeWithText("notes.txt").assertExists()
+    }
+
+    private class RecordingHapticFeedback : HapticFeedback {
+        val events = mutableListOf<HapticFeedbackType>()
+
+        override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+            events += hapticFeedbackType
+        }
     }
 }
