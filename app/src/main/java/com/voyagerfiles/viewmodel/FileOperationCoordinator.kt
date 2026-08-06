@@ -4,8 +4,10 @@ import com.voyagerfiles.data.repository.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class DestinationConflictException(val path: String) :
-    IllegalStateException("An item named ${path.substringAfterLast('/')} already exists in this folder")
+class DestinationConflictException(identifierOrName: String) :
+    IllegalStateException(
+        "An item named ${identifierOrName.substringAfterLast('/')} already exists in this folder",
+    )
 
 object FileOperationCoordinator {
     private const val BUFFER_SIZE = 64 * 1024
@@ -16,22 +18,24 @@ object FileOperationCoordinator {
         destinationDirectoryPath: String,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val targetPath = joinPath(destinationDirectoryPath, source.name)
-            if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
+            requireNameAvailable(destinationProvider, destinationDirectoryPath, source.name)
 
-            var targetCreated = false
+            var createdTargetPath: String? = null
             try {
+                createdTargetPath = destinationProvider
+                    .createFile(destinationDirectoryPath, source.name)
+                    .getOrThrow()
+                    .path
                 source.openInputStream().use { input ->
-                    destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
-                        targetCreated = true
+                    destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
                         input.copyTo(output, BUFFER_SIZE)
                     }
                 }
             } catch (error: Throwable) {
-                if (targetCreated) {
+                if (createdTargetPath != null) {
                     runCatching {
-                        if (destinationProvider.exists(targetPath)) {
-                            destinationProvider.delete(targetPath).getOrThrow()
+                        if (destinationProvider.exists(createdTargetPath)) {
+                            destinationProvider.delete(createdTargetPath).getOrThrow()
                         }
                     }.onFailure(error::addSuppressed)
                 }
@@ -86,29 +90,33 @@ object FileOperationCoordinator {
         onProgress: (StreamCopyProgress) -> Unit,
     ) {
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
-        val targetPath = joinPath(destinationDirectoryPath, item.name)
-        if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
+        requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
 
-        var targetCreated = false
+        var createdTargetPath: String? = null
         try {
             if (item.isDirectory) {
-                destinationProvider.createDirectory(destinationDirectoryPath, item.name).getOrThrow()
-                targetCreated = true
+                createdTargetPath = destinationProvider
+                    .createDirectory(destinationDirectoryPath, item.name)
+                    .getOrThrow()
+                    .path
                 sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
                     copyPathInternal(
                         sourceProvider,
                         destinationProvider,
                         child.path,
-                        targetPath,
+                        createdTargetPath,
                         onProgress,
                     )
                 }
                 return
             }
 
+            createdTargetPath = destinationProvider
+                .createFile(destinationDirectoryPath, item.name)
+                .getOrThrow()
+                .path
             sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
-                destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
-                    targetCreated = true
+                destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
                     copyStream(
                         input = input,
                         output = output,
@@ -119,10 +127,10 @@ object FileOperationCoordinator {
                 }
             }
         } catch (error: Throwable) {
-            if (targetCreated) {
+            if (createdTargetPath != null) {
                 runCatching {
-                    if (destinationProvider.exists(targetPath)) {
-                        destinationProvider.delete(targetPath).getOrThrow()
+                    if (destinationProvider.exists(createdTargetPath)) {
+                        destinationProvider.delete(createdTargetPath).getOrThrow()
                     }
                 }.onFailure(error::addSuppressed)
             }
@@ -166,6 +174,13 @@ object FileOperationCoordinator {
         }
     }
 
-    private fun joinPath(path: String, name: String): String =
-        if (path == "/") "/$name" else "${path.trimEnd('/')}/$name"
+    private suspend fun requireNameAvailable(
+        provider: FileProvider,
+        directoryPath: String,
+        name: String,
+    ) {
+        if (provider.listFiles(directoryPath).getOrThrow().any { it.name == name }) {
+            throw DestinationConflictException(name)
+        }
+    }
 }
