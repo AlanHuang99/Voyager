@@ -1,6 +1,8 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.model.FileItem
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 data class TransferProgress(
     val label: String,
@@ -9,6 +11,7 @@ data class TransferProgress(
     val currentItemName: String? = null,
     val copiedBytes: Long = 0,
     val totalBytes: Long? = null,
+    val elapsedNanos: Long = 0,
 ) {
     init {
         require(label.isNotBlank()) { "Progress label must not be blank" }
@@ -16,6 +19,7 @@ data class TransferProgress(
         require(totalItems == null || totalItems >= 0) { "Total item count must not be negative" }
         require(copiedBytes >= 0) { "Copied byte count must not be negative" }
         require(totalBytes == null || totalBytes >= 0) { "Total byte count must not be negative" }
+        require(elapsedNanos >= 0) { "Elapsed duration must not be negative" }
     }
 
     val fraction: Float?
@@ -41,11 +45,35 @@ data class TransferProgress(
     val percentageText: String?
         get() = fraction?.let { "${(it * 100).roundToInt()}%" }
 
+    val bytesPerSecond: Long?
+        get() = if (copiedBytes > 0 && elapsedNanos > 0) {
+            (copiedBytes.toDouble() * NANOS_PER_SECOND / elapsedNanos.toDouble())
+                .roundToLong()
+                .coerceAtLeast(1)
+        } else {
+            null
+        }
+
+    val byteProgressText: String?
+        get() = when {
+            totalBytes != null -> {
+                "${FileItem.formatFileSize(copiedBytes)} of ${FileItem.formatFileSize(totalBytes)}"
+            }
+
+            copiedBytes > 0 -> FileItem.formatFileSize(copiedBytes)
+            else -> null
+        }
+
+    val speedText: String?
+        get() = bytesPerSecond?.let { "${FileItem.formatFileSize(it)}/s" }
+
     val detailText: String?
         get() = buildList {
             currentItemName?.takeIf { it.isNotBlank() }?.let(::add)
             itemProgressText?.let(::add)
+            byteProgressText?.let(::add)
             percentageText?.let(::add)
+            speedText?.let(::add)
         }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
 
     val stateDescription: String
@@ -53,18 +81,12 @@ data class TransferProgress(
             add(label)
             currentItemName?.takeIf { it.isNotBlank() }?.let(::add)
             itemProgressText?.let(::add)
+            byteProgressText?.let(::add)
             percentageText?.let(::add)
+            speedText?.let(::add)
         }.joinToString(", ")
-}
 
-data class StreamCopyProgress(
-    val path: String,
-    val bytesCopied: Long,
-    val totalBytes: Long?,
-) {
-    init {
-        require(path.isNotBlank()) { "Progress path must not be blank" }
-        require(bytesCopied >= 0) { "Copied byte count must not be negative" }
-        require(totalBytes == null || totalBytes >= 0) { "Total byte count must not be negative" }
+    private companion object {
+        const val NANOS_PER_SECOND = 1_000_000_000.0
     }
 }

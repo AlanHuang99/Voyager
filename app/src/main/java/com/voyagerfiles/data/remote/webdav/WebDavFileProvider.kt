@@ -4,6 +4,8 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.thegrizzlylabs.sardineandroid.DavResource
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +14,9 @@ import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okio.BufferedSink
 import java.io.File
 import java.io.FileOutputStream
 import java.io.FilterOutputStream
@@ -183,6 +187,52 @@ class WebDavFileProvider(
                 } as OutputStream
             }
         }
+
+    override suspend fun writeStream(
+        path: String,
+        input: InputStream,
+        sourcePath: String,
+        totalBytes: Long?,
+        onProgress: (StreamTransferProgress) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            ensureConnected()
+            val requestBody = object : RequestBody() {
+                override fun contentType() = "application/octet-stream".toMediaType()
+
+                override fun contentLength(): Long = totalBytes ?: -1
+
+                override fun isOneShot(): Boolean = true
+
+                override fun writeTo(sink: BufferedSink) {
+                    StreamTransfer.copy(
+                        input = input,
+                        output = sink.outputStream(),
+                        path = sourcePath,
+                        totalBytes = totalBytes,
+                        onProgress = onProgress,
+                    )
+                }
+            }
+            val request = Request.Builder()
+                .url(toUrl(path))
+                .apply {
+                    if (connection.username.isNotEmpty()) {
+                        header(
+                            "Authorization",
+                            Credentials.basic(connection.username, connection.password),
+                        )
+                    }
+                }
+                .put(requestBody)
+                .build()
+            httpClient!!.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("WebDAV upload failed: HTTP ${response.code}")
+                }
+            }
+        }
+    }
 
     override suspend fun exists(path: String): Boolean =
         withContext(Dispatchers.IO) {

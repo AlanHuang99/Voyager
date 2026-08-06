@@ -26,11 +26,13 @@ import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
+import com.voyagerfiles.data.repository.ConnectionRepository
+import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
-import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.LocalTrashManager
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.security.AndroidCredentialCipher
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
@@ -51,10 +53,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
-
-    private companion object {
-        const val PROGRESS_PUBLICATION_BYTES = 256L * 1024L
-    }
 
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
@@ -389,7 +387,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val destinationProvider = fileProvider
         val destinationPath = _browseState.value.currentPath
         val contentResolver = getApplication<Application>().contentResolver
-        launchOperation(if (uris.size == 1) "Uploading file" else "Uploading ${uris.size} files") {
+        val progressLabel = "Uploading"
+        launchOperation(progressLabel) {
             val sources = withContext(Dispatchers.IO) {
                 uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
             }
@@ -401,12 +400,55 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             }
             var failed = 0
             var firstError: Throwable? = null
+            var completed = 0
             for (source in validatedSources) {
+                updateOperationProgress(
+                    TransferProgress(
+                        label = progressLabel,
+                        completedItems = completed,
+                        totalItems = validatedSources.size,
+                        currentItemName = source.name,
+                        totalBytes = source.size,
+                    ),
+                )
+                val progressThrottle = StreamProgressThrottle()
+                var latestStreamProgress: StreamTransferProgress? = null
+                val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
+                    latestStreamProgress = streamProgress
+                    if (progressThrottle.shouldPublish(streamProgress)) {
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = progressLabel,
+                                completedItems = completed,
+                                totalItems = validatedSources.size,
+                                currentItemName = source.name,
+                                copiedBytes = streamProgress.bytesTransferred,
+                                totalBytes = streamProgress.totalBytes,
+                                elapsedNanos = streamProgress.elapsedNanos,
+                            ),
+                        )
+                    }
+                }
                 FileOperationCoordinator.uploadFile(
                     source = source,
                     destinationProvider = destinationProvider,
                     destinationDirectoryPath = destinationPath,
-                ).onFailure { error ->
+                    onProgress = publishStreamProgress,
+                ).onSuccess {
+                    completed++
+                    val streamProgress = latestStreamProgress
+                    updateOperationProgress(
+                        TransferProgress(
+                            label = progressLabel,
+                            completedItems = completed,
+                            totalItems = validatedSources.size,
+                            currentItemName = source.name,
+                            copiedBytes = streamProgress?.bytesTransferred ?: 0,
+                            totalBytes = streamProgress?.totalBytes ?: source.size,
+                            elapsedNanos = streamProgress?.elapsedNanos ?: 0,
+                        ),
+                    )
+                }.onFailure { error ->
                     failed++
                     if (firstError == null) firstError = error
                 }
@@ -673,32 +715,20 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     continue
                 }
 
-                var lastPath = item.path
-                var lastPublishedBytes = 0L
-                var latestStreamProgress: StreamCopyProgress? = null
-                val publishStreamProgress: (StreamCopyProgress) -> Unit = { streamProgress ->
+                val progressThrottle = StreamProgressThrottle()
+                var latestStreamProgress: StreamTransferProgress? = null
+                val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
                     latestStreamProgress = streamProgress
-                    val pathChanged = streamProgress.path != lastPath
-                    val reachedKnownTotal = streamProgress.totalBytes
-                        ?.takeIf { it > 0 }
-                        ?.let {
-                            streamProgress.bytesCopied >= it &&
-                                lastPublishedBytes < it
-                        }
-                        ?: false
-                    val crossedPublicationThreshold =
-                        streamProgress.bytesCopied - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
-                    if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
-                        lastPath = streamProgress.path
-                        lastPublishedBytes = streamProgress.bytesCopied
+                    if (progressThrottle.shouldPublish(streamProgress)) {
                         updateOperationProgress(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
                                 totalItems = paths.size,
                                 currentItemName = streamProgress.path.substringAfterLast('/'),
-                                copiedBytes = streamProgress.bytesCopied,
+                                copiedBytes = streamProgress.bytesTransferred,
                                 totalBytes = streamProgress.totalBytes,
+                                elapsedNanos = streamProgress.elapsedNanos,
                             )
                         )
                     }
@@ -741,8 +771,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                             completedItems = completed,
                             totalItems = paths.size,
                             currentItemName = item.name,
-                            copiedBytes = streamProgress?.bytesCopied ?: 0,
+                            copiedBytes = streamProgress?.bytesTransferred ?: 0,
                             totalBytes = streamProgress?.totalBytes,
+                            elapsedNanos = streamProgress?.elapsedNanos ?: 0,
                         )
                     )
                 }
@@ -806,7 +837,48 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             showSnackbar("Downloading ${items.size} item${if (items.size == 1) "" else "s"}...")
 
             val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            FileDownloader.download(provider, items, downloads).fold(
+            val progressThrottle = StreamProgressThrottle()
+            var lastCompletedRequestedItems = -1
+            val publishProgress: (DownloadProgress) -> Unit = { progress ->
+                val stream = progress.stream
+                if (stream == null) {
+                    progressThrottle.reset()
+                    lastCompletedRequestedItems = progress.completedRequestedItems
+                    updateOperationProgress(
+                        TransferProgress(
+                            label = "Downloading",
+                            completedItems = progress.completedRequestedItems,
+                            totalItems = progress.totalRequestedItems,
+                            currentItemName = items
+                                .getOrNull(progress.completedRequestedItems)
+                                ?.name,
+                        ),
+                    )
+                } else {
+                    val completedItemsChanged =
+                        progress.completedRequestedItems != lastCompletedRequestedItems
+                    if (progressThrottle.shouldPublish(stream, force = completedItemsChanged)) {
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = "Downloading",
+                                completedItems = progress.completedRequestedItems,
+                                totalItems = progress.totalRequestedItems,
+                                currentItemName = stream.path.substringAfterLast('/'),
+                                copiedBytes = stream.bytesTransferred,
+                                totalBytes = stream.totalBytes,
+                                elapsedNanos = stream.elapsedNanos,
+                            ),
+                        )
+                    }
+                    lastCompletedRequestedItems = progress.completedRequestedItems
+                }
+            }
+            FileDownloader.download(
+                provider = provider,
+                items = items,
+                destinationDirectory = downloads,
+                onProgress = publishProgress,
+            ).fold(
                 onSuccess = { result ->
                     val count = result.downloadedFiles + result.downloadedDirectories
                     showSnackbar(

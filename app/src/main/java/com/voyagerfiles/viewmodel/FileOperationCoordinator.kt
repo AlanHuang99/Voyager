@@ -1,37 +1,45 @@
 package com.voyagerfiles.viewmodel
 
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class DestinationConflictException(val path: String) :
-    IllegalStateException("An item named ${path.substringAfterLast('/')} already exists in this folder")
+class DestinationConflictException(identifierOrName: String) :
+    IllegalStateException(
+        "An item named ${identifierOrName.substringAfterLast('/')} already exists in this folder",
+    )
 
 object FileOperationCoordinator {
-    private const val BUFFER_SIZE = 64 * 1024
-
     suspend fun uploadFile(
         source: UploadSource,
         destinationProvider: FileProvider,
         destinationDirectoryPath: String,
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val targetPath = joinPath(destinationDirectoryPath, source.name)
-            if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
+            requireNameAvailable(destinationProvider, destinationDirectoryPath, source.name)
 
-            var targetCreated = false
+            var createdTargetPath: String? = null
             try {
+                createdTargetPath = destinationProvider
+                    .createFile(destinationDirectoryPath, source.name)
+                    .getOrThrow()
+                    .path
                 source.openInputStream().use { input ->
-                    destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
-                        targetCreated = true
-                        input.copyTo(output, BUFFER_SIZE)
-                    }
+                    destinationProvider.writeStream(
+                        path = createdTargetPath,
+                        input = input,
+                        sourcePath = source.name,
+                        totalBytes = source.size,
+                        onProgress = onProgress,
+                    ).getOrThrow()
                 }
             } catch (error: Throwable) {
-                if (targetCreated) {
+                if (createdTargetPath != null) {
                     runCatching {
-                        if (destinationProvider.exists(targetPath)) {
-                            destinationProvider.delete(targetPath).getOrThrow()
+                        if (destinationProvider.exists(createdTargetPath)) {
+                            destinationProvider.delete(createdTargetPath).getOrThrow()
                         }
                     }.onFailure(error::addSuppressed)
                 }
@@ -46,7 +54,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit = {},
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             copyPathInternal(
@@ -64,7 +72,7 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit = {},
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             copyPathInternal(
@@ -83,46 +91,48 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
-        onProgress: (StreamCopyProgress) -> Unit,
+        onProgress: (StreamTransferProgress) -> Unit,
     ) {
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
-        val targetPath = joinPath(destinationDirectoryPath, item.name)
-        if (destinationProvider.exists(targetPath)) throw DestinationConflictException(targetPath)
+        requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
 
-        var targetCreated = false
+        var createdTargetPath: String? = null
         try {
             if (item.isDirectory) {
-                destinationProvider.createDirectory(destinationDirectoryPath, item.name).getOrThrow()
-                targetCreated = true
+                createdTargetPath = destinationProvider
+                    .createDirectory(destinationDirectoryPath, item.name)
+                    .getOrThrow()
+                    .path
                 sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
                     copyPathInternal(
                         sourceProvider,
                         destinationProvider,
                         child.path,
-                        targetPath,
+                        createdTargetPath,
                         onProgress,
                     )
                 }
                 return
             }
 
+            createdTargetPath = destinationProvider
+                .createFile(destinationDirectoryPath, item.name)
+                .getOrThrow()
+                .path
             sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
-                destinationProvider.getOutputStream(targetPath).getOrThrow().use { output ->
-                    targetCreated = true
-                    copyStream(
-                        input = input,
-                        output = output,
-                        path = sourcePath,
-                        totalBytes = item.size.takeIf { it >= 0 },
-                        onProgress = onProgress,
-                    )
-                }
+                destinationProvider.writeStream(
+                    path = createdTargetPath,
+                    input = input,
+                    sourcePath = sourcePath,
+                    totalBytes = item.size.takeIf { it >= 0 },
+                    onProgress = onProgress,
+                ).getOrThrow()
             }
         } catch (error: Throwable) {
-            if (targetCreated) {
+            if (createdTargetPath != null) {
                 runCatching {
-                    if (destinationProvider.exists(targetPath)) {
-                        destinationProvider.delete(targetPath).getOrThrow()
+                    if (destinationProvider.exists(createdTargetPath)) {
+                        destinationProvider.delete(createdTargetPath).getOrThrow()
                     }
                 }.onFailure(error::addSuppressed)
             }
@@ -130,42 +140,13 @@ object FileOperationCoordinator {
         }
     }
 
-    private fun copyStream(
-        input: java.io.InputStream,
-        output: java.io.OutputStream,
-        path: String,
-        totalBytes: Long?,
-        onProgress: (StreamCopyProgress) -> Unit,
+    private suspend fun requireNameAvailable(
+        provider: FileProvider,
+        directoryPath: String,
+        name: String,
     ) {
-        val buffer = ByteArray(BUFFER_SIZE)
-        var bytesCopied = 0L
-        var reported = false
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            if (read == 0) continue
-            output.write(buffer, 0, read)
-            bytesCopied += read
-            reported = true
-            onProgress(
-                StreamCopyProgress(
-                    path = path,
-                    bytesCopied = bytesCopied,
-                    totalBytes = totalBytes,
-                )
-            )
-        }
-        if (!reported) {
-            onProgress(
-                StreamCopyProgress(
-                    path = path,
-                    bytesCopied = 0,
-                    totalBytes = totalBytes,
-                )
-            )
+        if (provider.listFiles(directoryPath).getOrThrow().any { it.name == name }) {
+            throw DestinationConflictException(name)
         }
     }
-
-    private fun joinPath(path: String, name: String): String =
-        if (path == "/") "/$name" else "${path.trimEnd('/')}/$name"
 }

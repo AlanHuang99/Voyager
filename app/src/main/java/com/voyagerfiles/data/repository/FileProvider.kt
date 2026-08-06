@@ -14,6 +14,23 @@ interface FileProvider {
     suspend fun move(sourcePath: String, destPath: String): Result<Unit>
     suspend fun getInputStream(path: String): Result<InputStream>
     suspend fun getOutputStream(path: String): Result<OutputStream>
+    suspend fun writeStream(
+        path: String,
+        input: InputStream,
+        sourcePath: String,
+        totalBytes: Long?,
+        onProgress: (StreamTransferProgress) -> Unit = {},
+    ): Result<Unit> = runCatching {
+        getOutputStream(path).getOrThrow().use { output ->
+            StreamTransfer.copy(
+                input = input,
+                output = output,
+                path = sourcePath,
+                totalBytes = totalBytes,
+                onProgress = onProgress,
+            )
+        }
+    }
     suspend fun exists(path: String): Boolean
     suspend fun getFileInfo(path: String): Result<FileItem>
     fun getParentPath(path: String): String?

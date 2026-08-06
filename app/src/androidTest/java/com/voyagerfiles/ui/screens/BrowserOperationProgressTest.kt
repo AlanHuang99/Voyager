@@ -23,8 +23,9 @@ class BrowserOperationProgressTest {
             completedItems = 2,
             totalItems = 5,
             currentItemName = "report.pdf",
-            copiedBytes = 40,
-            totalBytes = 100,
+            copiedBytes = 1_572_864,
+            totalBytes = 3_145_728,
+            elapsedNanos = 1_500_000_000,
         )
         composeTestRule.setContent {
             MaterialTheme {
@@ -33,20 +34,25 @@ class BrowserOperationProgressTest {
         }
 
         composeTestRule.onNodeWithText("Copying").assertIsDisplayed()
-        composeTestRule.onNodeWithText("report.pdf • 2 of 5 • 40%").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "report.pdf • 2 of 5 • 1.5 MB of 3 MB • 50% • 1 MB/s",
+        ).assertIsDisplayed()
         composeTestRule.onNode(
             SemanticsMatcher.expectValue(
                 SemanticsProperties.StateDescription,
-                "Copying, report.pdf, 2 of 5, 40%",
-            )
+                "Copying, report.pdf, 2 of 5, 1.5 MB of 3 MB, 50%, 1 MB/s",
+            ),
         ).assertIsDisplayed()
     }
 
     @Test
     fun leavesUnknownProgressIndeterminateWithoutInventingPercentage() {
         val progress = TransferProgress(
-            label = "Moving",
-            currentItemName = "folder",
+            label = "Downloading",
+            currentItemName = "unknown.bin",
+            copiedBytes = 1_024,
+            totalBytes = null,
+            elapsedNanos = 1_000_000_000,
         )
         composeTestRule.setContent {
             MaterialTheme {
@@ -54,8 +60,14 @@ class BrowserOperationProgressTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Moving").assertIsDisplayed()
-        composeTestRule.onNodeWithText("folder").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Downloading").assertIsDisplayed()
+        composeTestRule.onNodeWithText("unknown.bin • 1 KB • 1 KB/s").assertIsDisplayed()
         composeTestRule.onNodeWithText("0%", substring = true).assertDoesNotExist()
+        composeTestRule.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                "Downloading, unknown.bin, 1 KB, 1 KB/s",
+            ),
+        ).assertIsDisplayed()
     }
 }

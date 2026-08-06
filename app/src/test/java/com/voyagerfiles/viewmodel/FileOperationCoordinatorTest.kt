@@ -3,6 +3,8 @@ package com.voyagerfiles.viewmodel
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,6 +40,47 @@ class FileOperationCoordinatorTest {
     }
 
     @Test
+    fun uploadReportsExactBytesAndKnownTotalOffTheCallingThread() = runBlocking {
+        val callerThread = Thread.currentThread().name
+        val writeThread = AtomicReference<String?>(null)
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
+        val destination = ThreadRecordingProvider(writeThread).apply { putDirectory("/remote") }
+        val source = UploadSource(
+            name = "large.bin",
+            size = payload.size.toLong(),
+            openInputStream = { ByteArrayInputStream(payload) },
+        )
+        val progress = mutableListOf<StreamTransferProgress>()
+
+        FileOperationCoordinator.uploadFile(
+            source = source,
+            destinationProvider = destination,
+            destinationDirectoryPath = "/remote",
+            onProgress = progress::add,
+        ).getOrThrow()
+
+        assertNotEquals(callerThread, writeThread.get())
+        assertTrue(progress.size >= 3)
+        assertTrue(progress.all { it.path == "large.bin" })
+        assertTrue(progress.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), progress.last().bytesTransferred)
+        assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
+    }
+
+    @Test
+    fun uploadUsesProviderWriteStreamOverride() = runBlocking {
+        val destination = WriteStreamOnlyProvider().apply { putDirectory("/remote") }
+        val source = UploadSource("report.txt") {
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        FileOperationCoordinator.uploadFile(source, destination, "/remote").getOrThrow()
+
+        assertTrue(destination.writeStreamCalled)
+        assertEquals("report", destination.readFile("/remote/report.txt"))
+    }
+
+    @Test
     fun uploadRefusesExistingFileWithoutOpeningOrOverwritingIt() = runBlocking {
         var sourceOpened = false
         val destination = MemoryProvider().apply {
@@ -67,6 +110,79 @@ class FileOperationCoordinatorTest {
 
         assertTrue(result.isFailure)
         assertFalse(destination.exists("/remote/report.txt"))
+    }
+
+    @Test
+    fun copyUsesOpaqueProviderCreatedFileIdentifier() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = OpaquePathProvider()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/report.txt",
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val createdPath = destination.createdPath(destination.rootPath, "report.txt")
+        assertEquals("report", destination.readFile(createdPath))
+    }
+
+    @Test
+    fun recursiveCopyUsesOpaqueProviderCreatedDirectoryIdentifiers() = runBlocking {
+        val source = MemoryProvider().apply {
+            putDirectory("/local/folder")
+            putDirectory("/local/folder/nested")
+            putFile("/local/folder/nested/report.txt", "report")
+        }
+        val destination = OpaquePathProvider()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/folder",
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val folderPath = destination.createdPath(destination.rootPath, "folder")
+        val nestedPath = destination.createdPath(folderPath, "nested")
+        val reportPath = destination.createdPath(nestedPath, "report.txt")
+        assertEquals("report", destination.readFile(reportPath))
+    }
+
+    @Test
+    fun uploadUsesOpaqueProviderCreatedFileIdentifier() = runBlocking {
+        val destination = OpaquePathProvider()
+        val source = UploadSource("report.txt") {
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        FileOperationCoordinator.uploadFile(
+            source = source,
+            destinationProvider = destination,
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val createdPath = destination.createdPath(destination.rootPath, "report.txt")
+        assertEquals("report", destination.readFile(createdPath))
+    }
+
+    @Test
+    fun failedOpaqueCopyCleansUpCreatedIdentifierAndKeepsSource() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = OpaquePathProvider(failWrites = true)
+
+        val result = FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/report.txt",
+            destinationDirectoryPath = destination.rootPath,
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(source.exists("/local/report.txt"))
+        assertFalse(destination.exists(destination.lastCreatedPath!!))
+        assertTrue(destination.listFiles(destination.rootPath).getOrThrow().isEmpty())
     }
 
     @Test
@@ -174,7 +290,7 @@ class FileOperationCoordinatorTest {
         val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
         val source = MemoryProvider().apply { putFile("/local/large.bin", payload) }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -185,10 +301,14 @@ class FileOperationCoordinatorTest {
         ).getOrThrow()
 
         assertTrue(events.size >= 3)
-        assertTrue(events.zipWithNext().all { (first, second) -> first.bytesCopied < second.bytesCopied })
+        assertTrue(
+            events.zipWithNext().all { (first, second) ->
+                first.bytesTransferred < second.bytesTransferred
+            },
+        )
         assertTrue(events.all { it.path == "/local/large.bin" })
         assertTrue(events.all { it.totalBytes == payload.size.toLong() })
-        assertEquals(payload.size.toLong(), events.last().bytesCopied)
+        assertEquals(payload.size.toLong(), events.last().bytesTransferred)
         assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
     }
 
@@ -201,7 +321,7 @@ class FileOperationCoordinatorTest {
             putFile("/local/folder/nested/second.txt", "second")
         }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -221,7 +341,7 @@ class FileOperationCoordinatorTest {
     fun failedWriteDoesNotReportUnwrittenBytes() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
         val destination = FailingWriteProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         val result = FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -239,7 +359,7 @@ class FileOperationCoordinatorTest {
     fun zeroByteFileReportsKnownZeroTotal() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/empty.txt", byteArrayOf()) }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -249,23 +369,18 @@ class FileOperationCoordinatorTest {
             onProgress = events::add,
         ).getOrThrow()
 
-        assertEquals(
-            listOf(
-                StreamCopyProgress(
-                    path = "/local/empty.txt",
-                    bytesCopied = 0,
-                    totalBytes = 0,
-                )
-            ),
-            events,
-        )
+        assertEquals(1, events.size)
+        assertEquals("/local/empty.txt", events.single().path)
+        assertEquals(0L, events.single().bytesTransferred)
+        assertEquals(0L, events.single().totalBytes)
+        assertTrue(events.single().elapsedNanos >= 0)
     }
 
     @Test
     fun negativeProviderSizeIsReportedAsUnknownRatherThanZero() = runBlocking {
         val source = UnknownSizeProvider().apply { putFile("/local/unknown.bin", "contents") }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
-        val events = mutableListOf<StreamCopyProgress>()
+        val events = mutableListOf<StreamTransferProgress>()
 
         FileOperationCoordinator.copyPath(
             sourceProvider = source,
@@ -317,9 +432,129 @@ class FileOperationCoordinatorTest {
         }
     }
 
+    private class WriteStreamOnlyProvider : MemoryProvider() {
+        var writeStreamCalled = false
+
+        override suspend fun getOutputStream(path: String): Result<OutputStream> =
+            Result.failure(AssertionError("Coordinator bypassed writeStream"))
+
+        override suspend fun writeStream(
+            path: String,
+            input: InputStream,
+            sourcePath: String,
+            totalBytes: Long?,
+            onProgress: (StreamTransferProgress) -> Unit,
+        ): Result<Unit> = runCatching {
+            writeStreamCalled = true
+            super.getOutputStream(path).getOrThrow().use { output ->
+                StreamTransfer.copy(
+                    input = input,
+                    output = output,
+                    path = sourcePath,
+                    totalBytes = totalBytes,
+                    onProgress = onProgress,
+                )
+            }
+        }
+    }
+
     private class UnknownSizeProvider : MemoryProvider() {
         override suspend fun getFileInfo(path: String): Result<FileItem> =
             super.getFileInfo(path).map { it.copy(size = -1) }
+    }
+
+    private class OpaquePathProvider(
+        private val failWrites: Boolean = false,
+    ) : MemoryProvider() {
+        val rootPath = "content://tree/root"
+        var lastCreatedPath: String? = null
+            private set
+
+        private var nextId = 1
+        private val children = mutableMapOf<String, MutableList<FileItem>>()
+        private val parentByPath = mutableMapOf<String, String>()
+        private val directoryPaths = mutableSetOf(rootPath)
+
+        init {
+            putDirectory(rootPath)
+        }
+
+        fun createdPath(parentPath: String, name: String): String =
+            children.getValue(parentPath).single { it.name == name }.path
+
+        override suspend fun listFiles(path: String): Result<List<FileItem>> =
+            Result.success(children[path].orEmpty().toList())
+
+        override suspend fun createDirectory(path: String, name: String): Result<FileItem> =
+            createEntry(path, name, isDirectory = true)
+
+        override suspend fun createFile(path: String, name: String): Result<FileItem> =
+            createEntry(path, name, isDirectory = false)
+
+        override suspend fun getOutputStream(path: String): Result<OutputStream> {
+            if (path !in parentByPath) {
+                return Result.failure(IOException("Output path was not returned by createFile: $path"))
+            }
+            if (!failWrites) return super.getOutputStream(path)
+            return Result.success(
+                object : OutputStream() {
+                    override fun write(b: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated opaque write failure")
+                    }
+
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated opaque write failure")
+                    }
+                },
+            )
+        }
+
+        override suspend fun delete(path: String): Result<Unit> = runCatching {
+            val descendants = mutableListOf<String>()
+            fun collect(parent: String) {
+                children[parent].orEmpty().forEach { child ->
+                    collect(child.path)
+                    descendants += child.path
+                }
+            }
+            collect(path)
+            (descendants + path).forEach { target ->
+                super.delete(target).getOrThrow()
+                val parent = parentByPath.remove(target)
+                if (parent != null) children[parent]?.removeAll { it.path == target }
+                children.remove(target)
+                directoryPaths.remove(target)
+            }
+        }
+
+        private fun createEntry(
+            parentPath: String,
+            name: String,
+            isDirectory: Boolean,
+        ): Result<FileItem> = runCatching {
+            require(parentPath in directoryPaths) {
+                "Parent path was not returned by createDirectory: $parentPath"
+            }
+            val createdPath = "$rootPath/document/id-${nextId++}"
+            val item = FileItem(
+                name = name,
+                path = createdPath,
+                isDirectory = isDirectory,
+                source = FileSource.SAF,
+            )
+            if (isDirectory) {
+                putDirectory(createdPath)
+                directoryPaths += createdPath
+            } else {
+                putFile(createdPath, byteArrayOf())
+            }
+            parentByPath[createdPath] = parentPath
+            children.getOrPut(parentPath) { mutableListOf() } += item
+            lastCreatedPath = createdPath
+            item
+        }
     }
 
     private open class MemoryProvider : FileProvider {

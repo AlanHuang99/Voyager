@@ -67,7 +67,31 @@ class TransferProgressTest {
 
         assertEquals("2 of 5", progress.itemProgressText)
         assertEquals("40%", progress.percentageText)
-        assertEquals("Copying, report.pdf, 2 of 5, 40%", progress.stateDescription)
+        assertEquals(
+            "Copying, report.pdf, 2 of 5, 40 B of 100 B, 40%",
+            progress.stateDescription,
+        )
+    }
+
+    @Test
+    fun formatsTransferredBytesAndAverageSpeedWithoutInventingTotals() {
+        val known = TransferProgress(
+            label = "Downloading",
+            copiedBytes = 1_572_864,
+            totalBytes = 3_145_728,
+            elapsedNanos = 1_500_000_000,
+        )
+        assertEquals("1.5 MB of 3 MB", known.byteProgressText)
+        assertEquals("1 MB/s", known.speedText)
+
+        val unknown = TransferProgress(
+            label = "Downloading",
+            copiedBytes = 1_024,
+            totalBytes = null,
+            elapsedNanos = 1_000_000_000,
+        )
+        assertEquals("1 KB", unknown.byteProgressText)
+        assertEquals("1 KB/s", unknown.speedText)
     }
 
     @Test
@@ -83,6 +107,9 @@ class TransferProgressTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             TransferProgress(label = "Copying", totalBytes = -1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            TransferProgress(label = "Copying", elapsedNanos = -1)
         }
     }
 }
