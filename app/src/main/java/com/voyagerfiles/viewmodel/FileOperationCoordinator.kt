@@ -12,12 +12,11 @@ class DestinationConflictException(identifierOrName: String) :
     )
 
 object FileOperationCoordinator {
-    private const val BUFFER_SIZE = 64 * 1024
-
     suspend fun uploadFile(
         source: UploadSource,
         destinationProvider: FileProvider,
         destinationDirectoryPath: String,
+        onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             requireNameAvailable(destinationProvider, destinationDirectoryPath, source.name)
@@ -30,7 +29,13 @@ object FileOperationCoordinator {
                     .path
                 source.openInputStream().use { input ->
                     destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
-                        input.copyTo(output, BUFFER_SIZE)
+                        StreamTransfer.copy(
+                            input = input,
+                            output = output,
+                            path = source.name,
+                            totalBytes = source.size,
+                            onProgress = onProgress,
+                        )
                     }
                 }
             } catch (error: Throwable) {

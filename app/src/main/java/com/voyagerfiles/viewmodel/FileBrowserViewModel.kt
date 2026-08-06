@@ -390,7 +390,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val destinationProvider = fileProvider
         val destinationPath = _browseState.value.currentPath
         val contentResolver = getApplication<Application>().contentResolver
-        launchOperation(if (uris.size == 1) "Uploading file" else "Uploading ${uris.size} files") {
+        val progressLabel = "Uploading"
+        launchOperation(progressLabel) {
             val sources = withContext(Dispatchers.IO) {
                 uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
             }
@@ -402,12 +403,64 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             }
             var failed = 0
             var firstError: Throwable? = null
+            var completed = 0
             for (source in validatedSources) {
+                updateOperationProgress(
+                    TransferProgress(
+                        label = progressLabel,
+                        completedItems = completed,
+                        totalItems = validatedSources.size,
+                        currentItemName = source.name,
+                        totalBytes = source.size,
+                    ),
+                )
+                var lastPublishedBytes = 0L
+                var latestStreamProgress: StreamTransferProgress? = null
+                val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
+                    val isFirstEvent = latestStreamProgress == null
+                    latestStreamProgress = streamProgress
+                    val reachedKnownTotal = streamProgress.totalBytes
+                        ?.takeIf { it > 0 }
+                        ?.let { total ->
+                            streamProgress.bytesTransferred >= total && lastPublishedBytes < total
+                        }
+                        ?: false
+                    val crossedPublicationThreshold =
+                        streamProgress.bytesTransferred - lastPublishedBytes >=
+                            PROGRESS_PUBLICATION_BYTES
+                    if (isFirstEvent || reachedKnownTotal || crossedPublicationThreshold) {
+                        lastPublishedBytes = streamProgress.bytesTransferred
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = progressLabel,
+                                completedItems = completed,
+                                totalItems = validatedSources.size,
+                                currentItemName = source.name,
+                                copiedBytes = streamProgress.bytesTransferred,
+                                totalBytes = streamProgress.totalBytes,
+                            ),
+                        )
+                    }
+                }
                 FileOperationCoordinator.uploadFile(
                     source = source,
                     destinationProvider = destinationProvider,
                     destinationDirectoryPath = destinationPath,
-                ).onFailure { error ->
+                    onProgress = publishStreamProgress,
+                ).onSuccess {
+                    completed++
+                    val streamProgress = latestStreamProgress
+                    updateOperationProgress(
+                        TransferProgress(
+                            label = progressLabel,
+                            completedItems = completed,
+                            totalItems = validatedSources.size,
+                            currentItemName = source.name,
+                            copiedBytes = streamProgress?.bytesTransferred ?: 0,
+                            totalBytes = streamProgress?.totalBytes ?: source.size,
+                        ),
+                    )
+                }.onFailure { error ->
                     failed++
                     if (firstError == null) firstError = error
                 }

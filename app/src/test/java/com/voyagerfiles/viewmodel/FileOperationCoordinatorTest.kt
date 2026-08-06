@@ -39,6 +39,34 @@ class FileOperationCoordinatorTest {
     }
 
     @Test
+    fun uploadReportsExactBytesAndKnownTotalOffTheCallingThread() = runBlocking {
+        val callerThread = Thread.currentThread().name
+        val writeThread = AtomicReference<String?>(null)
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
+        val destination = ThreadRecordingProvider(writeThread).apply { putDirectory("/remote") }
+        val source = UploadSource(
+            name = "large.bin",
+            size = payload.size.toLong(),
+            openInputStream = { ByteArrayInputStream(payload) },
+        )
+        val progress = mutableListOf<StreamTransferProgress>()
+
+        FileOperationCoordinator.uploadFile(
+            source = source,
+            destinationProvider = destination,
+            destinationDirectoryPath = "/remote",
+            onProgress = progress::add,
+        ).getOrThrow()
+
+        assertNotEquals(callerThread, writeThread.get())
+        assertTrue(progress.size >= 3)
+        assertTrue(progress.all { it.path == "large.bin" })
+        assertTrue(progress.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), progress.last().bytesTransferred)
+        assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
+    }
+
+    @Test
     fun uploadRefusesExistingFileWithoutOpeningOrOverwritingIt() = runBlocking {
         var sourceOpened = false
         val destination = MemoryProvider().apply {
