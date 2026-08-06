@@ -2,6 +2,7 @@ package com.voyagerfiles.data.remote.webdav
 
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
@@ -104,15 +105,29 @@ class WebDavFileProviderTest {
     @Test
     fun fileDownloaderSavesFileToLocalDirectory() = runBlocking {
         val server = startServer()
-        Files.write(server.root.resolve("remote.txt"), "webdav download".toByteArray())
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> ('a'.code + index % 26).toByte() }
+        Files.write(server.root.resolve("remote.txt"), payload)
         val provider = createProvider(server.port)
         val destination = temp.newFolder("downloads").toPath()
         val item = provider.listFiles("/").getOrThrow().single()
+        val progress = mutableListOf<DownloadProgress>()
 
-        val result = FileDownloader.download(provider, listOf(item), destination.toFile()).getOrThrow()
+        val result = FileDownloader.download(
+            provider = provider,
+            items = listOf(item),
+            destinationDirectory = destination.toFile(),
+            onProgress = progress::add,
+        ).getOrThrow()
 
         assertEquals(1, result.downloadedFiles)
-        assertEquals("webdav download", String(Files.readAllBytes(destination.resolve("remote.txt"))))
+        assertTrue(Files.readAllBytes(destination.resolve("remote.txt")).contentEquals(payload))
+        val streamEvents = progress.mapNotNull { it.stream }
+        assertTrue(streamEvents.size >= 3)
+        assertTrue(streamEvents.all { it.path == "/remote.txt" })
+        assertTrue(streamEvents.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), streamEvents.last().bytesTransferred)
+        assertEquals(1, progress.last().completedRequestedItems)
+        assertEquals(1, progress.last().totalRequestedItems)
     }
 
     @Test

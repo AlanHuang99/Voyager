@@ -27,6 +27,7 @@ import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
 import com.voyagerfiles.data.repository.ConnectionRepository
+import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.FileProviderFactory
@@ -861,7 +862,56 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             showSnackbar("Downloading ${items.size} item${if (items.size == 1) "" else "s"}...")
 
             val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            FileDownloader.download(provider, items, downloads).fold(
+            var lastStreamPath: String? = null
+            var lastPublishedBytes = 0L
+            val publishProgress: (DownloadProgress) -> Unit = { progress ->
+                val stream = progress.stream
+                if (stream == null) {
+                    lastStreamPath = null
+                    lastPublishedBytes = 0
+                    updateOperationProgress(
+                        TransferProgress(
+                            label = "Downloading",
+                            completedItems = progress.completedRequestedItems,
+                            totalItems = progress.totalRequestedItems,
+                            currentItemName = items
+                                .getOrNull(progress.completedRequestedItems)
+                                ?.name,
+                        ),
+                    )
+                } else {
+                    val pathChanged = stream.path != lastStreamPath
+                    val reachedKnownTotal = stream.totalBytes
+                        ?.takeIf { it > 0 }
+                        ?.let { total ->
+                            stream.bytesTransferred >= total && lastPublishedBytes < total
+                        }
+                        ?: false
+                    val crossedPublicationThreshold =
+                        stream.bytesTransferred - lastPublishedBytes >=
+                            PROGRESS_PUBLICATION_BYTES
+                    if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
+                        lastStreamPath = stream.path
+                        lastPublishedBytes = stream.bytesTransferred
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = "Downloading",
+                                completedItems = progress.completedRequestedItems,
+                                totalItems = progress.totalRequestedItems,
+                                currentItemName = stream.path.substringAfterLast('/'),
+                                copiedBytes = stream.bytesTransferred,
+                                totalBytes = stream.totalBytes,
+                            ),
+                        )
+                    }
+                }
+            }
+            FileDownloader.download(
+                provider = provider,
+                items = items,
+                destinationDirectory = downloads,
+                onProgress = publishProgress,
+            ).fold(
                 onSuccess = { result ->
                     val count = result.downloadedFiles + result.downloadedDirectories
                     showSnackbar(

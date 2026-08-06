@@ -2,6 +2,7 @@ package com.voyagerfiles.data.remote.sftp
 
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import kotlinx.coroutines.runBlocking
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory
@@ -116,15 +117,29 @@ class SftpFileProviderTest {
     @Test
     fun fileDownloaderSavesFileToLocalDirectory() = runBlocking {
         val server = startServer(AuthMode.PASSWORD)
-        Files.write(server.root.resolve("remote.txt"), "local copy".toByteArray())
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
+        Files.write(server.root.resolve("remote.bin"), payload)
         val provider = createProvider(server.port)
         val destination = temp.newFolder("downloads").toPath()
         val item = provider.listFiles("/").getOrThrow().single()
+        val progress = mutableListOf<DownloadProgress>()
 
-        val result = FileDownloader.download(provider, listOf(item), destination.toFile()).getOrThrow()
+        val result = FileDownloader.download(
+            provider = provider,
+            items = listOf(item),
+            destinationDirectory = destination.toFile(),
+            onProgress = progress::add,
+        ).getOrThrow()
 
         assertEquals(1, result.downloadedFiles)
-        assertEquals("local copy", String(Files.readAllBytes(destination.resolve("remote.txt"))))
+        assertTrue(Files.readAllBytes(destination.resolve("remote.bin")).contentEquals(payload))
+        val streamEvents = progress.mapNotNull { it.stream }
+        assertTrue(streamEvents.size >= 3)
+        assertTrue(streamEvents.all { it.path == "/remote.bin" })
+        assertTrue(streamEvents.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), streamEvents.last().bytesTransferred)
+        assertEquals(1, progress.last().completedRequestedItems)
+        assertEquals(1, progress.last().totalRequestedItems)
     }
 
     @Test
@@ -135,12 +150,21 @@ class SftpFileProviderTest {
         val provider = createProvider(server.port)
         val destination = temp.newFolder("recursive-downloads").toPath()
         val item = provider.listFiles("/").getOrThrow().single()
+        val progress = mutableListOf<DownloadProgress>()
 
-        val result = FileDownloader.download(provider, listOf(item), destination.toFile()).getOrThrow()
+        val result = FileDownloader.download(
+            provider = provider,
+            items = listOf(item),
+            destinationDirectory = destination.toFile(),
+            onProgress = progress::add,
+        ).getOrThrow()
 
         assertEquals(1, result.downloadedFiles)
         assertEquals(2, result.downloadedDirectories)
         assertEquals("nested", String(Files.readAllBytes(destination.resolve("folder/nested/file.txt"))))
+        assertTrue(progress.mapNotNull { it.stream }.any { it.path == "/folder/nested/file.txt" })
+        assertEquals(1, progress.last().completedRequestedItems)
+        assertEquals(1, progress.last().totalRequestedItems)
     }
 
     @Test
