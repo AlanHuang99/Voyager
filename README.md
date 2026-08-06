@@ -28,13 +28,13 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
 - Switch among list, compact list, and grid layouts, view image and first-page PDF thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
-- Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with visible progress.
+- Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
 - Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
-- Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored.
+- Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. APK files open in Android's package installer.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
 - Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
-- Connect to SFTP, FTP, SMB, and WebDAV servers, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder.
+- Connect to SFTP, FTP, SMB, and WebDAV servers, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress.
 - Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
 - Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
 
