@@ -142,6 +142,17 @@ object FileUtils {
             context.startActivity(intent)
         }
 
+    fun createOpenWithIntent(context: Context, file: FileItem): Result<Intent> =
+        createOpenFileIntent(context, file).map { target ->
+            Intent.createChooser(target, "Open with")
+        }
+
+    fun openFileWith(context: Context, file: FileItem): Result<Unit> =
+        createOpenWithIntent(context, file).mapCatching { chooser ->
+            if (context !is Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
+
     fun shareFile(context: Context, file: FileItem) {
         shareFiles(context, listOf(file)).getOrThrow()
     }

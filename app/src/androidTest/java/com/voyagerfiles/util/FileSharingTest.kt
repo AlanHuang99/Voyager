@@ -82,6 +82,19 @@ class FileSharingTest {
     }
 
     @Test
+    fun openWithWrapsTheReadableViewIntentInAChooser() {
+        val file = createLocalFile("report.pdf")
+
+        val chooser = FileUtils.createOpenWithIntent(context, file).getOrThrow()
+        val target = chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        assertEquals(Intent.ACTION_VIEW, target?.action)
+        assertEquals("application/pdf", target?.type)
+        assertTrue(target!!.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+    }
+
+    @Test
     fun appCanRequestTheSystemPackageInstallerForApkFiles() {
         val requestedPermissions = context.packageManager
             .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
