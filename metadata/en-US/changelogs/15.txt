@@ -1,0 +1,5 @@
+Voyager 1.7.0:
+- Open APK files, choose an app with Open with, and confirm archive extraction
+- Improve selection haptics and dynamic-theme toolbar contrast
+- Fix writes into Storage Access Framework document trees
+- Show file names, bytes, percentage, and speed during uploads and downloads

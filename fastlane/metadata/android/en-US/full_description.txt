@@ -4,15 +4,18 @@ Features:
 • Local file browsing with file management (copy, move, rename, Trash, permanent delete, create)
 • Share one or several local and document-tree files through Android's system share sheet
 • File details with selectable metadata
-• Image thumbnails for local image files
-• Storage Access Framework document-tree browsing
-• SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication
+• Image and first-page PDF thumbnails
+• Storage Access Framework document-tree browsing and file management
+• Open files through Android defaults or choose a handler with Open with
+• Create ZIP archives and safely extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files
+• SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication whose public key can be copied or saved
 • FTP remote access
 • SMB/CIFS network share browsing
 • WebDAV remote access
 • Copy and move files between local storage and a remote server, in both directions
 • Create remote files and folders, and upload documents through Android's system picker
 • Download remote files and folders to the device
+• Upload and download progress with active filenames, item counts, bytes, percentage when known, and speed
 • Multiple browser sessions for local and remote locations, with a session switcher
 • Optional automatic closure of inactive sessions after Voyager remains in the background
 • Mounted external storage volumes, such as SD cards and USB/OTG, listed alongside internal storage
