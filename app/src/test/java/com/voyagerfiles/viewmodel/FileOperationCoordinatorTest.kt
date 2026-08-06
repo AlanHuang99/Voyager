@@ -70,6 +70,79 @@ class FileOperationCoordinatorTest {
     }
 
     @Test
+    fun copyUsesOpaqueProviderCreatedFileIdentifier() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = OpaquePathProvider()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/report.txt",
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val createdPath = destination.createdPath(destination.rootPath, "report.txt")
+        assertEquals("report", destination.readFile(createdPath))
+    }
+
+    @Test
+    fun recursiveCopyUsesOpaqueProviderCreatedDirectoryIdentifiers() = runBlocking {
+        val source = MemoryProvider().apply {
+            putDirectory("/local/folder")
+            putDirectory("/local/folder/nested")
+            putFile("/local/folder/nested/report.txt", "report")
+        }
+        val destination = OpaquePathProvider()
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/folder",
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val folderPath = destination.createdPath(destination.rootPath, "folder")
+        val nestedPath = destination.createdPath(folderPath, "nested")
+        val reportPath = destination.createdPath(nestedPath, "report.txt")
+        assertEquals("report", destination.readFile(reportPath))
+    }
+
+    @Test
+    fun uploadUsesOpaqueProviderCreatedFileIdentifier() = runBlocking {
+        val destination = OpaquePathProvider()
+        val source = UploadSource("report.txt") {
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        FileOperationCoordinator.uploadFile(
+            source = source,
+            destinationProvider = destination,
+            destinationDirectoryPath = destination.rootPath,
+        ).getOrThrow()
+
+        val createdPath = destination.createdPath(destination.rootPath, "report.txt")
+        assertEquals("report", destination.readFile(createdPath))
+    }
+
+    @Test
+    fun failedOpaqueCopyCleansUpCreatedIdentifierAndKeepsSource() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
+        val destination = OpaquePathProvider(failWrites = true)
+
+        val result = FileOperationCoordinator.copyPath(
+            sourceProvider = source,
+            destinationProvider = destination,
+            sourcePath = "/local/report.txt",
+            destinationDirectoryPath = destination.rootPath,
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(source.exists("/local/report.txt"))
+        assertFalse(destination.exists(destination.lastCreatedPath!!))
+        assertTrue(destination.listFiles(destination.rootPath).getOrThrow().isEmpty())
+    }
+
+    @Test
     fun copyStreamsFileBetweenDifferentProviders() = runBlocking {
         val source = MemoryProvider().apply { putFile("/local/report.txt", "report") }
         val destination = MemoryProvider().apply { putDirectory("/remote") }
@@ -320,6 +393,100 @@ class FileOperationCoordinatorTest {
     private class UnknownSizeProvider : MemoryProvider() {
         override suspend fun getFileInfo(path: String): Result<FileItem> =
             super.getFileInfo(path).map { it.copy(size = -1) }
+    }
+
+    private class OpaquePathProvider(
+        private val failWrites: Boolean = false,
+    ) : MemoryProvider() {
+        val rootPath = "content://tree/root"
+        var lastCreatedPath: String? = null
+            private set
+
+        private var nextId = 1
+        private val children = mutableMapOf<String, MutableList<FileItem>>()
+        private val parentByPath = mutableMapOf<String, String>()
+        private val directoryPaths = mutableSetOf(rootPath)
+
+        init {
+            putDirectory(rootPath)
+        }
+
+        fun createdPath(parentPath: String, name: String): String =
+            children.getValue(parentPath).single { it.name == name }.path
+
+        override suspend fun listFiles(path: String): Result<List<FileItem>> =
+            Result.success(children[path].orEmpty().toList())
+
+        override suspend fun createDirectory(path: String, name: String): Result<FileItem> =
+            createEntry(path, name, isDirectory = true)
+
+        override suspend fun createFile(path: String, name: String): Result<FileItem> =
+            createEntry(path, name, isDirectory = false)
+
+        override suspend fun getOutputStream(path: String): Result<OutputStream> {
+            if (path !in parentByPath) {
+                return Result.failure(IOException("Output path was not returned by createFile: $path"))
+            }
+            if (!failWrites) return super.getOutputStream(path)
+            return Result.success(
+                object : OutputStream() {
+                    override fun write(b: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated opaque write failure")
+                    }
+
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        putFile(path, "partial")
+                        throw IOException("simulated opaque write failure")
+                    }
+                },
+            )
+        }
+
+        override suspend fun delete(path: String): Result<Unit> = runCatching {
+            val descendants = mutableListOf<String>()
+            fun collect(parent: String) {
+                children[parent].orEmpty().forEach { child ->
+                    collect(child.path)
+                    descendants += child.path
+                }
+            }
+            collect(path)
+            (descendants + path).forEach { target ->
+                super.delete(target).getOrThrow()
+                val parent = parentByPath.remove(target)
+                if (parent != null) children[parent]?.removeAll { it.path == target }
+                children.remove(target)
+                directoryPaths.remove(target)
+            }
+        }
+
+        private fun createEntry(
+            parentPath: String,
+            name: String,
+            isDirectory: Boolean,
+        ): Result<FileItem> = runCatching {
+            require(parentPath in directoryPaths) {
+                "Parent path was not returned by createDirectory: $parentPath"
+            }
+            val createdPath = "$rootPath/document/id-${nextId++}"
+            val item = FileItem(
+                name = name,
+                path = createdPath,
+                isDirectory = isDirectory,
+                source = FileSource.SAF,
+            )
+            if (isDirectory) {
+                putDirectory(createdPath)
+                directoryPaths += createdPath
+            } else {
+                putFile(createdPath, byteArrayOf())
+            }
+            parentByPath[createdPath] = parentPath
+            children.getOrPut(parentPath) { mutableListOf() } += item
+            lastCreatedPath = createdPath
+            item
+        }
     }
 
     private open class MemoryProvider : FileProvider {
