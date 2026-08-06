@@ -1,10 +1,20 @@
 package com.voyagerfiles.ui.screens
 
 import android.app.Application
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -12,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.ViewMode
@@ -20,9 +31,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -69,6 +85,67 @@ class BrowserSelectionActionsTest {
         composeTestRule.onNodeWithContentDescription("Share").assertExists()
         composeTestRule.onNodeWithContentDescription("Rename").assertExists()
         composeTestRule.onNodeWithContentDescription("Delete").assertExists()
+    }
+
+    @Test
+    fun firstSelectionPerformsOneHapticInListAndGridModes() {
+        val haptics = RecordingHapticFeedback()
+        val viewModel = launchBrowser(haptics)
+        waitForRoot(viewModel)
+        composeTestRule.runOnIdle { viewModel.setViewMode(ViewMode.LIST) }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.browseState.value.viewMode == ViewMode.LIST
+        }
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            assertEquals(listOf(HapticFeedbackType.LongPress), haptics.events)
+            viewModel.clearSelection()
+            viewModel.setViewMode(ViewMode.GRID)
+        }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            viewModel.browseState.value.viewMode == ViewMode.GRID &&
+                viewModel.browseState.value.selectedFiles.isEmpty()
+        }
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            assertEquals(
+                listOf(HapticFeedbackType.LongPress, HapticFeedbackType.LongPress),
+                haptics.events,
+            )
+        }
+    }
+
+    @Test
+    fun selectionToolbarUsesContrastingContentColors() {
+        val containerColor = Color(0xFFAAAAAA)
+        val lowContrastDefaults = lightColorScheme(
+            primaryContainer = containerColor,
+            onPrimaryContainer = Color(0xFF101010),
+            onSurface = containerColor,
+            onSurfaceVariant = containerColor,
+        )
+        val viewModel = launchBrowser(colorScheme = lowContrastDefaults)
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+
+        composeTestRule.onNodeWithContentDescription("Clear selection").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Rename").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Share").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Delete").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More selection actions").assertIsDisplayed()
+        assertHasIconContrast(
+            image = composeTestRule.onNodeWithContentDescription("Delete").captureToImage(),
+            containerColor = containerColor,
+        )
     }
 
     @Test
@@ -240,15 +317,32 @@ class BrowserSelectionActionsTest {
             .assertIsDisplayed()
     }
 
-    private fun launchBrowser(): FileBrowserViewModel {
+    private fun launchBrowser(
+        hapticFeedback: HapticFeedback? = null,
+        colorScheme: ColorScheme? = null,
+    ): FileBrowserViewModel {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(application)
         composeTestRule.setContent {
-            MaterialTheme {
-                BrowserScreen(
-                    viewModel = viewModel,
-                    onNavigateBack = {},
-                )
+            val browserContent: @Composable () -> Unit = {
+                if (hapticFeedback == null) {
+                    BrowserScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = {},
+                    )
+                } else {
+                    CompositionLocalProvider(LocalHapticFeedback provides hapticFeedback) {
+                        BrowserScreen(
+                            viewModel = viewModel,
+                            onNavigateBack = {},
+                        )
+                    }
+                }
+            }
+            if (colorScheme == null) {
+                MaterialTheme(content = browserContent)
+            } else {
+                MaterialTheme(colorScheme = colorScheme, content = browserContent)
             }
         }
         composeTestRule.runOnIdle {
@@ -263,5 +357,48 @@ class BrowserSelectionActionsTest {
                 !viewModel.browseState.value.isLoading
         }
         composeTestRule.onNodeWithText("notes.txt").assertExists()
+    }
+
+    private fun assertHasIconContrast(image: ImageBitmap, containerColor: Color) {
+        val pixels = image.toPixelMap()
+        var maximumContrast = 1.0
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                maximumContrast = max(
+                    maximumContrast,
+                    contrastRatio(pixels[x, y], containerColor),
+                )
+            }
+        }
+        assertTrue(
+            "Expected action icon contrast of at least 3:1, captured $maximumContrast:1",
+            maximumContrast >= 3.0,
+        )
+    }
+
+    private fun contrastRatio(first: Color, second: Color): Double {
+        val firstLuminance = relativeLuminance(first)
+        val secondLuminance = relativeLuminance(second)
+        return (max(firstLuminance, secondLuminance) + 0.05) /
+            (min(firstLuminance, secondLuminance) + 0.05)
+    }
+
+    private fun relativeLuminance(color: Color): Double =
+        0.2126 * linearize(color.red) +
+            0.7152 * linearize(color.green) +
+            0.0722 * linearize(color.blue)
+
+    private fun linearize(channel: Float): Double = if (channel <= 0.04045f) {
+        channel / 12.92
+    } else {
+        ((channel + 0.055) / 1.055).toDouble().pow(2.4)
+    }
+
+    private class RecordingHapticFeedback : HapticFeedback {
+        val events = mutableListOf<HapticFeedbackType>()
+
+        override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+            events += hapticFeedbackType
+        }
     }
 }

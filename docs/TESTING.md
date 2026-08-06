@@ -34,7 +34,7 @@ adb connect DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT
 ANDROID_SERIAL=DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT ./gradlew connectedDebugAndroidTest --stacktrace
 ```
 
-Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise direct Android file-open intents, the explicit Open with chooser, APK installer permission, generated SFTP public-key export, image and first-page PDF thumbnails, determinate and indeterminate operation progress, archive naming, direct and selection-based ZIP extraction, archive-tap confirmation and cancellation, unavailable-storage presentation, saved-connection and file-delete confirmations, single and multiple share intents, contextual selection actions, permanent local deletion, compact-view persistence, file details, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
+Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise direct Android file-open intents, the explicit Open with chooser, APK installer permission, generated SFTP public-key export, image and first-page PDF thumbnails, determinate and indeterminate operation progress, archive naming, direct and selection-based ZIP extraction, archive-tap confirmation and cancellation, unavailable-storage presentation, saved-connection and file-delete confirmations, single and multiple share intents, contextual selection actions, first-selection haptic dispatch, selection-toolbar contrast, permanent local deletion, compact-view persistence, file details, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
 
 Run the issue-focused device coverage with:
 
@@ -84,7 +84,7 @@ Use disposable files and keep device orientation unlocked unless a case calls fo
 | Trash | For a direct-local selection, verify both Trash and permanent choices; move a file to Trash, restore it, create a restore conflict, permanently delete an entry, empty Trash, and repeat with Trash disabled. |
 | Error recovery | Remove or unmount a location while browsing, deny a SAF operation, open an unsupported file, use a bad remote hostname, and verify retry or actionable feedback. |
 | Remote | Generate an SFTP key, copy and save its public key, authenticate with it while leaving the password blank, verify first-use pinning and changed-key rejection, verify FTP cleartext confirmation, HTTPS WebDAV on a custom port, HTTP warning, large transfers, and a connection delete confirmation. |
-| Layout and accessibility | Test portrait and landscape, large font and display sizes, List, Compact list, and Grid persistence, TalkBack labels, 48 dp touch targets, loading indicators, empty states, selection mode, view menus, details sheets, dialogs, and keyboard focus where available. |
+| Layout and accessibility | Test portrait and landscape, large font and display sizes, List, Compact list, and Grid persistence, TalkBack labels, 48 dp touch targets, loading indicators, empty states, selection mode, view menus, details sheets, dialogs, and keyboard focus where available; in each layout, verify that the first selected item produces one haptic response and later selection changes do not, then apply a low-chroma gray dynamic palette and confirm the selection close button, count, actions, and overflow icon remain readable. |
 
 ## Useful device commands
 

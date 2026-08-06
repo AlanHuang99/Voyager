@@ -90,8 +90,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -139,6 +141,7 @@ fun BrowserScreen(
     val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uploadLauncher = rememberLauncherForActivityResult(
@@ -178,6 +181,13 @@ fun BrowserScreen(
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
+
+    fun toggleSelection(path: String) {
+        if (shouldPerformSelectionHaptic(state.selectedFiles, path)) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        viewModel.toggleSelection(path)
+    }
     val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan, canOpenWith) {
         SelectionToolbarModel.forState(
             isRemote = isNetwork,
@@ -468,6 +478,9 @@ fun BrowserScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                 )
             } else {
@@ -803,7 +816,7 @@ fun BrowserScreen(
                                 isSelectionMode = isSelectionMode,
                                 onClick = {
                                     if (isSelectionMode) {
-                                        viewModel.toggleSelection(file.path)
+                                        toggleSelection(file.path)
                                     } else if (file.isDirectory) {
                                         navigateTo(file.path)
                                     } else if (isNetwork) {
@@ -813,7 +826,7 @@ fun BrowserScreen(
                                     }
                                 },
                                 onLongClick = {
-                                    viewModel.toggleSelection(file.path)
+                                    toggleSelection(file.path)
                                 },
                             )
                         }
@@ -835,7 +848,7 @@ fun BrowserScreen(
                                 isSelectionMode = isSelectionMode,
                                 onClick = {
                                     if (isSelectionMode) {
-                                        viewModel.toggleSelection(file.path)
+                                        toggleSelection(file.path)
                                     } else if (file.isDirectory) {
                                         navigateTo(file.path)
                                     } else if (isNetwork) {
@@ -845,7 +858,7 @@ fun BrowserScreen(
                                     }
                                 },
                                 onLongClick = {
-                                    viewModel.toggleSelection(file.path)
+                                    toggleSelection(file.path)
                                 },
                             )
                         }
