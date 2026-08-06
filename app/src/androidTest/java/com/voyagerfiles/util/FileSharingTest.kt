@@ -1,7 +1,9 @@
 package com.voyagerfiles.util
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -77,6 +79,16 @@ class FileSharingTest {
         assertEquals(uri, intent.data)
         assertEquals("application/pdf", intent.type)
         assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+    }
+
+    @Test
+    fun appCanRequestTheSystemPackageInstallerForApkFiles() {
+        val requestedPermissions = context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions
+            .orEmpty()
+
+        assertTrue(Manifest.permission.REQUEST_INSTALL_PACKAGES in requestedPermissions)
     }
 
     private fun createLocalFile(name: String): FileItem {
