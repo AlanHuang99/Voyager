@@ -96,4 +96,44 @@ class BrowserToolbarModelTest {
         assertFalse(model.overflowActions.contains(SelectionToolbarAction.RENAME))
         assertTrue(model.overflowActions.contains(SelectionToolbarAction.DOWNLOAD))
     }
+
+    @Test
+    fun oneLocalFileOffersOpenWithInOverflow() {
+        val model = SelectionToolbarModel.forState(
+            isRemote = false,
+            selectionCount = 1,
+            canShare = true,
+            canOpenWith = true,
+        )
+
+        assertTrue(SelectionToolbarAction.OPEN_WITH in model.overflowActions)
+    }
+
+    @Test
+    fun foldersRemoteItemsAndMultipleSelectionsDoNotOfferOpenWith() {
+        assertFalse(
+            SelectionToolbarAction.OPEN_WITH in SelectionToolbarModel.forState(
+                isRemote = false,
+                selectionCount = 1,
+                canShare = false,
+                canOpenWith = false,
+            ).overflowActions,
+        )
+        assertFalse(
+            SelectionToolbarAction.OPEN_WITH in SelectionToolbarModel.forState(
+                isRemote = true,
+                selectionCount = 1,
+                canShare = false,
+                canOpenWith = false,
+            ).overflowActions,
+        )
+        assertFalse(
+            SelectionToolbarAction.OPEN_WITH in SelectionToolbarModel.forState(
+                isRemote = false,
+                selectionCount = 2,
+                canShare = true,
+                canOpenWith = false,
+            ).overflowActions,
+        )
+    }
 }

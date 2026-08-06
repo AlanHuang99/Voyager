@@ -3,10 +3,13 @@ package com.voyagerfiles.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
@@ -75,6 +78,7 @@ class SessionAutoCloseNavigationTest {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             viewModel.sessions.value.size == 1 && !viewModel.browseState.value.isLoading
         }
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(root.name))
         composeTestRule.onNodeWithText(root.name).assertIsDisplayed().performClick()
         composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
         val previousGeneration = viewModel.sessionClosureGeneration.value
@@ -112,6 +116,7 @@ class SessionAutoCloseNavigationTest {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             viewModel.sessions.value.size == 1 && !viewModel.browseState.value.isLoading
         }
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(root.name))
         composeTestRule.onNodeWithText(root.name).assertIsDisplayed().performClick()
         composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
         val previousGeneration = viewModel.sessionClosureGeneration.value

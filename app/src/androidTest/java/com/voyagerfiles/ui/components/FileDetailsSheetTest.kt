@@ -1,9 +1,12 @@
 package com.voyagerfiles.ui.components
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.ui.theme.VoyagerTheme
@@ -39,6 +42,7 @@ class FileDetailsSheetTest {
         composeTestRule.onNodeWithText("report.pdf").assertIsDisplayed()
         composeTestRule.onNodeWithText("2 KB").assertIsDisplayed()
         composeTestRule.onNodeWithText("/storage/emulated/0/Documents/report.pdf").assertIsDisplayed()
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("media_rw"))
         composeTestRule.onNodeWithText("media_rw").assertIsDisplayed()
         composeTestRule.onNodeWithText("rw-r--r--").performScrollTo().assertIsDisplayed()
     }

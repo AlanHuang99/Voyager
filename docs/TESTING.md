@@ -29,11 +29,12 @@ Reports are written under `app/build/reports/`. APKs are written under `app/buil
 Connect an Android device through USB or wireless debugging and confirm that `adb devices` reports it as `device` rather than `offline` or `unauthorized`.
 
 ```bash
-adb connect 192.168.27.167:5555
-ANDROID_SERIAL=192.168.27.167:5555 ./gradlew connectedDebugAndroidTest --stacktrace
+adb mdns services
+adb connect DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT
+ANDROID_SERIAL=DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT ./gradlew connectedDebugAndroidTest --stacktrace
 ```
 
-Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise Android file-open intents, generated SFTP public-key export, image and first-page PDF thumbnails, determinate and indeterminate operation progress, archive naming and a ZIP create/extract round trip, unavailable-storage presentation, saved-connection and file-delete confirmations, single and multiple share intents, contextual selection actions, permanent local deletion, compact-view persistence, file details, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
+Instrumentation installs the debug package `com.voyagerfiles.debug`. The current tests exercise direct Android file-open intents, the explicit Open with chooser, APK installer permission, generated SFTP public-key export, image and first-page PDF thumbnails, determinate and indeterminate operation progress, archive naming, direct and selection-based ZIP extraction, archive-tap confirmation and cancellation, unavailable-storage presentation, saved-connection and file-delete confirmations, single and multiple share intents, contextual selection actions, permanent local deletion, compact-view persistence, file details, parent navigation after using search, selection-control accessibility labels, and Android Keystore encryption.
 
 Run the issue-focused device coverage with:
 
@@ -77,9 +78,9 @@ Use disposable files and keep device orientation unlocked unless a case calls fo
 | Storage | Browse internal storage, an available removable volume, and an unavailable or unmounted volume if one is present. |
 | Navigation | Enter nested directories, use breadcrumbs and Back, switch sessions during a slow load, rotate the device, and confirm the latest location remains visible. |
 | Search and filters | Search case-insensitively, combine search with each type filter, select all visible results, clear filters, and test an empty result. |
-| File opening and thumbnails | Open a local or SAF file, choose an Android handler as the default where the OS offers that choice, reopen the file, and confirm the default is honored; verify image and first-page PDF thumbnails in list and grid layouts, including an invalid PDF fallback. |
+| File opening and thumbnails | Open a local or SAF file, choose an Android handler as the default where the OS offers that choice, reopen the file, and confirm the default is honored; use Open with on one selected file and confirm the chooser appears; open an APK, allow Voyager as an installation source if prompted, confirm the system package installer opens, then cancel installation; verify image and first-page PDF thumbnails in list and grid layouts, including an invalid PDF fallback. |
 | File operations | Create, rename, copy, move, and delete files and directories; share one and several local or SAF files; inspect Details; attempt a duplicate destination and a move into a descendant; verify the source survives failures; verify determinate progress for known sizes and indeterminate progress for unknown totals. |
-| Archives | Create ZIP files from one file, several items, an empty directory, and a nested directory; extract ZIP, TAR, TGZ/TAR.GZ, TBZ2/TAR.BZ2, GZ, and BZ2 fixtures; repeat on a SAF or disposable remote provider; verify conflicts do not overwrite data; verify corrupt, encrypted, traversal, link, and RAR inputs fail with an actionable message and leave no partial extraction root. |
+| Archives | Create ZIP files from one file, several items, an empty directory, and a nested directory; tap a supported archive and verify Cancel leaves the folder unchanged while Extract creates a new extraction root; extract ZIP, TAR, TGZ/TAR.GZ, TBZ2/TAR.BZ2, GZ, and BZ2 fixtures; repeat on a SAF or disposable remote provider; verify conflicts do not overwrite data; verify corrupt, encrypted, traversal, link, and RAR inputs fail with an actionable message and leave no partial extraction root. |
 | Trash | For a direct-local selection, verify both Trash and permanent choices; move a file to Trash, restore it, create a restore conflict, permanently delete an entry, empty Trash, and repeat with Trash disabled. |
 | Error recovery | Remove or unmount a location while browsing, deny a SAF operation, open an unsupported file, use a bad remote hostname, and verify retry or actionable feedback. |
 | Remote | Generate an SFTP key, copy and save its public key, authenticate with it while leaving the password blank, verify first-use pinning and changed-key rejection, verify FTP cleartext confirmation, HTTPS WebDAV on a custom port, HTTP warning, large transfers, and a connection delete confirmation. |
@@ -90,20 +91,20 @@ Use disposable files and keep device orientation unlocked unless a case calls fo
 Install the universal debug APK without clearing app data:
 
 ```bash
-adb -s 192.168.27.167:5555 install -r app/build/outputs/apk/debug/app-universal-debug.apk
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT install -r app/build/outputs/apk/debug/app-universal-debug.apk
 ```
 
 Open Android's app-specific all-files access page through Voyager's own permission flow. For a dedicated test device only, the equivalent app-op can be controlled directly:
 
 ```bash
-adb -s 192.168.27.167:5555 shell appops set com.voyagerfiles.debug MANAGE_EXTERNAL_STORAGE allow
-adb -s 192.168.27.167:5555 shell appops set com.voyagerfiles.debug MANAGE_EXTERNAL_STORAGE deny
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT shell appops set com.voyagerfiles.debug MANAGE_EXTERNAL_STORAGE allow
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT shell appops set com.voyagerfiles.debug MANAGE_EXTERNAL_STORAGE deny
 ```
 
 Capture a screenshot and UI hierarchy for a visual or accessibility review:
 
 ```bash
-adb -s 192.168.27.167:5555 exec-out screencap -p > /tmp/voyager.png
-adb -s 192.168.27.167:5555 shell uiautomator dump /sdcard/window.xml
-adb -s 192.168.27.167:5555 pull /sdcard/window.xml /tmp/voyager-window.xml
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT exec-out screencap -p > /tmp/voyager.png
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT shell uiautomator dump /sdcard/window.xml
+adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT pull /sdcard/window.xml /tmp/voyager-window.xml
 ```

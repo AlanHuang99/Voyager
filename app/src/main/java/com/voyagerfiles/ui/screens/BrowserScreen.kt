@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
@@ -56,6 +57,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -157,6 +159,7 @@ fun BrowserScreen(
     var showCreateMenu by remember { mutableStateOf(false) }
     var showSessionsSheet by remember { mutableStateOf(false) }
     var archiveNameDialogDefault by remember { mutableStateOf<String?>(null) }
+    var archiveToExtract by remember { mutableStateOf<FileItem?>(null) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
@@ -167,13 +170,20 @@ fun BrowserScreen(
         BrowserArchiveActions.forSelection(selectedItems)
     }
     val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
+    val canOpenWith = remember(selectedItems) {
+        selectedItems.singleOrNull()?.let { item ->
+            !item.isDirectory &&
+                (item.source == FileSource.LOCAL || item.source == FileSource.SAF)
+        } == true
+    }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
-    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan) {
+    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan, canOpenWith) {
         SelectionToolbarModel.forState(
             isRemote = isNetwork,
             selectionCount = selectedItems.size,
             canShare = sharePlan != null,
+            canOpenWith = canOpenWith,
         )
     }
     val runningOperation = operationState as? OperationState.Running
@@ -212,6 +222,51 @@ fun BrowserScreen(
                 }
             },
         )
+    }
+
+    fun openSelectedWith() {
+        val file = selectedItems.singleOrNull() ?: return
+        FileUtils.openFileWith(context, file).fold(
+            onSuccess = { viewModel.clearSelection() },
+            onFailure = { error ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        if (error is ActivityNotFoundException) {
+                            "No app can open this file type"
+                        } else {
+                            "Could not open this file"
+                        }
+                    )
+                }
+            },
+        )
+    }
+
+    fun handleDeviceFileTap(file: FileItem) {
+        when (BrowserArchiveActions.tapAction(file)) {
+            ArchiveTapAction.CONFIRM_EXTRACTION -> archiveToExtract = file
+            ArchiveTapAction.SHOW_UNSUPPORTED -> {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        BrowserArchiveActions.unsupportedExtractionReason(listOf(file))
+                            ?: "This archive type cannot be extracted"
+                    )
+                }
+            }
+            ArchiveTapAction.OPEN_EXTERNALLY -> {
+                FileUtils.openFile(context, file).onFailure { error ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            if (error is ActivityNotFoundException) {
+                                "No app can open this file type"
+                            } else {
+                                "Could not open this file"
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // Show snackbar messages from ViewModel
@@ -395,6 +450,16 @@ fun BrowserScreen(
                                         onClick = {
                                             showDetailsFor = selectedItems.singleOrNull()
                                             showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.OPEN_WITH in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Open with") },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
+                                        onClick = {
+                                            showSelectionMoreMenu = false
+                                            openSelectedWith()
                                         },
                                     )
                                 }
@@ -744,17 +809,7 @@ fun BrowserScreen(
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        FileUtils.openFile(context, file).onFailure { error ->
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    if (error is ActivityNotFoundException) {
-                                                        "No app can open this file type"
-                                                    } else {
-                                                        "Could not open this file"
-                                                    }
-                                                )
-                                            }
-                                        }
+                                        handleDeviceFileTap(file)
                                     }
                                 },
                                 onLongClick = {
@@ -786,17 +841,7 @@ fun BrowserScreen(
                                     } else if (isNetwork) {
                                         viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        FileUtils.openFile(context, file).onFailure { error ->
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    if (error is ActivityNotFoundException) {
-                                                        "No app can open this file type"
-                                                    } else {
-                                                        "Could not open this file"
-                                                    }
-                                                )
-                                            }
-                                        }
+                                        handleDeviceFileTap(file)
                                     }
                                 },
                                 onLongClick = {
@@ -860,6 +905,31 @@ fun BrowserScreen(
             onCreate = { name ->
                 viewModel.createZipFromSelection(name)
                 archiveNameDialogDefault = null
+            },
+        )
+    }
+
+    archiveToExtract?.let { archive ->
+        AlertDialog(
+            onDismissRequest = { archiveToExtract = null },
+            title = { Text("Extract archive?") },
+            text = {
+                Text("Extract ${archive.name} into a new folder in this location?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.extractArchive(archive.path)
+                        archiveToExtract = null
+                    },
+                ) {
+                    Text("Extract")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { archiveToExtract = null }) {
+                    Text("Cancel")
+                }
             },
         )
     }
@@ -1075,6 +1145,7 @@ data class SelectionToolbarModel(
             isRemote: Boolean,
             selectionCount: Int,
             canShare: Boolean,
+            canOpenWith: Boolean = false,
         ): SelectionToolbarModel {
             val isSingle = selectionCount == 1
             val primaryActions = when {
@@ -1108,6 +1179,7 @@ data class SelectionToolbarModel(
                     add(SelectionToolbarAction.SELECT_ALL)
                     if (isRemote) add(SelectionToolbarAction.DOWNLOAD)
                     if (isSingle) add(SelectionToolbarAction.DETAILS)
+                    if (canOpenWith) add(SelectionToolbarAction.OPEN_WITH)
                 },
             )
         }
@@ -1123,6 +1195,7 @@ enum class SelectionToolbarAction {
     RENAME,
     SHARE,
     DETAILS,
+    OPEN_WITH,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
