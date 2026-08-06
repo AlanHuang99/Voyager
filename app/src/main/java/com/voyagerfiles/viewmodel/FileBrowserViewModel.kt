@@ -439,6 +439,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                                 currentItemName = source.name,
                                 copiedBytes = streamProgress.bytesTransferred,
                                 totalBytes = streamProgress.totalBytes,
+                                elapsedNanos = streamProgress.elapsedNanos,
                             ),
                         )
                     }
@@ -459,6 +460,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                             currentItemName = source.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
                             totalBytes = streamProgress?.totalBytes ?: source.size,
+                            elapsedNanos = streamProgress?.elapsedNanos ?: 0,
                         ),
                     )
                 }.onFailure { error ->
@@ -755,6 +757,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                                 currentItemName = streamProgress.path.substringAfterLast('/'),
                                 copiedBytes = streamProgress.bytesTransferred,
                                 totalBytes = streamProgress.totalBytes,
+                                elapsedNanos = streamProgress.elapsedNanos,
                             )
                         )
                     }
@@ -799,6 +802,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                             currentItemName = item.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
                             totalBytes = streamProgress?.totalBytes,
+                            elapsedNanos = streamProgress?.elapsedNanos ?: 0,
                         )
                     )
                 }
@@ -901,6 +905,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                                 currentItemName = stream.path.substringAfterLast('/'),
                                 copiedBytes = stream.bytesTransferred,
                                 totalBytes = stream.totalBytes,
+                                elapsedNanos = stream.elapsedNanos,
                             ),
                         )
                     }
