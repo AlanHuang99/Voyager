@@ -93,6 +93,26 @@ class BrowserArchiveActionsTest {
         )
     }
 
+    @Test
+    fun supportedArchiveTapRequestsConfirmation() {
+        assertEquals(
+            ArchiveTapAction.CONFIRM_EXTRACTION,
+            BrowserArchiveActions.tapAction(file("bundle.zip")),
+        )
+    }
+
+    @Test
+    fun unsupportedAndOrdinaryFilesKeepDistinctTapBehavior() {
+        assertEquals(
+            ArchiveTapAction.SHOW_UNSUPPORTED,
+            BrowserArchiveActions.tapAction(file("legacy.rar")),
+        )
+        assertEquals(
+            ArchiveTapAction.OPEN_EXTERNALLY,
+            BrowserArchiveActions.tapAction(file("notes.txt")),
+        )
+    }
+
     private fun file(name: String, isDirectory: Boolean = false): FileItem =
         FileItem(name = name, path = "/$name", isDirectory = isDirectory)
 }

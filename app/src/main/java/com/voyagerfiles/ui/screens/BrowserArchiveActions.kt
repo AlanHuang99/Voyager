@@ -11,7 +11,20 @@ enum class BrowserArchiveAction {
     EXTRACTION_UNSUPPORTED,
 }
 
+enum class ArchiveTapAction {
+    CONFIRM_EXTRACTION,
+    SHOW_UNSUPPORTED,
+    OPEN_EXTERNALLY,
+}
+
 object BrowserArchiveActions {
+
+    fun tapAction(item: FileItem): ArchiveTapAction = when {
+        ArchiveFormat.detect(item.name)?.canExtract == true ->
+            ArchiveTapAction.CONFIRM_EXTRACTION
+        item.isArchive -> ArchiveTapAction.SHOW_UNSUPPORTED
+        else -> ArchiveTapAction.OPEN_EXTERNALLY
+    }
 
     fun forSelection(items: List<FileItem>): Set<BrowserArchiveAction> = buildSet {
         if (items.isEmpty()) return@buildSet
