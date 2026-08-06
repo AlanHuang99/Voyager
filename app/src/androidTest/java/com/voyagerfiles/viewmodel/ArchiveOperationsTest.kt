@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -74,6 +77,39 @@ class ArchiveOperationsTest {
             "on-device archive content",
             root.resolve("bundle_extracted/notes.txt").readText(),
         )
+    }
+
+    @Test
+    fun extractsArchiveByPathWithoutSelection() = runBlocking {
+        val archive = root.resolve("bundle.zip")
+        ZipOutputStream(FileOutputStream(archive)).use { zip ->
+            zip.putNextEntry(ZipEntry("inside.txt"))
+            zip.write("direct extraction content".toByteArray())
+            zip.closeEntry()
+        }
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val viewModel = withContext(Dispatchers.Main) {
+            FileBrowserViewModel(application).also { it.openLocalRoot(root.absolutePath) }
+        }
+        waitUntil("open test root", viewModel) {
+            viewModel.browseState.value.currentPath == root.absolutePath &&
+                viewModel.browseState.value.files.any { it.path == archive.absolutePath } &&
+                !viewModel.browseState.value.isLoading
+        }
+
+        withContext(Dispatchers.Main) {
+            viewModel.extractArchive(archive.absolutePath)
+        }
+        waitUntil("extract bundle.zip directly", viewModel) {
+            viewModel.operationState.value == OperationState.Idle &&
+                root.resolve("bundle_extracted/inside.txt").isFile
+        }
+
+        assertEquals(
+            "direct extraction content",
+            root.resolve("bundle_extracted/inside.txt").readText(),
+        )
+        assertTrue(viewModel.browseState.value.selectedFiles.isEmpty())
     }
 
     private suspend fun waitUntil(

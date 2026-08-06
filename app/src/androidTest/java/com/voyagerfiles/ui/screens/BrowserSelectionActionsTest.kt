@@ -10,14 +10,19 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +41,11 @@ class BrowserSelectionActionsTest {
             deleteRecursively()
             mkdirs()
             resolve("notes.txt").writeText("notes")
-            resolve("archive.zip").writeBytes(byteArrayOf())
+            ZipOutputStream(FileOutputStream(resolve("archive.zip"))).use { zip ->
+                zip.putNextEntry(ZipEntry("inside.txt"))
+                zip.write("inside".toByteArray())
+                zip.closeEntry()
+            }
             resolve("legacy.rar").writeBytes(byteArrayOf())
             resolve("Folder").mkdirs()
         }
@@ -131,7 +140,9 @@ class BrowserSelectionActionsTest {
         composeTestRule.onNodeWithText("Details").assertIsDisplayed().performClick()
 
         composeTestRule.onNodeWithText("Details").assertIsDisplayed()
-        composeTestRule.onNodeWithText(root.resolve("notes.txt").absolutePath).assertIsDisplayed()
+        composeTestRule.onNodeWithText(root.resolve("notes.txt").absolutePath)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -182,6 +193,37 @@ class BrowserSelectionActionsTest {
         composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
 
         composeTestRule.onNodeWithText("Extract here").assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingSupportedArchiveConfirmsBeforeExtraction() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("archive.zip") and hasClickAction()).performClick()
+
+        composeTestRule.onNodeWithText("Extract archive?").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("Extract archive?").assertDoesNotExist()
+        assertFalse(root.resolve("archive_extracted").exists())
+
+        composeTestRule.onNode(hasText("archive.zip") and hasClickAction()).performClick()
+        composeTestRule.onNodeWithText("Extract").assertIsDisplayed().performClick()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            root.resolve("archive_extracted/inside.txt").isFile
+        }
+    }
+
+    @Test
+    fun tappingUnsupportedArchiveExplainsWhyWithoutConfirming() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("legacy.rar") and hasClickAction()).performClick()
+
+        composeTestRule.onNodeWithText("RAR extraction is not available in this build")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Extract archive?").assertDoesNotExist()
     }
 
     @Test

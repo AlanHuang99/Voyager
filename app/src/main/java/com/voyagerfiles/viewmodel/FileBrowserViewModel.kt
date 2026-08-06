@@ -534,8 +534,33 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             showSnackbar("The selected archive is no longer available. Refresh the folder and try again.")
             return
         }
+        launchArchiveExtraction(
+            archive = archive,
+            destinationDirectory = state.currentPath,
+            clearSelectionAfter = true,
+        )
+    }
+
+    fun extractArchive(path: String) {
+        val state = _browseState.value
+        val archive = state.files.firstOrNull { it.path == path }
+        if (archive == null) {
+            showSnackbar("The archive is no longer available. Refresh the folder and try again.")
+            return
+        }
+        launchArchiveExtraction(
+            archive = archive,
+            destinationDirectory = state.currentPath,
+            clearSelectionAfter = false,
+        )
+    }
+
+    private fun launchArchiveExtraction(
+        archive: FileItem,
+        destinationDirectory: String,
+        clearSelectionAfter: Boolean,
+    ) {
         val provider = fileProvider
-        val destinationDirectory = state.currentPath
         val publishProgress = archiveProgressPublisher("Extracting")
 
         launchOperation("Extracting") {
@@ -546,7 +571,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 onProgress = publishProgress,
             ).fold(
                 onSuccess = { extractionRoot ->
-                    clearSelection()
+                    if (clearSelectionAfter) clearSelection()
                     refreshFiles()
                     showSnackbar("Extracted to ${extractionRoot.name}")
                 },
