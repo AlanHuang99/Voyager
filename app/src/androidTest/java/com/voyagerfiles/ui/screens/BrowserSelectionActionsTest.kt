@@ -135,6 +135,30 @@ class BrowserSelectionActionsTest {
     }
 
     @Test
+    fun oneLocalFileOffersOpenWith() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("notes.txt") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+
+        composeTestRule.onNodeWithText("Open with").assertIsDisplayed()
+    }
+
+    @Test
+    fun aFolderDoesNotOfferOpenWith() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+
+        composeTestRule.onNode(hasText("Folder") and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+
+        composeTestRule.onNodeWithText("Open with").assertDoesNotExist()
+    }
+
+    @Test
     fun selectedFileCanOpenCompressionDialogWithSafeDefaultName() {
         val viewModel = launchBrowser()
         waitForRoot(viewModel)

@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
@@ -167,13 +168,20 @@ fun BrowserScreen(
         BrowserArchiveActions.forSelection(selectedItems)
     }
     val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
+    val canOpenWith = remember(selectedItems) {
+        selectedItems.singleOrNull()?.let { item ->
+            !item.isDirectory &&
+                (item.source == FileSource.LOCAL || item.source == FileSource.SAF)
+        } == true
+    }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
-    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan) {
+    val selectionToolbarModel = remember(isNetwork, selectedItems.size, sharePlan, canOpenWith) {
         SelectionToolbarModel.forState(
             isRemote = isNetwork,
             selectionCount = selectedItems.size,
             canShare = sharePlan != null,
+            canOpenWith = canOpenWith,
         )
     }
     val runningOperation = operationState as? OperationState.Running
@@ -208,6 +216,24 @@ fun BrowserScreen(
                 scope.launch {
                     snackbarHostState.showSnackbar(
                         "Could not share the selected files. Check that access is still available and try again."
+                    )
+                }
+            },
+        )
+    }
+
+    fun openSelectedWith() {
+        val file = selectedItems.singleOrNull() ?: return
+        FileUtils.openFileWith(context, file).fold(
+            onSuccess = { viewModel.clearSelection() },
+            onFailure = { error ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        if (error is ActivityNotFoundException) {
+                            "No app can open this file type"
+                        } else {
+                            "Could not open this file"
+                        }
                     )
                 }
             },
@@ -395,6 +421,16 @@ fun BrowserScreen(
                                         onClick = {
                                             showDetailsFor = selectedItems.singleOrNull()
                                             showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                if (SelectionToolbarAction.OPEN_WITH in selectionToolbarModel.overflowActions) {
+                                    DropdownMenuItem(
+                                        text = { Text("Open with") },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
+                                        onClick = {
+                                            showSelectionMoreMenu = false
+                                            openSelectedWith()
                                         },
                                     )
                                 }
@@ -1075,6 +1111,7 @@ data class SelectionToolbarModel(
             isRemote: Boolean,
             selectionCount: Int,
             canShare: Boolean,
+            canOpenWith: Boolean = false,
         ): SelectionToolbarModel {
             val isSingle = selectionCount == 1
             val primaryActions = when {
@@ -1108,6 +1145,7 @@ data class SelectionToolbarModel(
                     add(SelectionToolbarAction.SELECT_ALL)
                     if (isRemote) add(SelectionToolbarAction.DOWNLOAD)
                     if (isSingle) add(SelectionToolbarAction.DETAILS)
+                    if (canOpenWith) add(SelectionToolbarAction.OPEN_WITH)
                 },
             )
         }
@@ -1123,6 +1161,7 @@ enum class SelectionToolbarAction {
     RENAME,
     SHARE,
     DETAILS,
+    OPEN_WITH,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
