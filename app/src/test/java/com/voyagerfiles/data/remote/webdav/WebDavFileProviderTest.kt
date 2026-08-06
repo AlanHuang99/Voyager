@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -16,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.URI
@@ -100,6 +102,29 @@ class WebDavFileProviderTest {
 
         assertTrue(Files.exists(server.root.resolve("uploaded.txt")))
         assertEquals("uploaded", String(Files.readAllBytes(server.root.resolve("uploaded.txt"))))
+    }
+
+    @Test
+    fun writeStreamReportsHttpRequestBodyProgressWithoutSpooling() = runBlocking {
+        val server = startServer()
+        val provider = createProvider(server.port)
+        val payload = ByteArray(2 * 64 * 1024 + 17) { index -> (index % 251).toByte() }
+        val progress = mutableListOf<StreamTransferProgress>()
+
+        provider.writeStream(
+            path = "/streamed.bin",
+            input = ByteArrayInputStream(payload),
+            sourcePath = "streamed.bin",
+            totalBytes = payload.size.toLong(),
+            onProgress = progress::add,
+        ).getOrThrow()
+
+        assertTrue(Files.readAllBytes(server.root.resolve("streamed.bin")).contentEquals(payload))
+        assertTrue(progress.size >= 3)
+        assertTrue(progress.all { it.path == "streamed.bin" })
+        assertTrue(progress.all { it.totalBytes == payload.size.toLong() })
+        assertEquals(payload.size.toLong(), progress.last().bytesTransferred)
+        assertTrue(temp.root.listFiles().orEmpty().none { it.name.startsWith("voyager-webdav-") })
     }
 
     @Test

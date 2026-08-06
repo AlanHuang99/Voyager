@@ -1,7 +1,6 @@
 package com.voyagerfiles.viewmodel
 
 import com.voyagerfiles.data.repository.FileProvider
-import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,15 +27,13 @@ object FileOperationCoordinator {
                     .getOrThrow()
                     .path
                 source.openInputStream().use { input ->
-                    destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
-                        StreamTransfer.copy(
-                            input = input,
-                            output = output,
-                            path = source.name,
-                            totalBytes = source.size,
-                            onProgress = onProgress,
-                        )
-                    }
+                    destinationProvider.writeStream(
+                        path = createdTargetPath,
+                        input = input,
+                        sourcePath = source.name,
+                        totalBytes = source.size,
+                        onProgress = onProgress,
+                    ).getOrThrow()
                 }
             } catch (error: Throwable) {
                 if (createdTargetPath != null) {
@@ -123,15 +120,13 @@ object FileOperationCoordinator {
                 .getOrThrow()
                 .path
             sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
-                destinationProvider.getOutputStream(createdTargetPath).getOrThrow().use { output ->
-                    StreamTransfer.copy(
-                        input = input,
-                        output = output,
-                        path = sourcePath,
-                        totalBytes = item.size.takeIf { it >= 0 },
-                        onProgress = onProgress,
-                    )
-                }
+                destinationProvider.writeStream(
+                    path = createdTargetPath,
+                    input = input,
+                    sourcePath = sourcePath,
+                    totalBytes = item.size.takeIf { it >= 0 },
+                    onProgress = onProgress,
+                ).getOrThrow()
             }
         } catch (error: Throwable) {
             if (createdTargetPath != null) {

@@ -3,6 +3,7 @@ package com.voyagerfiles.viewmodel
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -64,6 +65,19 @@ class FileOperationCoordinatorTest {
         assertTrue(progress.all { it.totalBytes == payload.size.toLong() })
         assertEquals(payload.size.toLong(), progress.last().bytesTransferred)
         assertEquals(payload.toList(), destination.readFileBytes("/remote/large.bin").toList())
+    }
+
+    @Test
+    fun uploadUsesProviderWriteStreamOverride() = runBlocking {
+        val destination = WriteStreamOnlyProvider().apply { putDirectory("/remote") }
+        val source = UploadSource("report.txt") {
+            ByteArrayInputStream("report".toByteArray())
+        }
+
+        FileOperationCoordinator.uploadFile(source, destination, "/remote").getOrThrow()
+
+        assertTrue(destination.writeStreamCalled)
+        assertEquals("report", destination.readFile("/remote/report.txt"))
     }
 
     @Test
@@ -415,6 +429,32 @@ class FileOperationCoordinatorTest {
 
                 override fun close() = delegate.close()
             })
+        }
+    }
+
+    private class WriteStreamOnlyProvider : MemoryProvider() {
+        var writeStreamCalled = false
+
+        override suspend fun getOutputStream(path: String): Result<OutputStream> =
+            Result.failure(AssertionError("Coordinator bypassed writeStream"))
+
+        override suspend fun writeStream(
+            path: String,
+            input: InputStream,
+            sourcePath: String,
+            totalBytes: Long?,
+            onProgress: (StreamTransferProgress) -> Unit,
+        ): Result<Unit> = runCatching {
+            writeStreamCalled = true
+            super.getOutputStream(path).getOrThrow().use { output ->
+                StreamTransfer.copy(
+                    input = input,
+                    output = output,
+                    path = sourcePath,
+                    totalBytes = totalBytes,
+                    onProgress = onProgress,
+                )
+            }
         }
     }
 

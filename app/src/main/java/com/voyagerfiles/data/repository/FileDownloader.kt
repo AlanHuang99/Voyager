@@ -24,6 +24,7 @@ object FileDownloader {
 
                 val counts = DownloadCounts()
                 items.forEachIndexed { index, item ->
+                    var latestStreamProgress: StreamTransferProgress? = null
                     onProgress(
                         DownloadProgress(
                             completedRequestedItems = index,
@@ -37,6 +38,7 @@ object FileDownloader {
                         destinationDirectory = destinationDirectory,
                         counts = counts,
                         onStreamProgress = { stream ->
+                            latestStreamProgress = stream
                             onProgress(
                                 DownloadProgress(
                                     completedRequestedItems = index,
@@ -50,7 +52,7 @@ object FileDownloader {
                         DownloadProgress(
                             completedRequestedItems = index + 1,
                             totalRequestedItems = items.size,
-                            stream = null,
+                            stream = latestStreamProgress,
                         ),
                     )
                 }

@@ -54,10 +54,6 @@ import java.io.File
 
 class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
 
-    private companion object {
-        const val PROGRESS_PUBLICATION_BYTES = 256L * 1024L
-    }
-
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
     private val connectionDao = db.connectionDao()
@@ -415,22 +411,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                         totalBytes = source.size,
                     ),
                 )
-                var lastPublishedBytes = 0L
+                val progressThrottle = StreamProgressThrottle()
                 var latestStreamProgress: StreamTransferProgress? = null
                 val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
-                    val isFirstEvent = latestStreamProgress == null
                     latestStreamProgress = streamProgress
-                    val reachedKnownTotal = streamProgress.totalBytes
-                        ?.takeIf { it > 0 }
-                        ?.let { total ->
-                            streamProgress.bytesTransferred >= total && lastPublishedBytes < total
-                        }
-                        ?: false
-                    val crossedPublicationThreshold =
-                        streamProgress.bytesTransferred - lastPublishedBytes >=
-                            PROGRESS_PUBLICATION_BYTES
-                    if (isFirstEvent || reachedKnownTotal || crossedPublicationThreshold) {
-                        lastPublishedBytes = streamProgress.bytesTransferred
+                    if (progressThrottle.shouldPublish(streamProgress)) {
                         updateOperationProgress(
                             TransferProgress(
                                 label = progressLabel,
@@ -730,25 +715,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     continue
                 }
 
-                var lastPath = item.path
-                var lastPublishedBytes = 0L
+                val progressThrottle = StreamProgressThrottle()
                 var latestStreamProgress: StreamTransferProgress? = null
                 val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
                     latestStreamProgress = streamProgress
-                    val pathChanged = streamProgress.path != lastPath
-                    val reachedKnownTotal = streamProgress.totalBytes
-                        ?.takeIf { it > 0 }
-                        ?.let {
-                            streamProgress.bytesTransferred >= it &&
-                                lastPublishedBytes < it
-                        }
-                        ?: false
-                    val crossedPublicationThreshold =
-                        streamProgress.bytesTransferred - lastPublishedBytes >=
-                            PROGRESS_PUBLICATION_BYTES
-                    if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
-                        lastPath = streamProgress.path
-                        lastPublishedBytes = streamProgress.bytesTransferred
+                    if (progressThrottle.shouldPublish(streamProgress)) {
                         updateOperationProgress(
                             TransferProgress(
                                 label = progressLabel,
@@ -866,13 +837,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             showSnackbar("Downloading ${items.size} item${if (items.size == 1) "" else "s"}...")
 
             val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            var lastStreamPath: String? = null
-            var lastPublishedBytes = 0L
+            val progressThrottle = StreamProgressThrottle()
+            var lastCompletedRequestedItems = -1
             val publishProgress: (DownloadProgress) -> Unit = { progress ->
                 val stream = progress.stream
                 if (stream == null) {
-                    lastStreamPath = null
-                    lastPublishedBytes = 0
+                    progressThrottle.reset()
+                    lastCompletedRequestedItems = progress.completedRequestedItems
                     updateOperationProgress(
                         TransferProgress(
                             label = "Downloading",
@@ -884,19 +855,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                         ),
                     )
                 } else {
-                    val pathChanged = stream.path != lastStreamPath
-                    val reachedKnownTotal = stream.totalBytes
-                        ?.takeIf { it > 0 }
-                        ?.let { total ->
-                            stream.bytesTransferred >= total && lastPublishedBytes < total
-                        }
-                        ?: false
-                    val crossedPublicationThreshold =
-                        stream.bytesTransferred - lastPublishedBytes >=
-                            PROGRESS_PUBLICATION_BYTES
-                    if (pathChanged || reachedKnownTotal || crossedPublicationThreshold) {
-                        lastStreamPath = stream.path
-                        lastPublishedBytes = stream.bytesTransferred
+                    val completedItemsChanged =
+                        progress.completedRequestedItems != lastCompletedRequestedItems
+                    if (progressThrottle.shouldPublish(stream, force = completedItemsChanged)) {
                         updateOperationProgress(
                             TransferProgress(
                                 label = "Downloading",
@@ -909,6 +870,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                             ),
                         )
                     }
+                    lastCompletedRequestedItems = progress.completedRequestedItems
                 }
             }
             FileDownloader.download(
