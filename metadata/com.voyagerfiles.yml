@@ -32,15 +32,6 @@ Builds:
     gradleprops:
       - voyager.enableAbiSplits=false
 
-  - versionName: 1.1.3
-    versionCode: 8
-    commit: 302a258044055a561149da95245a4f8b4e3d1204
-    subdir: app
-    gradle:
-      - yes
-    gradleprops:
-      - voyager.enableAbiSplits=false
-
   - versionName: 1.1.4
     versionCode: 9
     commit: 6005df18d6626992252aaf84fcfb6be84f0e410b
@@ -52,16 +43,7 @@ Builds:
 
   - versionName: 1.2.0
     versionCode: 10
-    commit: cbfac38ad790548ca067908f1ea02723c75c81e8
-    subdir: app
-    gradle:
-      - yes
-    gradleprops:
-      - voyager.enableAbiSplits=false
-
-  - versionName: 1.3.0
-    versionCode: 11
-    commit: bceef044f79bbcee0091d13b6e2deb86147fcf97
+    commit: eb85eedb46d5eda762d4d86a30439299a3330d69
     subdir: app
     gradle:
       - yes
@@ -70,7 +52,7 @@ Builds:
 
   - versionName: 1.4.0
     versionCode: 12
-    commit: 8d8a2c760d697dd4223dfd93c1418e97451e25d8
+    commit: d98e039fbec037f8dc8b483eb0216bcfba465006
     subdir: app
     gradle:
       - yes
@@ -90,6 +72,25 @@ Builds:
     versionCode: 14
     commit: c91c4ea3a6192af8ee62580ed079d4282336ada4
     subdir: app
+    sudo:
+      - export CPUS_MAX=16
+      - export CPUS=$(getconf _NPROCESSORS_ONLN)
+      - for (( c=$CPUS_MAX; c<$CPUS; c++ )) ; do echo 0 > /sys/devices/system/cpu/cpu$c/online
+        ; done
+    gradle:
+      - yes
+    gradleprops:
+      - voyager.enableAbiSplits=false
+
+  - versionName: 1.7.0
+    versionCode: 15
+    commit: 63a14046423edacc9d00c92b69cc268594a51682
+    subdir: app
+    sudo:
+      - export CPUS_MAX=16
+      - export CPUS=$(getconf _NPROCESSORS_ONLN)
+      - for (( c=$CPUS_MAX; c<$CPUS; c++ )) ; do echo 0 > /sys/devices/system/cpu/cpu$c/online
+        ; done
     gradle:
       - yes
     gradleprops:
@@ -99,5 +100,5 @@ AllowedAPKSigningKeys: db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.6.0
-CurrentVersionCode: 14
+CurrentVersion: 1.7.0
+CurrentVersionCode: 15
