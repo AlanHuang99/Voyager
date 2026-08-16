@@ -27,6 +27,7 @@
         android:theme="@style/Theme.MaterialBrowser"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="35">
 
         <activity
