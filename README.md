@@ -50,6 +50,8 @@ Generated SFTP private keys remain in app-private storage. Voyager displays the 
 
 SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager does not force SMB transport encryption; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
 
+HTTPS WebDAV follows Android's system and user-installed certificate authorities. A private authority must be installed by the device owner, and normal certificate-chain and hostname validation still apply.
+
 ## Requirements
 
 - Android 8.0 (API 26) or later.
