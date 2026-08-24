@@ -24,6 +24,22 @@ Run the same complete gate used by CI:
 
 Reports are written under `app/build/reports/`. APKs are written under `app/build/outputs/apk/`.
 
+## Localization and RTL
+
+The JVM localization contract checks that production Compose copy uses Android resources, resource names are unique, multi-argument formats use indexed placeholders, plurals define `one` and `other`, and translatable values are nonempty. Android lint separately checks hardcoded text, missing translations, and invalid resource formats.
+
+```bash
+./gradlew testDebugUnitTest --tests com.voyagerfiles.ui.LocalizationResourceContractTest lintDebug --stacktrace
+```
+
+Run the locale-resolution instrumentation on a connected device:
+
+```bash
+ANDROID_SERIAL=DEVICE ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.text.UiTextTest --stacktrace
+```
+
+Use the forced-RTL commands and cleanup procedure in [TRANSLATING.md](TRANSLATING.md) for visual review. Always restore `debug.force_rtl` to `0` and restart the debug app after testing.
+
 ## Device instrumentation
 
 Connect an Android device through USB or wireless debugging and confirm that `adb devices` reports it as `device` rather than `offline` or `unauthorized`.

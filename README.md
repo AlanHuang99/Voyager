@@ -83,7 +83,7 @@ Run the complete local gate before submitting a change:
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
+See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TRANSLATING.md](docs/TRANSLATING.md) for the translation workflow, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
 
 ## Tech stack
 
@@ -104,7 +104,7 @@ All runtime dependencies are open source and license-compatible with GPLv3; the 
 
 ## Contributing
 
-Issues and pull requests are welcome. For substantial changes, open an issue first to discuss the approach. Include automated coverage for changed behavior and describe any device or server setup used for manual verification.
+Issues and pull requests are welcome. For substantial changes, open an issue first to discuss the approach. Include automated coverage for changed behavior and describe any device or server setup used for manual verification. Translation contributors should follow [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ## License
 

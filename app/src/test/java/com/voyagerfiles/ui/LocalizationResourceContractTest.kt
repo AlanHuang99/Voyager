@@ -4,6 +4,7 @@ import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.w3c.dom.Element
 
 class LocalizationResourceContractTest {
     @Test
@@ -51,6 +52,56 @@ class LocalizationResourceContractTest {
         )
     }
 
+    @Test
+    fun defaultResourceNamesAreUniqueAndValuesAreNonempty() {
+        val document = defaultResourcesDocument()
+        val elements = resourceElements(document.documentElement)
+        val names = elements.map { it.getAttribute("name") }
+        val duplicateNames = names.groupingBy(String::toString).eachCount().filterValues { it > 1 }.keys
+        val emptyValues = elements.flatMap { element ->
+            when (element.tagName) {
+                "string" -> listOfNotNull(
+                    element.getAttribute("name").takeIf {
+                        element.getAttribute("translatable") != "false" && element.textContent.trim().isEmpty()
+                    },
+                )
+                "plurals" -> childElements(element).mapNotNull { item ->
+                    "${element.getAttribute("name")}:${item.getAttribute("quantity")}".takeIf {
+                        item.textContent.trim().isEmpty()
+                    }
+                }
+                else -> emptyList()
+            }
+        }
+
+        assertTrue("Resource names must be unique: ${duplicateNames.joinToString()}", duplicateNames.isEmpty())
+        assertTrue("Translatable resource values must be nonempty: ${emptyValues.joinToString()}", emptyValues.isEmpty())
+    }
+
+    @Test
+    fun pluralsAndFormatArgumentsAreTranslationSafe() {
+        val document = defaultResourcesDocument()
+        val elements = resourceElements(document.documentElement)
+        val incompletePlurals = elements.filter { it.tagName == "plurals" }.mapNotNull { plural ->
+            val quantities = childElements(plural).map { it.getAttribute("quantity") }.toSet()
+            plural.getAttribute("name").takeUnless { quantities.containsAll(setOf("one", "other")) }
+        }
+        val unsafeFormats = elements.flatMap { element ->
+            val values = if (element.tagName == "plurals") childElements(element) else listOf(element)
+            values.mapNotNull { value ->
+                val placeholders = formatPlaceholder.findAll(value.textContent).toList()
+                val multipleArguments = placeholders.size > 1
+                val allIndexed = placeholders.all { it.groupValues[1].isNotEmpty() }
+                "${element.getAttribute("name")}:${value.getAttribute("quantity")}".takeIf {
+                    multipleArguments && !allIndexed
+                }
+            }
+        }
+
+        assertTrue("Plurals must define one and other: ${incompletePlurals.joinToString()}", incompletePlurals.isEmpty())
+        assertTrue("Multi-argument formats must use indexed placeholders: ${unsafeFormats.joinToString()}", unsafeFormats.isEmpty())
+    }
+
     private fun stripBlockComments(lines: List<String>): List<String> {
         var inBlockComment = false
         return lines.map { line ->
@@ -83,13 +134,30 @@ class LocalizationResourceContractTest {
             .first { File(it, "app/src/main/res/values/strings.xml").isFile }
     }
 
+    private fun defaultResourcesDocument() = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(repositoryRoot().resolve("app/src/main/res/values/strings.xml"))
+
+    private fun resourceElements(root: Element): List<Element> = childElements(root)
+        .filter { it.tagName == "string" || it.tagName == "plurals" }
+
+    private fun childElements(element: Element): List<Element> = buildList {
+        val children = element.childNodes
+        for (index in 0 until children.length) {
+            (children.item(index) as? Element)?.let(::add)
+        }
+    }
+
     private companion object {
         val forbidden = listOf(
-            Regex("\\bText\\(\\s*\\\""),
+            Regex("\\bText\\([^\\n]*\\\"[A-Za-z]"),
+            Regex("\\bIcon\\([^\\n]*,\\s*\\\"[A-Za-z]"),
             Regex("contentDescription\\s*=\\s*\\\""),
             Regex("placeholder\\s*=\\s*\\{\\s*Text\\(\\s*\\\""),
             Regex("showSnackbar\\(\\s*\\\""),
             Regex("SnackbarHostState\\(\\).*showSnackbar\\(\\s*\\\""),
+            Regex("Intent\\.createChooser\\([^\\n]*,\\s*\\\""),
+            Regex("FileNameValidationResult\\.Invalid\\(\\s*\\\""),
         )
+        val formatPlaceholder = Regex("%(?:(\\d+)\\$)?[-#+ 0,(<]*\\d*(?:\\.\\d+)?[a-zA-Z]")
     }
 }

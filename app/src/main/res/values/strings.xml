@@ -395,6 +395,7 @@
     <string name="content_desc_clear_search">Clear search</string>
     <string name="content_desc_close_session">Close session</string>
     <string name="localized_integer">%1$,d</string>
+    <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
         <item quantity="one">%d selected</item>
         <item quantity="other">%d selected</item>

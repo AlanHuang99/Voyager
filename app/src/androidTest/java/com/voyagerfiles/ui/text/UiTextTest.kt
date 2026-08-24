@@ -45,6 +45,37 @@ class UiTextTest {
         assertEquals("report.pdf", UiText.Dynamic("report.pdf").resolve(resourcesFor(Locale.US)))
     }
 
+    @Test
+    fun representativeUiFormatsResolveUnderUsAndGermanLocales() {
+        val us = resourcesFor(Locale.US)
+        val german = resourcesFor(Locale.GERMANY)
+        val filename = UiText.Resource(
+            R.string.dialog_delete_named_title,
+            listOf(UiText.Dynamic("report.pdf")),
+        )
+        val count = UiText.Plural(R.plurals.items_count, 2, listOf(2))
+        val percentage = UiText.Resource(R.string.localized_percentage, listOf(12.5))
+        val host = UiText.Resource(
+            R.string.connection_summary,
+            listOf(UiText.Resource(R.string.protocol_webdav), UiText.Dynamic("files.example"), 8443),
+        )
+        val error = UiText.Resource(
+            R.string.operation_failed,
+            listOf(UiText.Resource(R.string.operation_download), UiText.Dynamic("disk full")),
+        )
+
+        assertEquals("Delete \"report.pdf\"?", filename.resolve(us))
+        assertEquals("Delete \"report.pdf\"?", filename.resolve(german))
+        assertEquals("2 items", count.resolve(us))
+        assertEquals("2 items", count.resolve(german))
+        assertEquals("12.5%", percentage.resolve(us))
+        assertEquals("12,5%", percentage.resolve(german))
+        assertEquals("WebDAV • files.example:8443", host.resolve(us))
+        assertEquals("WebDAV • files.example:8443", host.resolve(german))
+        assertEquals("Could not download: disk full", error.resolve(us))
+        assertEquals("Could not download: disk full", error.resolve(german))
+    }
+
     private fun resourcesFor(locale: Locale) = ApplicationProvider.getApplicationContext<Context>()
         .createConfigurationContext(
             Configuration().apply {
