@@ -154,6 +154,10 @@ dependencies {
 
     // SMB - smbj (Apache 2.0)
     implementation("com.hierynomus:smbj:0.13.0")
+    implementation("com.rapid7.client:dcerpc:0.12.13") {
+        exclude(group = "com.hierynomus", module = "smbj")
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk18on")
+    }
 
     // WebDAV - Sardine (Apache 2.0)
     implementation("com.github.thegrizzlylabs:sardine-android:0.8") {

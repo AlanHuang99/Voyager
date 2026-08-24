@@ -12,6 +12,7 @@ import com.voyagerfiles.data.model.FileSource
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -102,6 +103,27 @@ class FileSharingTest {
             .orEmpty()
 
         assertTrue(Manifest.permission.REQUEST_INSTALL_PACKAGES in requestedPermissions)
+    }
+
+    @Test
+    fun remotePlaybackIntentGrantsOnlyTheOpaqueContentUri() {
+        val uri = Uri.parse("content://${context.packageName}.webdavplayback/opaque-token")
+        val file = FileItem(
+            name = "song.mp3",
+            path = "https://tester:secret@example.test/media/song.mp3",
+            isDirectory = false,
+            source = FileSource.WEBDAV,
+        )
+
+        val intent = FileUtils.createRemotePlaybackIntent(uri, file)
+
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals("audio/mpeg", intent.type)
+        assertEquals(uri, intent.data)
+        assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertFalse(intent.dataString.orEmpty().contains("tester"))
+        assertFalse(intent.dataString.orEmpty().contains("secret"))
     }
 
     private fun createLocalFile(name: String): FileItem {

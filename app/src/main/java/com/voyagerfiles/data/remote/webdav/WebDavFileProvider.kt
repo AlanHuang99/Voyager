@@ -11,6 +11,7 @@ import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,10 +38,35 @@ class WebDavFileProvider(
         return webDavBaseUrl(connection)
     }
 
-    private fun toUrl(path: String): String {
-        val cleanPath = if (path.startsWith("/")) path else "/$path"
-        return "${baseUrl()}$cleanPath"
+    internal fun toUrl(path: String): String {
+        val builder = baseUrl().toHttpUrl().newBuilder()
+        val cleanPath = path.trimStart('/')
+        if (cleanPath.isEmpty()) {
+            builder.addPathSegment("")
+        } else {
+            cleanPath.split('/').forEach(builder::addPathSegment)
+        }
+        return builder.build().toString()
     }
+
+    internal suspend fun createPlaybackSource(path: String): Result<PreparedWebDavPlayback> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val client = OkHttpClient()
+                val source = WebDavRangeSource(
+                    client = client,
+                    url = toUrl(path).toHttpUrl(),
+                    authorization = connection.username.takeIf(String::isNotEmpty)?.let {
+                        Credentials.basic(connection.username, connection.password)
+                    },
+                )
+                val metadata = source.probe().getOrElse { error ->
+                    source.close()
+                    throw error
+                }
+                PreparedWebDavPlayback(source, metadata)
+            }
+        }
 
     private fun ensureConnected() {
         if (sardine != null) return
@@ -278,6 +304,11 @@ class WebDavFileProvider(
     private fun DavResource.isDirectoryResource(): Boolean =
         isDirectory || href?.path?.endsWith("/") == true
 }
+
+internal data class PreparedWebDavPlayback(
+    val source: WebDavRangeSource,
+    val metadata: WebDavRangeMetadata,
+)
 
 internal fun webDavBaseUrl(connection: RemoteConnection): String {
     val scheme = if (connection.useTls) "https" else "http"

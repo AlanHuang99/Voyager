@@ -27,6 +27,7 @@
         android:theme="@style/Theme.MaterialBrowser"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="35">
 
         <activity
@@ -48,5 +49,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <provider
+            android:name=".playback.WebDavPlaybackProvider"
+            android:authorities="${applicationId}.webdavplayback"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

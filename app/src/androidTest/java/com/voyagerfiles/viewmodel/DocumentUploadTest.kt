@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
+import com.voyagerfiles.ui.text.resolve
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -94,7 +95,7 @@ class DocumentUploadTest {
         assertEquals("new upload", destination.resolve("notes.txt").readText())
         assertEquals(
             "1 of 2 items could not be uploaded. An item named report.txt already exists in this folder. Rename or remove it, then try again.",
-            viewModel.snackbarMessage.value,
+            viewModel.snackbarMessage.value?.resolve(application.resources),
         )
     }
 }

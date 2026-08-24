@@ -53,11 +53,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
+import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
 import java.text.DateFormat
@@ -72,15 +76,17 @@ fun TrashScreen(
     val state by viewModel.trashState.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val snackbarHostState = remember { SnackbarHostState() }
     val runningOperation = operationState as? OperationState.Running
+    val runningOperationLabel = runningOperation?.label?.let { it.asString() }
     val isSelectionMode = state.selectedIds.isNotEmpty()
     var showPermanentDeleteDialog by remember { mutableStateOf(false) }
     var showEmptyDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.refreshTrash() }
     LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let { message ->
+        resolvedSnackbarMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
             viewModel.clearSnackbar()
         }
@@ -95,7 +101,17 @@ fun TrashScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(if (isSelectionMode) "${state.selectedIds.size} selected" else "Trash")
+                    Text(
+                        if (isSelectionMode) {
+                            pluralStringResource(
+                                R.plurals.items_selected,
+                                state.selectedIds.size,
+                                state.selectedIds.size,
+                            )
+                        } else {
+                            stringResource(R.string.trash_title)
+                        },
+                    )
                 },
                 navigationIcon = {
                     IconButton(
@@ -105,7 +121,10 @@ fun TrashScreen(
                     ) {
                         Icon(
                             if (isSelectionMode) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                            if (isSelectionMode) "Clear selection" else "Back",
+                            stringResource(
+                                if (isSelectionMode) R.string.content_desc_clear_selection
+                                else R.string.content_desc_back,
+                            ),
                         )
                     }
                 },
@@ -115,20 +134,23 @@ fun TrashScreen(
                             onClick = viewModel::restoreSelectedTrash,
                             enabled = runningOperation == null,
                         ) {
-                            Icon(Icons.Filled.Restore, "Restore selected")
+                            Icon(Icons.Filled.Restore, stringResource(R.string.content_desc_restore_selected))
                         }
                         IconButton(
                             onClick = { showPermanentDeleteDialog = true },
                             enabled = runningOperation == null,
                         ) {
-                            Icon(Icons.Filled.DeleteForever, "Delete selected permanently")
+                            Icon(
+                                Icons.Filled.DeleteForever,
+                                stringResource(R.string.content_desc_delete_selected_permanently),
+                            )
                         }
                     } else if (state.entries.isNotEmpty()) {
                         TextButton(
                             onClick = { showEmptyDialog = true },
                             enabled = runningOperation == null,
                         ) {
-                            Text("Empty")
+                            Text(stringResource(R.string.action_empty))
                         }
                     }
                 },
@@ -147,10 +169,10 @@ fun TrashScreen(
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { stateDescription = operation.label },
+                        .semantics { stateDescription = runningOperationLabel.orEmpty() },
                 )
                 Text(
-                    operation.label,
+                    runningOperationLabel.orEmpty(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -177,15 +199,17 @@ fun TrashScreen(
                                 modifier = Modifier.size(48.dp),
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Could not load Trash", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.trash_load_failed), style = MaterialTheme.typography.titleMedium)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                state.error ?: "Unknown error",
+                                state.error?.asString().orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            TextButton(onClick = viewModel::refreshTrash) { Text("Retry") }
+                            TextButton(onClick = viewModel::refreshTrash) {
+                                Text(stringResource(R.string.action_retry))
+                            }
                         }
                     }
                 }
@@ -200,9 +224,9 @@ fun TrashScreen(
                                 modifier = Modifier.size(56.dp),
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Trash is empty", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.trash_empty_state), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "Deleted local items appear here",
+                                stringResource(R.string.trash_empty_state_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -248,18 +272,20 @@ fun TrashScreen(
     if (showEmptyDialog) {
         AlertDialog(
             onDismissRequest = { showEmptyDialog = false },
-            title = { Text("Empty Trash?") },
-            text = { Text("Permanently delete every item in Trash? This cannot be undone.") },
+            title = { Text(stringResource(R.string.trash_empty_title)) },
+            text = { Text(stringResource(R.string.trash_empty_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showEmptyDialog = false
                         viewModel.emptyTrash()
                     },
-                ) { Text("Empty Trash") }
+                ) { Text(stringResource(R.string.action_empty_trash)) }
             },
             dismissButton = {
-                TextButton(onClick = { showEmptyDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showEmptyDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             },
         )
     }
@@ -272,6 +298,12 @@ internal fun TrashEntryRow(
     enabled: Boolean,
     onToggle: () -> Unit,
 ) {
+    val selectionContentDescription = stringResource(
+        if (selected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
+        entry.displayName,
+    )
+    val deletedAt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+        .format(Date(entry.deletedAt))
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -289,7 +321,7 @@ internal fun TrashEntryRow(
                 onCheckedChange = { onToggle() },
                 enabled = enabled,
                 modifier = Modifier.semantics {
-                    contentDescription = if (selected) "Deselect ${entry.displayName}" else "Select ${entry.displayName}"
+                    contentDescription = selectionContentDescription
                 },
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -315,7 +347,7 @@ internal fun TrashEntryRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Deleted ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(entry.deletedAt))}",
+                    stringResource(R.string.trash_deleted_at, deletedAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

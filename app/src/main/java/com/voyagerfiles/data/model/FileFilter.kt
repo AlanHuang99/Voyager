@@ -1,14 +1,17 @@
 package com.voyagerfiles.data.model
 
-enum class FileTypeFilter(val label: String) {
-    ALL("All"),
-    FOLDERS("Folders"),
-    IMAGES("Images"),
-    VIDEOS("Videos"),
-    AUDIO("Audio"),
-    DOCUMENTS("Documents"),
-    ARCHIVES("Archives"),
-    APPS("Apps"),
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
+
+enum class FileTypeFilter(@StringRes val labelRes: Int) {
+    ALL(R.string.filter_all),
+    FOLDERS(R.string.filter_folders),
+    IMAGES(R.string.filter_images),
+    VIDEOS(R.string.filter_videos),
+    AUDIO(R.string.filter_audio),
+    DOCUMENTS(R.string.filter_documents),
+    ARCHIVES(R.string.filter_archives),
+    APPS(R.string.filter_apps),
     ;
 
     fun matches(file: FileItem): Boolean = when (this) {

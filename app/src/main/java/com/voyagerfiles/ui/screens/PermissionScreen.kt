@@ -18,8 +18,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 
 @Composable
 fun PermissionScreen(
@@ -45,25 +47,25 @@ fun PermissionScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                "Choose storage access",
+                stringResource(R.string.permission_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                "Full access lets Voyager manage device storage and mounted drives. Limited access still supports document trees and remote servers.",
+                stringResource(R.string.permission_message),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(32.dp))
             Button(onClick = onRequestPermission) {
-                Text("Grant full access")
+                Text(stringResource(R.string.permission_grant_full_access))
             }
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onContinueLimited) {
-                Text("Continue with limited access")
+                Text(stringResource(R.string.permission_continue_limited))
             }
         }
     }

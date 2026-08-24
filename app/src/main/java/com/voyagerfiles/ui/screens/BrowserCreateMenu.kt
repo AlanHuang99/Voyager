@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -9,15 +10,17 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.voyagerfiles.R
 
 enum class BrowserCreateAction(
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    NEW_FOLDER("New Folder", Icons.Filled.CreateNewFolder),
-    NEW_FILE("New File", Icons.AutoMirrored.Filled.NoteAdd),
-    UPLOAD_FILES("Upload Files", Icons.Filled.UploadFile),
+    NEW_FOLDER(R.string.create_new_folder, Icons.Filled.CreateNewFolder),
+    NEW_FILE(R.string.create_new_file, Icons.AutoMirrored.Filled.NoteAdd),
+    UPLOAD_FILES(R.string.create_upload_files, Icons.Filled.UploadFile),
 }
 
 data class BrowserCreateMenuModel(
@@ -48,7 +51,7 @@ fun BrowserCreateMenu(
     ) {
         model.actions.forEach { action ->
             DropdownMenuItem(
-                text = { Text(action.label) },
+                text = { Text(stringResource(action.labelRes)) },
                 leadingIcon = { Icon(action.icon, null) },
                 onClick = {
                     onDismiss()

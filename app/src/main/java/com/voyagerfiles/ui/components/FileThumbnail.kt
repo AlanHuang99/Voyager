@@ -34,8 +34,11 @@ import coil.request.ImageRequest
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal const val PDF_THUMBNAIL_TEST_TAG = "pdf-thumbnail"
+internal const val APK_THUMBNAIL_TEST_TAG = "apk-thumbnail"
 internal const val FILE_ICON_TEST_TAG = "file-icon"
 
 @Composable
@@ -75,6 +78,55 @@ fun FileThumbnailOrIcon(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(PDF_THUMBNAIL_TEST_TAG),
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp)
+                        .testTag(FILE_ICON_TEST_TAG),
+                    tint = fileIconTint(file),
+                )
+            }
+        }
+        return
+    }
+
+    if (file.isApk && file.source == FileSource.LOCAL) {
+        val context = LocalContext.current
+        val sizePixels = with(LocalDensity.current) { iconSize.roundToPx().coerceAtLeast(1) }
+        val thumbnail by produceState<android.graphics.Bitmap?>(
+            initialValue = null,
+            file.source,
+            file.path,
+            file.size,
+            file.lastModified,
+            sizePixels,
+        ) {
+            value = withContext(Dispatchers.IO) {
+                ApkThumbnailLoader.load(
+                    context = context,
+                    file = file,
+                    maxWidth = sizePixels,
+                    maxHeight = sizePixels,
+                ).getOrNull()
+            }
+        }
+        Surface(
+            modifier = modifier.size(iconSize),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            if (thumbnail != null) {
+                Image(
+                    bitmap = checkNotNull(thumbnail).asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(APK_THUMBNAIL_TEST_TAG),
                 )
             } else {
                 Icon(

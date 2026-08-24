@@ -3,8 +3,10 @@ package com.voyagerfiles.viewmodel
 import android.app.Application
 import android.net.Uri
 import android.os.Environment
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
 import com.voyagerfiles.data.archive.ArchiveProgress
 import com.voyagerfiles.data.archive.ArchiveService
@@ -26,6 +28,7 @@ import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
+import com.voyagerfiles.data.remote.webdav.WebDavFileProvider
 import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
@@ -34,7 +37,10 @@ import com.voyagerfiles.data.repository.FileProviderFactory
 import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.security.AndroidCredentialCipher
+import com.voyagerfiles.playback.PlaybackEntry
+import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.theme.AppTheme
+import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
@@ -52,7 +58,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
+fun interface RemoteFileProviderFactory {
+    fun create(context: Application, connection: RemoteConnection): FileProvider
+}
+
+fun interface WebDavPlaybackPreparer {
+    suspend fun prepare(context: Application, provider: FileProvider, file: FileItem): Result<Uri>
+}
+
+private val defaultRemoteFileProviderFactory = RemoteFileProviderFactory { context, connection ->
+    FileProviderFactory.createRemote(context, connection)
+}
+
+private val defaultWebDavPlaybackPreparer = WebDavPlaybackPreparer { context, provider, file ->
+    runCatching {
+        val webDavProvider = provider as? WebDavFileProvider
+            ?: error("The active provider is not WebDAV")
+        val prepared = webDavProvider.createPlaybackSource(file.path).getOrThrow()
+        try {
+            WebDavPlaybackProvider.register(
+                context,
+                PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
+            )
+        } catch (error: Throwable) {
+            prepared.source.close()
+            throw error
+        }
+    }
+}
+
+class FileBrowserViewModel @JvmOverloads constructor(
+    application: Application,
+    private val remoteProviderFactory: RemoteFileProviderFactory = defaultRemoteFileProviderFactory,
+    private val playbackPreparer: WebDavPlaybackPreparer = defaultWebDavPlaybackPreparer,
+) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
@@ -88,8 +127,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     val clipboardOperation: StateFlow<ClipboardOperation> = _clipboardOperation.asStateFlow()
     private var clipboardProvider: FileProvider? = null
 
-    private val _snackbarMessage = MutableStateFlow<String?>(null)
-    val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
+    private val _snackbarMessage = MutableStateFlow<UiText?>(null)
+    val snackbarMessage: StateFlow<UiText?> = _snackbarMessage.asStateFlow()
 
     private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
     val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
@@ -117,7 +156,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             runCatching { connectionRepository.migratePlaintextCredentials() }
                 .onFailure {
-                    showSnackbar("Could not secure saved connection passwords. Edit and save them again.")
+                    showSnackbar(UiText.Resource(R.string.credential_migration_failed))
                 }
         }
         viewModelScope.launch {
@@ -160,7 +199,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 _browseState.value.source != FileSource.SAF &&
                 !BrowserNavigationBounds.isPathAtOrInsideRoot(normalizedPath, rootPath)
             ) {
-                showSnackbar("This location is outside the current session")
+                showSnackbar(UiText.Resource(R.string.location_outside_session))
                 return@launch
             }
             navigateToPath(normalizedPath)
@@ -356,13 +395,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val validatedName = validFileNameOrNotify(name) ?: return
         val provider = fileProvider
         val path = _browseState.value.currentPath
-        launchOperation("Creating folder") {
+        launchOperation(R.string.progress_creating_folder, R.string.operation_create_folder) {
             provider.createDirectory(path, validatedName).fold(
                 onSuccess = {
-                    showSnackbar("Folder created")
+                    showSnackbar(UiText.Resource(R.string.folder_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure("Create folder", it)) },
+                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_folder, it)) },
             )
         }
     }
@@ -371,13 +410,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val validatedName = validFileNameOrNotify(name) ?: return
         val provider = fileProvider
         val path = _browseState.value.currentPath
-        launchOperation("Creating file") {
+        launchOperation(R.string.progress_creating_file, R.string.operation_create_file) {
             provider.createFile(path, validatedName).fold(
                 onSuccess = {
-                    showSnackbar("File created")
+                    showSnackbar(UiText.Resource(R.string.file_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure("Create file", it)) },
+                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_file, it)) },
             )
         }
     }
@@ -387,15 +426,17 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val destinationProvider = fileProvider
         val destinationPath = _browseState.value.currentPath
         val contentResolver = getApplication<Application>().contentResolver
-        val progressLabel = "Uploading"
-        launchOperation(progressLabel) {
+        val progressLabel = UiText.Resource(R.string.progress_uploading)
+        launchOperation(R.string.progress_uploading, R.string.operation_upload) {
             val sources = withContext(Dispatchers.IO) {
                 uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
             }
             val validatedSources = sources.map { source ->
                 when (val result = FileNameValidator.validate(source.name)) {
                     is FileNameValidationResult.Valid -> source.copy(name = result.name)
-                    is FileNameValidationResult.Invalid -> throw IllegalArgumentException(result.message)
+                    is FileNameValidationResult.Invalid -> {
+                        throw UiTextException(UiText.Resource(result.messageRes))
+                    }
                 }
             }
             var failed = 0
@@ -459,13 +500,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     OperationMessages.partial(
                         failed = failed,
                         total = validatedSources.size,
-                        action = "uploaded",
+                        action = R.string.action_uploaded,
                         error = checkNotNull(firstError),
                     )
                 )
             } else {
                 val count = validatedSources.size
-                showSnackbar("Uploaded $count file${if (count == 1) "" else "s"}")
+                showSnackbar(UiText.Plural(R.plurals.files_uploaded, count, listOf(count)))
             }
         }
     }
@@ -480,12 +521,15 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             DeleteMode.PERMANENT
         }
         if (resolvedMode == DeleteMode.TRASH && state.source != FileSource.LOCAL) {
-            showSnackbar("Trash is available only for direct local storage")
+            showSnackbar(UiText.Resource(R.string.trash_direct_local_only))
             return
         }
         val moveToTrash = resolvedMode == DeleteMode.TRASH
         val provider = fileProvider
-        launchOperation(if (moveToTrash) "Moving to Trash" else "Deleting") {
+        launchOperation(
+            if (moveToTrash) R.string.progress_moving_to_trash else R.string.progress_deleting,
+            if (moveToTrash) R.string.operation_trash else R.string.operation_delete,
+        ) {
             val count = selectedPaths.size
             var failed = 0
             var firstError: Throwable? = null
@@ -503,13 +547,18 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     OperationMessages.partial(
                         failed = failed,
                         total = count,
-                        action = if (moveToTrash) "moved to Trash" else "deleted",
+                        action = if (moveToTrash) R.string.action_moved_to_trash else R.string.action_deleted,
                         error = checkNotNull(firstError),
                     )
                 )
             } else {
-                val action = if (moveToTrash) "moved to Trash" else "permanently deleted"
-                showSnackbar("$count item${if (count > 1) "s" else ""} $action")
+                showSnackbar(
+                    UiText.Plural(
+                        if (moveToTrash) R.plurals.items_trashed else R.plurals.items_deleted,
+                        count,
+                        listOf(count),
+                    ),
+                )
             }
         }
     }
@@ -517,13 +566,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun rename(oldPath: String, newName: String) {
         val validatedName = validFileNameOrNotify(newName) ?: return
         val provider = fileProvider
-        launchOperation("Renaming") {
+        launchOperation(R.string.progress_renaming, R.string.operation_rename) {
             provider.rename(oldPath, validatedName).fold(
                 onSuccess = {
-                    showSnackbar("Renamed to $validatedName")
+                    showSnackbar(UiText.Resource(R.string.renamed_to, listOf(UiText.Dynamic(validatedName))))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure("Rename", it)) },
+                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_rename, it)) },
             )
         }
     }
@@ -531,11 +580,11 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun createZipFromSelection(archiveName: String) {
         val validatedName = validFileNameOrNotify(archiveName) ?: return
         if ('\\' in validatedName) {
-            showSnackbar("Names cannot contain backslashes")
+            showSnackbar(UiText.Resource(R.string.name_no_backslashes))
             return
         }
         if (ArchiveFormat.detect(validatedName) != ArchiveFormat.ZIP) {
-            showSnackbar("Name must end with .zip")
+            showSnackbar(UiText.Resource(R.string.name_must_end_zip))
             return
         }
         val state = _browseState.value
@@ -543,9 +592,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         if (selectedItems.isEmpty()) return
         val provider = fileProvider
         val destinationDirectory = state.currentPath
-        val publishProgress = archiveProgressPublisher("Compressing")
+        val publishProgress = archiveProgressPublisher(R.string.progress_compressing)
 
-        launchOperation("Compressing") {
+        launchOperation(R.string.progress_compressing, R.string.operation_compress) {
             ArchiveService.createZip(
                 provider = provider,
                 selectedItems = selectedItems,
@@ -556,10 +605,12 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 onSuccess = { archive ->
                     clearSelection()
                     refreshFiles()
-                    showSnackbar("Created ${archive.name}")
+                    showSnackbar(
+                        UiText.Resource(R.string.archive_created, listOf(UiText.Dynamic(archive.name))),
+                    )
                 },
                 onFailure = { error ->
-                    showSnackbar(OperationMessages.failure("Compress", error))
+                    showSnackbar(OperationMessages.failure(R.string.operation_compress, error))
                 },
             )
         }
@@ -568,12 +619,12 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun extractSelectedArchive() {
         val state = _browseState.value
         if (state.selectedFiles.size != 1) {
-            showSnackbar("Select one archive to extract")
+            showSnackbar(UiText.Resource(R.string.archive_select_one))
             return
         }
         val archive = state.files.firstOrNull { it.path in state.selectedFiles }
         if (archive == null) {
-            showSnackbar("The selected archive is no longer available. Refresh the folder and try again.")
+            showSnackbar(UiText.Resource(R.string.selected_archive_unavailable))
             return
         }
         launchArchiveExtraction(
@@ -587,7 +638,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val state = _browseState.value
         val archive = state.files.firstOrNull { it.path == path }
         if (archive == null) {
-            showSnackbar("The archive is no longer available. Refresh the folder and try again.")
+            showSnackbar(UiText.Resource(R.string.archive_unavailable))
             return
         }
         launchArchiveExtraction(
@@ -603,9 +654,9 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         clearSelectionAfter: Boolean,
     ) {
         val provider = fileProvider
-        val publishProgress = archiveProgressPublisher("Extracting")
+        val publishProgress = archiveProgressPublisher(R.string.progress_extracting)
 
-        launchOperation("Extracting") {
+        launchOperation(R.string.progress_extracting, R.string.operation_extract) {
             ArchiveService.extract(
                 provider = provider,
                 archive = archive,
@@ -615,10 +666,15 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 onSuccess = { extractionRoot ->
                     if (clearSelectionAfter) clearSelection()
                     refreshFiles()
-                    showSnackbar("Extracted to ${extractionRoot.name}")
+                    showSnackbar(
+                        UiText.Resource(
+                            R.string.archive_extracted_to,
+                            listOf(UiText.Dynamic(extractionRoot.name)),
+                        ),
+                    )
                 },
                 onFailure = { error ->
-                    showSnackbar(OperationMessages.failure("Extract", error))
+                    showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
                 },
             )
         }
@@ -629,7 +685,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         _clipboardOperation.value = ClipboardOperation.COPY
         clipboardProvider = fileProvider
         clearSelection()
-        showSnackbar("${paths.size} item${if (paths.size > 1) "s" else ""} copied")
+        showSnackbar(UiText.Plural(R.plurals.items_copied, paths.size, listOf(paths.size)))
     }
 
     fun cutToClipboard(paths: List<String>) {
@@ -637,7 +693,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         _clipboardOperation.value = ClipboardOperation.CUT
         clipboardProvider = fileProvider
         clearSelection()
-        showSnackbar("${paths.size} item${if (paths.size > 1) "s" else ""} cut")
+        showSnackbar(UiText.Plural(R.plurals.items_cut, paths.size, listOf(paths.size)))
     }
 
     fun clearClipboard() {
@@ -676,12 +732,13 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         val destPath = _browseState.value.currentPath
         val sourceProvider = clipboardProvider ?: fileProvider
         val destinationProvider = fileProvider
-        val progressLabel = when (operation) {
-            ClipboardOperation.COPY -> "Copying"
-            ClipboardOperation.CUT -> "Moving"
-            ClipboardOperation.NONE -> "Pasting"
+        val progressLabelRes = when (operation) {
+            ClipboardOperation.COPY -> R.string.progress_copying
+            ClipboardOperation.CUT -> R.string.progress_moving
+            ClipboardOperation.NONE -> R.string.progress_pasting
         }
-        launchOperation(progressLabel) {
+        val progressLabel = UiText.Resource(progressLabelRes)
+        launchOperation(progressLabelRes, R.string.operation_paste) {
             var failed = 0
             var firstError: Throwable? = null
             var completed = 0
@@ -791,18 +848,32 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     OperationMessages.partial(
                         failed = failed,
                         total = paths.size,
-                        action = "pasted",
+                        action = R.string.action_pasted,
                         error = checkNotNull(firstError),
                     )
                 )
             } else {
-                showSnackbar("Pasted successfully")
+                showSnackbar(UiText.Resource(R.string.paste_success))
             }
         }
     }
 
     fun downloadFile(path: String) {
         downloadPaths(listOf(path), clearSelection = false)
+    }
+
+    suspend fun prepareWebDavPlayback(file: FileItem): Result<Uri> = runCatching {
+        val state = _browseState.value
+        require(state.source == FileSource.WEBDAV && file.source == FileSource.WEBDAV) {
+            "Direct playback requires the active WebDAV session"
+        }
+        require(!file.isDirectory && (file.isAudio || file.isVideo)) {
+            "Direct playback requires an audio or video file"
+        }
+        require(state.files.any { it.path == file.path && it.source == file.source }) {
+            "The WebDAV file is no longer active"
+        }
+        playbackPreparer.prepare(getApplication(), fileProvider, file).getOrThrow()
     }
 
     fun downloadSelected() {
@@ -813,9 +884,10 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         if (paths.isEmpty()) return
         val state = _browseState.value
         val provider = fileProvider
-        launchOperation("Downloading") {
+        val progressLabel = UiText.Resource(R.string.progress_downloading)
+        launchOperation(R.string.progress_downloading, R.string.operation_download) {
             if (!state.source.isNetwork) {
-                showSnackbar("This file is already on this device")
+                showSnackbar(UiText.Resource(R.string.file_already_on_device))
                 return@launchOperation
             }
 
@@ -825,16 +897,16 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                         ?: provider.getFileInfo(path).getOrThrow()
                 }
             }.getOrElse { error ->
-                showSnackbar(OperationMessages.failure("Download", error))
+                showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 return@launchOperation
             }
             if (items.any { it.path == state.currentPath }) {
-                showSnackbar("Choose files or folders inside this location")
+                showSnackbar(UiText.Resource(R.string.choose_inside_location))
                 return@launchOperation
             }
 
             if (clearSelection) clearSelection()
-            showSnackbar("Downloading ${items.size} item${if (items.size == 1) "" else "s"}...")
+            showSnackbar(UiText.Plural(R.plurals.items_downloading, items.size, listOf(items.size)))
 
             val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             val progressThrottle = StreamProgressThrottle()
@@ -846,7 +918,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     lastCompletedRequestedItems = progress.completedRequestedItems
                     updateOperationProgress(
                         TransferProgress(
-                            label = "Downloading",
+                            label = progressLabel,
                             completedItems = progress.completedRequestedItems,
                             totalItems = progress.totalRequestedItems,
                             currentItemName = items
@@ -860,7 +932,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                     if (progressThrottle.shouldPublish(stream, force = completedItemsChanged)) {
                         updateOperationProgress(
                             TransferProgress(
-                                label = "Downloading",
+                                label = progressLabel,
                                 completedItems = progress.completedRequestedItems,
                                 totalItems = progress.totalRequestedItems,
                                 currentItemName = stream.path.substringAfterLast('/'),
@@ -882,11 +954,15 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 onSuccess = { result ->
                     val count = result.downloadedFiles + result.downloadedDirectories
                     showSnackbar(
-                        "Downloaded $count item${if (count == 1) "" else "s"} to Downloads"
+                        UiText.Plural(
+                            R.plurals.items_downloaded,
+                            count,
+                            listOf(count, UiText.Resource(R.string.downloads_folder)),
+                        ),
                     )
                 },
                 onFailure = { error ->
-                    showSnackbar(OperationMessages.failure("Download", error))
+                    showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 },
             )
         }
@@ -900,10 +976,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             if (_sessions.value.none { it.id == sessionId }) {
                 val normalizedPath = BrowserNavigationBounds.normalizePath(connection.remotePath)
                 val source = sourceForProtocol(connection.protocol)
-                sessionProviders[sessionId] = FileProviderFactory.createRemote(
-                    context = getApplication(),
-                    connection = connection,
-                )
+                sessionProviders[sessionId] = remoteProviderFactory.create(getApplication(), connection)
                 _sessions.update { sessions ->
                     sessions + BrowserSession(
                         id = sessionId,
@@ -946,10 +1019,14 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             runCatching { connectionRepository.save(connection) }.fold(
                 onSuccess = {
-                    showSnackbar(if (connection.id == 0L) "Connection saved" else "Connection updated")
+                    showSnackbar(
+                        UiText.Resource(
+                            if (connection.id == 0L) R.string.connection_saved else R.string.connection_updated,
+                        ),
+                    )
                 },
                 onFailure = {
-                    showSnackbar("Could not protect and save the connection")
+                    showSnackbar(UiText.Resource(R.string.connection_save_failed))
                 },
             )
         }
@@ -958,8 +1035,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun deleteConnection(connection: RemoteConnection) {
         viewModelScope.launch {
             runCatching { connectionRepository.delete(connection) }.fold(
-                onSuccess = { showSnackbar("Connection deleted") },
-                onFailure = { showSnackbar("Could not delete the connection") },
+                onSuccess = { showSnackbar(UiText.Resource(R.string.connection_deleted)) },
+                onFailure = { showSnackbar(UiText.Resource(R.string.connection_delete_failed)) },
             )
         }
     }
@@ -987,14 +1064,16 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun restoreSelectedTrash() {
         val entries = selectedTrashEntries()
         if (entries.isEmpty()) return
-        launchOperation("Restoring from Trash") {
+        launchOperation(R.string.progress_restoring_from_trash, R.string.operation_restore) {
             val failures = runTrashActions(entries, trashManager::restore)
             loadTrashEntries()
             showTrashResult(
                 entries = entries,
                 failures = failures,
-                successMessage = { count -> "$count item${if (count == 1) "" else "s"} restored" },
-                failureAction = "restore",
+                successMessage = { count ->
+                    UiText.Plural(R.plurals.items_restored, count, listOf(count))
+                },
+                failureAction = R.string.operation_restore,
             )
         }
     }
@@ -1002,28 +1081,34 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     fun deleteSelectedTrashPermanently() {
         val entries = selectedTrashEntries()
         if (entries.isEmpty()) return
-        launchOperation("Deleting permanently") {
+        launchOperation(R.string.progress_deleting_permanently, R.string.operation_delete) {
             val failures = runTrashActions(entries, trashManager::deletePermanently)
             loadTrashEntries()
             showTrashResult(
                 entries = entries,
                 failures = failures,
-                successMessage = { count -> "$count item${if (count == 1) "" else "s"} permanently deleted" },
-                failureAction = "delete",
+                successMessage = { count ->
+                    UiText.Plural(R.plurals.items_deleted, count, listOf(count))
+                },
+                failureAction = R.string.operation_delete,
             )
         }
     }
 
     fun emptyTrash() {
-        launchOperation("Emptying Trash") {
+        launchOperation(R.string.progress_emptying_trash, R.string.operation_empty_trash) {
             trashManager.empty().fold(
                 onSuccess = { removed ->
                     loadTrashEntries()
-                    showSnackbar(if (removed == 0) "Trash is already empty" else "Trash emptied")
+                    showSnackbar(
+                        UiText.Resource(
+                            if (removed == 0) R.string.trash_already_empty else R.string.trash_emptied,
+                        ),
+                    )
                 },
                 onFailure = { error ->
                     loadTrashEntries()
-                    showSnackbar("Could not empty Trash: ${error.message ?: "Unknown error"}")
+                    showSnackbar(OperationMessages.failure(R.string.operation_empty_trash, error))
                 },
             )
         }
@@ -1031,7 +1116,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
 
     fun toggleBookmark(path: String, name: String) {
         if (_browseState.value.source != FileSource.LOCAL) {
-            showSnackbar("Bookmarks are available for local folders")
+            showSnackbar(UiText.Resource(R.string.bookmarks_local_only))
             return
         }
         viewModelScope.launch {
@@ -1050,22 +1135,29 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Snackbar
-    private fun showSnackbar(message: String) {
+    private fun showSnackbar(message: UiText) {
         _snackbarMessage.value = message
     }
 
-    private fun launchOperation(label: String, block: suspend () -> Unit) {
+    private fun launchOperation(
+        @StringRes progressLabel: Int,
+        @StringRes operationName: Int,
+        block: suspend () -> Unit,
+    ) {
         val active = _operationState.value as? OperationState.Running
         if (active != null) {
-            showSnackbar("${active.label} is already in progress")
+            showSnackbar(
+                UiText.Resource(R.string.operation_already_running, listOf(active.label)),
+            )
             return
         }
+        val label = UiText.Resource(progressLabel)
         _operationState.value = OperationState.Running(TransferProgress(label))
         viewModelScope.launch {
             try {
                 block()
             } catch (error: Throwable) {
-                showSnackbar(OperationMessages.failure(label, error))
+                showSnackbar(OperationMessages.failure(operationName, error))
             } finally {
                 _operationState.value = OperationState.Idle
                 if (autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
@@ -1088,7 +1180,8 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         initialNavigationJob = null
     }
 
-    private fun archiveProgressPublisher(label: String): (ArchiveProgress) -> Unit {
+    private fun archiveProgressPublisher(@StringRes labelRes: Int): (ArchiveProgress) -> Unit {
+        val label = UiText.Resource(labelRes)
         var lastEntryName: String? = null
         var lastCompletedEntries = -1
         var lastPublishedBytes = 0L
@@ -1143,7 +1236,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
                 _trashState.update {
                     it.copy(
                         isLoading = false,
-                        error = error.message ?: "Could not load Trash",
+                        error = OperationMessages.reason(error),
                     )
                 }
             },
@@ -1165,14 +1258,19 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
     private fun showTrashResult(
         entries: List<TrashEntry>,
         failures: List<Throwable>,
-        successMessage: (Int) -> String,
-        failureAction: String,
+        successMessage: (Int) -> UiText,
+        @StringRes failureAction: Int,
     ) {
         val succeeded = entries.size - failures.size
         when {
             failures.isEmpty() -> showSnackbar(successMessage(succeeded))
-            succeeded > 0 -> showSnackbar("$succeeded succeeded; ${failures.size} could not $failureAction")
-            else -> showSnackbar("Could not $failureAction: ${failures.first().message ?: "Unknown error"}")
+            succeeded > 0 -> showSnackbar(
+                UiText.Resource(
+                    R.string.partial_trash_success,
+                    listOf(succeeded, failures.size, UiText.Resource(failureAction)),
+                ),
+            )
+            else -> showSnackbar(OperationMessages.failure(failureAction, failures.first()))
         }
     }
 
@@ -1180,7 +1278,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         when (val result = FileNameValidator.validate(name)) {
             is FileNameValidationResult.Valid -> result.name
             is FileNameValidationResult.Invalid -> {
-                showSnackbar(result.message)
+                showSnackbar(UiText.Resource(result.messageRes))
                 null
             }
         }

@@ -49,6 +49,7 @@
 -dontwarn javax.naming.**
 -dontwarn javax.mail.**
 -dontwarn java.beans.**
+-dontwarn java.rmi.UnmarshalException
 -dontwarn aQute.**
 -dontwarn org.osgi.**
 -dontwarn edu.umd.cs.findbugs.**

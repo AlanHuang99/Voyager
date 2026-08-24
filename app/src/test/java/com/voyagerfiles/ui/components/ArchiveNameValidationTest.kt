@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.components
 
+import com.voyagerfiles.R
 import com.voyagerfiles.util.FileNameValidationResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,14 +19,14 @@ class ArchiveNameValidationTest {
     @Test
     fun rejectsMissingZipSuffixAndProviderSeparators() {
         assertEquals(
-            FileNameValidationResult.Invalid("Name must end with .zip"),
+            FileNameValidationResult.Invalid(R.string.name_must_end_zip),
             validateZipArchiveName("backup.tar"),
         )
         val separatorResult = validateZipArchiveName("folder\\backup.zip")
         assertTrue(separatorResult is FileNameValidationResult.Invalid)
         assertEquals(
-            "Names cannot contain backslashes",
-            (separatorResult as FileNameValidationResult.Invalid).message,
+            R.string.name_no_backslashes,
+            (separatorResult as FileNameValidationResult.Invalid).messageRes,
         )
     }
 }

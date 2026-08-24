@@ -1,6 +1,9 @@
 package com.voyagerfiles.data.model
 
 import android.webkit.MimeTypeMap
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
+import com.voyagerfiles.ui.text.UiText
 import java.text.DecimalFormat
 import java.util.Date
 
@@ -68,6 +71,8 @@ data class FileItem(
             "heif" to "image/heif",
             "jpg" to "image/jpeg",
             "jpeg" to "image/jpeg",
+            "mp3" to "audio/mpeg",
+            "mp4" to "video/mp4",
             "png" to "image/png",
             "webp" to "image/webp",
         )
@@ -106,11 +111,11 @@ val FileSource.isNetwork: Boolean
         this == FileSource.SMB ||
         this == FileSource.WEBDAV
 
-enum class SortBy {
-    NAME,
-    SIZE,
-    DATE,
-    TYPE,
+enum class SortBy(@StringRes val labelRes: Int) {
+    NAME(R.string.browser_sort_name),
+    SIZE(R.string.browser_sort_size),
+    DATE(R.string.browser_sort_date),
+    TYPE(R.string.browser_sort_type),
 }
 
 enum class SortOrder {
@@ -122,7 +127,7 @@ data class BrowseState(
     val currentPath: String = "/",
     val files: List<FileItem> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
     val selectedFiles: Set<String> = emptySet(),
     val sortBy: SortBy = SortBy.NAME,
     val sortOrder: SortOrder = SortOrder.ASCENDING,
@@ -147,8 +152,8 @@ data class BrowseState(
         }
 }
 
-enum class ViewMode(val label: String) {
-    LIST("List"),
-    COMPACT("Compact list"),
-    GRID("Grid"),
+enum class ViewMode(@StringRes val labelRes: Int) {
+    LIST(R.string.view_mode_list),
+    COMPACT(R.string.view_mode_compact_list),
+    GRID(R.string.view_mode_grid),
 }

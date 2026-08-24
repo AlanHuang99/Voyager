@@ -37,11 +37,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.remote.sftp.SshKeyGenerator
+import com.voyagerfiles.ui.text.asString
+import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import kotlinx.coroutines.Dispatchers
@@ -57,18 +61,22 @@ fun CreateItemDialog(
 ) {
     var name by remember { mutableStateOf("") }
     val validation = FileNameValidator.validate(name)
-    val validationError = (validation as? FileNameValidationResult.Invalid)?.message
+    val validationErrorRes = (validation as? FileNameValidationResult.Invalid)?.messageRes
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isDirectory) "New Folder" else "New File") },
+        title = {
+            Text(stringResource(if (isDirectory) R.string.create_new_folder else R.string.create_new_file))
+        },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
-                isError = validationError != null,
-                supportingText = validationError?.let { message -> { Text(message) } },
+                label = { Text(stringResource(R.string.dialog_name)) },
+                isError = validationErrorRes != null,
+                supportingText = validationErrorRes?.let { messageRes ->
+                    { Text(stringResource(messageRes)) }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -79,10 +87,10 @@ fun CreateItemDialog(
                     (validation as? FileNameValidationResult.Valid)?.let { onCreate(it.name) }
                 },
                 enabled = validation is FileNameValidationResult.Valid,
-            ) { Text("Create") }
+            ) { Text(stringResource(R.string.action_create)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -96,18 +104,20 @@ fun RenameDialog(
     var name by remember { mutableStateOf(currentName) }
     val validation = FileNameValidator.validate(name)
     val validatedName = (validation as? FileNameValidationResult.Valid)?.name
-    val validationError = (validation as? FileNameValidationResult.Invalid)?.message
+    val validationErrorRes = (validation as? FileNameValidationResult.Invalid)?.messageRes
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename") },
+        title = { Text(stringResource(R.string.dialog_rename)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("New name") },
-                isError = validationError != null,
-                supportingText = validationError?.let { message -> { Text(message) } },
+                label = { Text(stringResource(R.string.dialog_new_name)) },
+                isError = validationErrorRes != null,
+                supportingText = validationErrorRes?.let { messageRes ->
+                    { Text(stringResource(messageRes)) }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -116,10 +126,10 @@ fun RenameDialog(
             TextButton(
                 onClick = { validatedName?.let(onRename) },
                 enabled = validatedName != null && validatedName != currentName,
-            ) { Text("Rename") }
+            ) { Text(stringResource(R.string.action_rename)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -132,13 +142,13 @@ fun DeleteConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(model.title) },
-        text = { Text(model.message) },
+        title = { Text(model.title.asString()) },
+        text = { Text(model.message.asString()) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text(model.confirmLabel) }
+            TextButton(onClick = onConfirm) { Text(model.confirmLabel.asString()) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -159,7 +169,7 @@ fun ConnectionDialog(
     var username by remember { mutableStateOf(existingConnection?.username ?: "") }
     var password by remember { mutableStateOf(existingConnection?.password ?: "") }
     var privateKeyPath by remember { mutableStateOf(existingConnection?.privateKeyPath ?: "") }
-    var keyGenerationMessage by remember { mutableStateOf<String?>(null) }
+    var keyGenerationMessage by remember { mutableStateOf<UiText?>(null) }
     var generatedPublicKey by remember { mutableStateOf<String?>(null) }
     var generatedPublicKeyFileName by remember { mutableStateOf("id_voyager_key.pub") }
     var pendingPublicKeySave by remember { mutableStateOf<String?>(null) }
@@ -182,16 +192,24 @@ fun ConnectionDialog(
                 runCatching {
                     withContext(Dispatchers.IO) {
                         checkNotNull(context.contentResolver.openOutputStream(uri, "w")) {
-                            "The selected document could not be opened"
+                            context.getString(R.string.connection_selected_document_open_failed)
                         }.bufferedWriter(Charsets.UTF_8).use { writer ->
                             writer.write(publicKey)
                             writer.newLine()
                         }
                     }
                 }.fold(
-                    onSuccess = { keyGenerationMessage = "Public key saved" },
+                    onSuccess = {
+                        keyGenerationMessage = UiText.Resource(R.string.connection_public_key_saved)
+                    },
                     onFailure = { error ->
-                        keyGenerationMessage = "Public key save failed: ${error.message ?: "unknown error"}"
+                        keyGenerationMessage = UiText.Resource(
+                            R.string.connection_public_key_save_failed,
+                            listOf(
+                                error.message?.let(UiText::Dynamic)
+                                    ?: UiText.Resource(R.string.unknown_error),
+                            ),
+                        )
                     },
                 )
             }
@@ -200,7 +218,7 @@ fun ConnectionDialog(
 
     fun connectionFromFields(): RemoteConnection = RemoteConnection(
         id = existingConnection?.id ?: 0,
-        name = name.trim().ifBlank { "${host.trim()} (${protocol.displayName})" },
+        name = name.trim().ifBlank { "${host.trim()} (${context.getString(protocol.displayNameRes)})" },
         protocol = protocol,
         host = host.trim(),
         port = checkNotNull(port.toIntOrNull()),
@@ -215,13 +233,20 @@ fun ConnectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existingConnection != null) "Edit Connection" else "New Connection") },
+        title = {
+            Text(
+                stringResource(
+                    if (existingConnection != null) R.string.dialog_edit_connection
+                    else R.string.dialog_new_connection,
+                ),
+            )
+        },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Display Name") },
+                    label = { Text(stringResource(R.string.connection_display_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -233,10 +258,10 @@ fun ConnectionDialog(
                     onExpandedChange = { protocolExpanded = !protocolExpanded },
                 ) {
                     OutlinedTextField(
-                        value = protocol.displayName,
+                        value = stringResource(protocol.displayNameRes),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Protocol") },
+                        label = { Text(stringResource(R.string.connection_protocol)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = protocolExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -248,7 +273,7 @@ fun ConnectionDialog(
                     ) {
                         ConnectionProtocol.entries.forEach { proto ->
                             DropdownMenuItem(
-                                text = { Text(proto.displayName) },
+                                text = { Text(stringResource(proto.displayNameRes)) },
                                 onClick = {
                                     protocol = proto
                                     port = proto.defaultPort.toString()
@@ -265,9 +290,11 @@ fun ConnectionDialog(
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
-                    label = { Text("Host") },
-                    isError = validation.hostError != null,
-                    supportingText = validation.hostError?.let { message -> { Text(message) } },
+                    label = { Text(stringResource(R.string.connection_host)) },
+                    isError = validation.hostErrorRes != null,
+                    supportingText = validation.hostErrorRes?.let { messageRes ->
+                        { Text(stringResource(messageRes)) }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -275,7 +302,7 @@ fun ConnectionDialog(
                 if (protocol == ConnectionProtocol.FTP) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "FTP sends credentials and files without transport encryption",
+                        stringResource(R.string.connection_ftp_warning),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -288,9 +315,12 @@ fun ConnectionDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Use HTTPS")
+                            Text(stringResource(R.string.connection_use_https))
                             Text(
-                                if (useTls) "Encrypted WebDAV connection" else "HTTP sends credentials without transport encryption",
+                                stringResource(
+                                    if (useTls) R.string.connection_webdav_encrypted
+                                    else R.string.connection_webdav_http_warning,
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (useTls) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                             )
@@ -304,9 +334,11 @@ fun ConnectionDialog(
                 OutlinedTextField(
                     value = port,
                     onValueChange = { port = it },
-                    label = { Text("Port") },
-                    isError = validation.portError != null,
-                    supportingText = validation.portError?.let { message -> { Text(message) } },
+                    label = { Text(stringResource(R.string.connection_port)) },
+                    isError = validation.portErrorRes != null,
+                    supportingText = validation.portErrorRes?.let { messageRes ->
+                        { Text(stringResource(messageRes)) }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -316,7 +348,7 @@ fun ConnectionDialog(
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
-                    label = { Text("Username") },
+                    label = { Text(stringResource(R.string.connection_username)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -326,7 +358,7 @@ fun ConnectionDialog(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.connection_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
@@ -337,7 +369,7 @@ fun ConnectionDialog(
                     OutlinedTextField(
                         value = privateKeyPath,
                         onValueChange = { privateKeyPath = it },
-                        label = { Text("Private key path (optional)") },
+                        label = { Text(stringResource(R.string.connection_private_key_path)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -365,10 +397,16 @@ fun ConnectionDialog(
                                         privateKeyPath = generated.privateKeyFile.absolutePath
                                         generatedPublicKey = generated.publicKey
                                         generatedPublicKeyFileName = generated.publicKeyFile.name
-                                        keyGenerationMessage = "Private key created in app storage"
+                                        keyGenerationMessage = UiText.Resource(R.string.connection_private_key_created)
                                     },
                                     onFailure = { error ->
-                                        keyGenerationMessage = "Key generation failed: ${error.message ?: "unknown error"}"
+                                        keyGenerationMessage = UiText.Resource(
+                                            R.string.connection_key_generation_failed,
+                                            listOf(
+                                                error.message?.let(UiText::Dynamic)
+                                                    ?: UiText.Resource(R.string.unknown_error),
+                                            ),
+                                        )
                                     },
                                 )
                                 isGeneratingKey = false
@@ -378,11 +416,16 @@ fun ConnectionDialog(
                     ) {
                         Icon(Icons.Filled.VpnKey, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isGeneratingKey) "Generating..." else "Generate key")
+                        Text(
+                            stringResource(
+                                if (isGeneratingKey) R.string.connection_generating_key
+                                else R.string.connection_generate_key,
+                            ),
+                        )
                     }
                     keyGenerationMessage?.let { message ->
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(message)
+                        Text(message.asString())
                     }
                 }
 
@@ -391,9 +434,15 @@ fun ConnectionDialog(
                     OutlinedTextField(
                         value = shareName,
                         onValueChange = { shareName = it },
-                        label = { Text("Share Name") },
-                        isError = validation.shareNameError != null,
-                        supportingText = validation.shareNameError?.let { message -> { Text(message) } },
+                        label = { Text(stringResource(R.string.connection_share_name)) },
+                        isError = validation.shareNameErrorRes != null,
+                        supportingText = {
+                            Text(
+                                stringResource(
+                                    validation.shareNameErrorRes ?: R.string.smb_share_supporting,
+                                ),
+                            )
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -401,7 +450,7 @@ fun ConnectionDialog(
                     OutlinedTextField(
                         value = domain,
                         onValueChange = { domain = it },
-                        label = { Text("Domain (optional)") },
+                        label = { Text(stringResource(R.string.connection_domain)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -412,7 +461,7 @@ fun ConnectionDialog(
                 OutlinedTextField(
                     value = remotePath,
                     onValueChange = { remotePath = it },
-                    label = { Text("Remote Path") },
+                    label = { Text(stringResource(R.string.connection_remote_path)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -428,10 +477,10 @@ fun ConnectionDialog(
                     }
                 },
                 enabled = validation.isValid,
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 
@@ -439,18 +488,20 @@ fun ConnectionDialog(
         val warning = checkNotNull(transportWarning)
         AlertDialog(
             onDismissRequest = { showCleartextConfirmation = false },
-            title = { Text(warning.title) },
-            text = { Text(warning.message) },
+            title = { Text(warning.title.asString()) },
+            text = { Text(warning.message.asString()) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showCleartextConfirmation = false
                         onSave(connectionFromFields())
                     },
-                ) { Text(warning.confirmLabel) }
+                ) { Text(warning.confirmLabel.asString()) }
             },
             dismissButton = {
-                TextButton(onClick = { showCleartextConfirmation = false }) { Text("Cancel") }
+                TextButton(onClick = { showCleartextConfirmation = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             },
         )
     }
@@ -461,11 +512,24 @@ fun ConnectionDialog(
             onCopy = {
                 runCatching {
                     val clipboard = checkNotNull(context.getSystemService(ClipboardManager::class.java))
-                    clipboard.setPrimaryClip(ClipData.newPlainText("SFTP public key", publicKey))
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText(
+                            context.getString(R.string.connection_public_key_clip_label),
+                            publicKey,
+                        ),
+                    )
                 }.fold(
-                    onSuccess = { keyGenerationMessage = "Public key copied" },
+                    onSuccess = {
+                        keyGenerationMessage = UiText.Resource(R.string.connection_public_key_copied)
+                    },
                     onFailure = { error ->
-                        keyGenerationMessage = "Public key copy failed: ${error.message ?: "unknown error"}"
+                        keyGenerationMessage = UiText.Resource(
+                            R.string.connection_public_key_copy_failed,
+                            listOf(
+                                error.message?.let(UiText::Dynamic)
+                                    ?: UiText.Resource(R.string.unknown_error),
+                            ),
+                        )
                     },
                 )
             },
@@ -487,10 +551,10 @@ internal fun GeneratedPublicKeyDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Install this public key") },
+        title = { Text(stringResource(R.string.dialog_install_public_key)) },
         text = {
             Column {
-                Text("Copy or save this public key, then add it to the SFTP account's authorized keys. The private key stays protected inside Voyager.")
+                Text(stringResource(R.string.dialog_public_key_instructions))
                 Spacer(modifier = Modifier.height(12.dp))
                 SelectionContainer {
                     Text(
@@ -502,12 +566,12 @@ internal fun GeneratedPublicKeyDialog(
         },
         confirmButton = {
             Row {
-                TextButton(onClick = onCopy) { Text("Copy") }
-                TextButton(onClick = onSave) { Text("Save") }
+                TextButton(onClick = onCopy) { Text(stringResource(R.string.action_copy)) }
+                TextButton(onClick = onSave) { Text(stringResource(R.string.action_save)) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_done)) }
         },
     )
 }

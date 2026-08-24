@@ -1,6 +1,8 @@
 package com.voyagerfiles.ui.screens
 
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -51,7 +53,7 @@ class BrowserArchiveActionsTest {
             BrowserArchiveActions.forSelection(selection),
         )
         assertEquals(
-            "RAR extraction is not available in this build",
+            UiText.Resource(R.string.browser_rar_extraction_unavailable),
             BrowserArchiveActions.unsupportedExtractionReason(selection),
         )
         assertNull(BrowserArchiveActions.unsupportedExtractionReason(listOf(file("notes.txt"))))
@@ -64,6 +66,7 @@ class BrowserArchiveActionsTest {
             BrowserArchiveActions.defaultZipName(
                 selectedItems = listOf(file("notes.txt")),
                 existingNames = setOf("notes.txt"),
+                fallbackBaseName = "Archive",
             ),
         )
         assertEquals(
@@ -71,6 +74,7 @@ class BrowserArchiveActionsTest {
             BrowserArchiveActions.defaultZipName(
                 selectedItems = listOf(file("notes.txt")),
                 existingNames = setOf("notes.txt", "notes.zip", "notes (2).ZIP"),
+                fallbackBaseName = "Archive",
             ),
         )
         assertEquals(
@@ -78,6 +82,7 @@ class BrowserArchiveActionsTest {
             BrowserArchiveActions.defaultZipName(
                 selectedItems = listOf(file("one.txt"), file("two.txt")),
                 existingNames = emptySet(),
+                fallbackBaseName = "Archive",
             ),
         )
     }
@@ -89,6 +94,7 @@ class BrowserArchiveActionsTest {
             BrowserArchiveActions.defaultZipName(
                 selectedItems = listOf(file("folder\\notes.txt")),
                 existingNames = emptySet(),
+                fallbackBaseName = "Archive",
             ),
         )
     }

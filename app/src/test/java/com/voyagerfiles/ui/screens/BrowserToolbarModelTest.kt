@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ViewMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,9 +11,9 @@ class BrowserToolbarModelTest {
 
     @Test
     fun viewModesHaveUserFacingLabels() {
-        assertEquals("List", ViewMode.LIST.label)
-        assertEquals("Compact list", ViewMode.COMPACT.label)
-        assertEquals("Grid", ViewMode.GRID.label)
+        assertEquals(R.string.view_mode_list, ViewMode.LIST.labelRes)
+        assertEquals(R.string.view_mode_compact_list, ViewMode.COMPACT.labelRes)
+        assertEquals(R.string.view_mode_grid, ViewMode.GRID.labelRes)
     }
 
     @Test

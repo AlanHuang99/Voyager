@@ -1,7 +1,9 @@
 package com.voyagerfiles.ui.screens
 
+import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
 import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 
@@ -41,15 +43,18 @@ object BrowserArchiveActions {
         }
     }
 
-    fun unsupportedExtractionReason(items: List<FileItem>): String? {
+    fun unsupportedExtractionReason(items: List<FileItem>): UiText? {
         if (items.size != 1) return null
         val item = items.single()
         val format = ArchiveFormat.detect(item.name)
         return when {
             format == ArchiveFormat.RAR_UNSUPPORTED ->
-                "RAR extraction is not available in this build"
+                UiText.Resource(R.string.browser_rar_extraction_unavailable)
             format == null && item.isArchive ->
-                "${item.extension.uppercase()} extraction is not available in this build"
+                UiText.Resource(
+                    R.string.browser_format_extraction_unavailable,
+                    listOf(UiText.Dynamic(item.extension.uppercase())),
+                )
             else -> null
         }
     }
@@ -57,6 +62,7 @@ object BrowserArchiveActions {
     fun defaultZipName(
         selectedItems: List<FileItem>,
         existingNames: Set<String>,
+        fallbackBaseName: String,
     ): String {
         require(selectedItems.isNotEmpty()) { "Select at least one item to compress" }
         val proposedBase = if (selectedItems.size == 1) {
@@ -68,15 +74,15 @@ object BrowserArchiveActions {
                 }
             }
         } else {
-            "Archive"
+            fallbackBaseName
         }
         val base = if ('\\' in proposedBase) {
-            "Archive"
+            fallbackBaseName
         } else {
             when (val validation = FileNameValidator.validate(proposedBase)) {
                 is FileNameValidationResult.Valid -> validation.name
-                is FileNameValidationResult.Invalid -> "Archive"
-            }.ifBlank { "Archive" }
+                is FileNameValidationResult.Invalid -> fallbackBaseName
+            }.ifBlank { fallbackBaseName }
         }
         val normalizedExistingNames = existingNames.mapTo(mutableSetOf()) { it.lowercase() }
 

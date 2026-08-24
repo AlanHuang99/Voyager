@@ -35,6 +35,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
 - Connect to SFTP, FTP, SMB, and WebDAV servers, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress.
+- Play WebDAV audio and video in registered Android media players without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.
 - Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
 - Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
 
@@ -49,6 +50,10 @@ Saved remote passwords are encrypted with AES-GCM using a device-bound Android K
 Generated SFTP private keys remain in app-private storage. Voyager displays the corresponding OpenSSH public key and provides Copy and Save actions so it can be installed on a server without exposing the private key.
 
 SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager does not force SMB transport encryption; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
+
+HTTPS WebDAV follows Android's system and user-installed certificate authorities. A private authority must be installed by the device owner, and normal certificate-chain and hostname validation still apply.
+
+Direct WebDAV playback exposes an opaque, expiring `content` URI to the selected media player. The URI contains no server address, remote path, username, or password. Voyager's playback provider is not exported and grants read access only to the launched handler.
 
 ## Requirements
 
@@ -78,7 +83,7 @@ Run the complete local gate before submitting a change:
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
+See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TRANSLATING.md](docs/TRANSLATING.md) for the translation workflow, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
 
 ## Tech stack
 
@@ -99,7 +104,7 @@ All runtime dependencies are open source and license-compatible with GPLv3; the 
 
 ## Contributing
 
-Issues and pull requests are welcome. For substantial changes, open an issue first to discuss the approach. Include automated coverage for changed behavior and describe any device or server setup used for manual verification.
+Issues and pull requests are welcome. For substantial changes, open an issue first to discuss the approach. Include automated coverage for changed behavior and describe any device or server setup used for manual verification. Translation contributors should follow [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ## License
 

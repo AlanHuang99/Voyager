@@ -6,10 +6,12 @@ import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
+import okhttp3.Credentials
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -187,6 +189,40 @@ class WebDavFileProviderTest {
     }
 
     @Test
+    fun preparesIndependentAuthenticatedPlaybackSourceWithEncodedPath() = runBlocking {
+        val server = MockWebServer()
+        val payload = ByteArray(10) { it.toByte() }
+        server.dispatcher = rangeDispatcher(payload)
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
+        try {
+            val prepared = createProvider(server.port).createPlaybackSource("/space file.mp3").getOrThrow()
+
+            assertEquals(10L, prepared.metadata.size)
+            assertTrue(prepared.source.read(3, 4).getOrThrow().contentEquals(byteArrayOf(3, 4, 5, 6)))
+            repeat(2) {
+                val request = server.takeRequest()
+                assertEquals("/space%20file.mp3", request.requestUrl?.encodedPath)
+                assertEquals(Credentials.basic(USERNAME, PASSWORD), request.getHeader("Authorization"))
+            }
+            prepared.source.close()
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun rejectsPlaybackSourceWhenServerIgnoresRanges() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("complete file"))
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
+        try {
+            assertTrue(createProvider(server.port).createPlaybackSource("/song.mp3").isFailure)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun outputStreamSpoolsLargeFilesWithoutByteArrayBuffering() = runBlocking {
         val server = startServer()
         val provider = createProvider(server.port)
@@ -223,6 +259,22 @@ class WebDavFileProviderTest {
         server.start()
         servers += server
         return server
+    }
+
+    private fun rangeDispatcher(payload: ByteArray): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            if (request.getHeader("Authorization") != Credentials.basic(USERNAME, PASSWORD)) {
+                return MockResponse().setResponseCode(401)
+            }
+            val match = Regex("bytes=(\\d+)-(\\d+)").matchEntire(request.getHeader("Range").orEmpty())
+                ?: return MockResponse().setResponseCode(200).setBody(Buffer().write(payload))
+            val start = match.groupValues[1].toInt()
+            val end = minOf(match.groupValues[2].toInt(), payload.lastIndex)
+            return MockResponse()
+                .setResponseCode(206)
+                .setHeader("Content-Range", "bytes $start-$end/${payload.size}")
+                .setBody(Buffer().write(payload, start, end - start + 1))
+        }
     }
 
     private class LocalWebDavServer(

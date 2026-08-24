@@ -50,10 +50,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.HomeSection
@@ -105,13 +107,13 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Voyager") },
+                title = { Text(stringResource(R.string.app_name)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Filled.Settings, "Settings")
+                        Icon(Icons.Filled.Settings, stringResource(R.string.content_desc_settings))
                     }
                 },
             )
@@ -133,7 +135,7 @@ fun HomeScreen(
                         if (hasAllFilesAccess) {
                             item(key = "storage-header") {
                                 Text(
-                                    "Storage",
+                                    stringResource(R.string.home_storage_section),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -160,12 +162,12 @@ fun HomeScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Text(
-                                            "Limited storage access",
+                                            stringResource(R.string.home_limited_storage_title),
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         )
                                         Text(
-                                            "Document trees and remote servers remain available. Grant full access to browse device storage directly.",
+                                            stringResource(R.string.home_limited_storage_message),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         )
@@ -200,9 +202,9 @@ fun HomeScreen(
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
-                                            Text("Trash", style = MaterialTheme.typography.titleMedium)
+                                            Text(stringResource(R.string.home_trash), style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "Restore or permanently delete local items",
+                                                stringResource(R.string.home_trash_description),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -217,7 +219,7 @@ fun HomeScreen(
                         if (visibleSessions.isNotEmpty()) {
                             item(key = "active-sessions-header") {
                                 Text(
-                                    "Active Sessions",
+                                    stringResource(R.string.home_active_sessions_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
@@ -237,7 +239,7 @@ fun HomeScreen(
                         if (hasAllFilesAccess) {
                             item(key = "quick-access-header") {
                                 Text(
-                                    "Quick Access",
+                                    stringResource(R.string.home_quick_access_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
@@ -251,25 +253,25 @@ fun HomeScreen(
                                 ) {
                                     QuickAccessCard(
                                         icon = Icons.Filled.Download,
-                                        label = "Downloads",
+                                        label = stringResource(R.string.home_downloads),
                                         modifier = Modifier.weight(1f),
                                         onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.Image,
-                                        label = "Pictures",
+                                        label = stringResource(R.string.home_pictures),
                                         modifier = Modifier.weight(1f),
                                         onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.MusicNote,
-                                        label = "Music",
+                                        label = stringResource(R.string.home_music),
                                         modifier = Modifier.weight(1f),
                                         onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.VideoLibrary,
-                                        label = "Videos",
+                                        label = stringResource(R.string.home_videos),
                                         modifier = Modifier.weight(1f),
                                         onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
                                     )
@@ -301,12 +303,12 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            "Remote Connections",
+                                            stringResource(R.string.home_remote_connections_title),
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         )
                                         Text(
-                                            "SFTP, FTP, SMB, WebDAV",
+                                            stringResource(R.string.home_remote_protocols),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                                         )
@@ -320,7 +322,7 @@ fun HomeScreen(
                         if (hasAllFilesAccess && localBookmarks.isNotEmpty()) {
                             item(key = "bookmarks-header") {
                                 Text(
-                                    "Bookmarks",
+                                    stringResource(R.string.home_bookmarks_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
@@ -357,7 +359,7 @@ fun HomeScreen(
                         if (hasAllFilesAccess) {
                             item(key = "folders-header") {
                                 Text(
-                                    "Folders",
+                                    stringResource(R.string.home_folders_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
@@ -416,12 +418,12 @@ private fun SafAccessCard(
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    "Document Tree",
+                    stringResource(R.string.home_document_tree),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "Storage Access Framework",
+                    stringResource(R.string.home_storage_access_framework),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -437,11 +439,21 @@ internal fun StorageVolumeCard(
     onClick: () -> Unit,
 ) {
     val isInternal = volume.isPrimary
+    val availableLabel = stringResource(R.string.home_storage_available)
+    val storageUsage = if (storageInfo != null) {
+        stringResource(
+            R.string.home_storage_usage,
+            FileItem.formatFileSize(storageInfo.used),
+            FileItem.formatFileSize(storageInfo.total),
+        )
+    } else {
+        null
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("storage-volume:${volume.description}")
-            .semantics { stateDescription = volume.statusLabel ?: "Available" }
+            .semantics { stateDescription = volume.statusLabel ?: availableLabel }
             .clickable(enabled = volume.isAvailable, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isInternal)
@@ -469,9 +481,7 @@ internal fun StorageVolumeCard(
                         else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        volume.statusLabel ?: storageInfo?.let {
-                            "${FileItem.formatFileSize(it.used)} / ${FileItem.formatFileSize(it.total)}"
-                        } ?: volume.path.orEmpty(),
+                        volume.statusLabel ?: storageUsage ?: volume.path.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isInternal)
                             MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -542,7 +552,7 @@ private fun ActiveSessionRow(
             if (isActive) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Active",
+                    stringResource(R.string.home_session_active),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,10 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.BuildConfig
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.theme.BlackColors
@@ -97,10 +100,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -117,7 +120,7 @@ fun SettingsScreen(
                 .padding(16.dp),
         ) {
             Text(
-                "Theme",
+                stringResource(R.string.settings_theme),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -131,7 +134,7 @@ fun SettingsScreen(
                     Tab(
                         selected = selectedThemeCategoryIndex == index,
                         onClick = { selectedThemeCategoryIndex = index },
-                        text = { Text(category.label) },
+                        text = { Text(stringResource(category.labelRes)) },
                     )
                 }
             }
@@ -153,59 +156,81 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                "Storage access",
+                stringResource(R.string.settings_storage_access),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                if (hasAllFilesAccess) "Full file access" else "Limited access",
+                stringResource(
+                    if (hasAllFilesAccess) R.string.settings_full_file_access
+                    else R.string.settings_limited_access,
+                ),
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 if (hasAllFilesAccess) {
-                    "Device storage and mounted external media are available."
+                    stringResource(R.string.settings_full_access_description)
                 } else {
-                    "Document trees and remote servers remain available. Direct device storage requires Android special access."
+                    stringResource(R.string.settings_limited_access_description)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(onClick = onRequestAllFilesAccess) {
-                Text(if (hasAllFilesAccess) "Manage access" else "Grant full access")
+                Text(
+                    stringResource(
+                        if (hasAllFilesAccess) R.string.settings_manage_access
+                        else R.string.settings_grant_full_access,
+                    ),
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             homeLayout?.let { layout ->
+                val resetHomeContentDescription = stringResource(R.string.content_desc_reset_home_layout)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Home layout",
+                        stringResource(R.string.settings_home_layout),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     TextButton(
                         onClick = viewModel::resetHomeLayout,
                         modifier = Modifier.semantics {
-                            contentDescription = "Reset Home layout"
+                            contentDescription = resetHomeContentDescription
                         },
                     ) {
-                        Text("Reset")
+                        Text(stringResource(R.string.settings_reset))
                     }
                 }
                 Text(
-                    "Choose which sections appear and arrange their order",
+                    stringResource(R.string.settings_home_layout_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 layout.sectionOrder.forEachIndexed { index, section ->
+                    val sectionLabel = stringResource(section.labelRes)
+                    val showSectionContentDescription = stringResource(
+                        R.string.content_desc_show_section_home,
+                        sectionLabel,
+                    )
+                    val moveSectionUpContentDescription = stringResource(
+                        R.string.content_desc_move_section_up,
+                        sectionLabel,
+                    )
+                    val moveSectionDownContentDescription = stringResource(
+                        R.string.content_desc_move_section_down,
+                        sectionLabel,
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -213,7 +238,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            section.label,
+                            sectionLabel,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f),
                         )
@@ -223,7 +248,7 @@ fun SettingsScreen(
                                 viewModel.setHomeSectionVisible(section, visible)
                             },
                             modifier = Modifier.semantics {
-                                contentDescription = "Show ${section.label} on Home"
+                                contentDescription = showSectionContentDescription
                             },
                         )
                         IconButton(
@@ -232,7 +257,7 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 Icons.Filled.KeyboardArrowUp,
-                                contentDescription = "Move ${section.label} up",
+                                contentDescription = moveSectionUpContentDescription,
                             )
                         }
                         IconButton(
@@ -241,7 +266,7 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 Icons.Filled.KeyboardArrowDown,
-                                contentDescription = "Move ${section.label} down",
+                                contentDescription = moveSectionDownContentDescription,
                             )
                         }
                     }
@@ -251,12 +276,13 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                "Sessions",
+                stringResource(R.string.settings_sessions),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            val autoCloseContentDescription = stringResource(R.string.content_desc_auto_close_sessions)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -265,9 +291,12 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Close inactive sessions", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Close all sessions after Voyager stays in the background",
+                        stringResource(R.string.settings_close_inactive_sessions),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        stringResource(R.string.settings_close_sessions_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -277,12 +306,17 @@ fun SettingsScreen(
                     checked = autoCloseSessions,
                     onCheckedChange = viewModel::setAutoCloseSessions,
                     modifier = Modifier.semantics {
-                        contentDescription = "Auto-close sessions"
+                        contentDescription = autoCloseContentDescription
                     },
                 )
             }
 
             if (autoCloseSessions) {
+                val timeoutLabel = stringResource(sessionAutoCloseTimeout.labelRes)
+                val timeoutContentDescription = stringResource(
+                    R.string.content_desc_session_timeout_current,
+                    timeoutLabel,
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -290,16 +324,15 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Close after", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_close_after), style = MaterialTheme.typography.bodyLarge)
                     Box {
                         TextButton(
                             onClick = { timeoutMenuExpanded = true },
                             modifier = Modifier.semantics {
-                                contentDescription =
-                                    "Session timeout, current ${sessionAutoCloseTimeout.label}"
+                                contentDescription = timeoutContentDescription
                             },
                         ) {
-                            Text(sessionAutoCloseTimeout.label)
+                            Text(timeoutLabel)
                         }
                         DropdownMenu(
                             expanded = timeoutMenuExpanded,
@@ -307,7 +340,7 @@ fun SettingsScreen(
                         ) {
                             SessionAutoCloseTimeout.entries.forEach { timeout ->
                                 DropdownMenuItem(
-                                    text = { Text(timeout.label) },
+                                    text = { Text(stringResource(timeout.labelRes)) },
                                     onClick = {
                                         timeoutMenuExpanded = false
                                         viewModel.setSessionAutoCloseTimeout(timeout)
@@ -323,7 +356,7 @@ fun SettingsScreen(
 
             // Display section
             Text(
-                "Display",
+                stringResource(R.string.settings_display),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -336,7 +369,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Show hidden files", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_show_hidden_files), style = MaterialTheme.typography.bodyLarge)
                 Switch(
                     checked = browseState.showHidden,
                     onCheckedChange = { viewModel.setShowHidden(it) },
@@ -351,9 +384,9 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Use Trash for local files", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_use_trash), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Turn off only if local deletes should be permanent",
+                        stringResource(R.string.settings_use_trash_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -369,27 +402,27 @@ fun SettingsScreen(
 
             // About section
             Text(
-                "About",
+                stringResource(R.string.settings_about),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text("Voyager", style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Version ${BuildConfig.VERSION_NAME}",
+                stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Voyager - A Material Design 3 file browser with SFTP, FTP, SMB, and WebDAV support.",
+                stringResource(R.string.settings_app_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Licensed under GPLv3 | F-Droid compatible",
+                stringResource(R.string.settings_license),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -439,7 +472,7 @@ private fun ThemeOptionRow(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            theme.displayName,
+            stringResource(theme.displayNameRes),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -455,13 +488,13 @@ private fun ThemeOptionRow(
 }
 
 private data class ThemeCategory(
-    val label: String,
+    @param:StringRes val labelRes: Int,
     val themes: List<AppTheme>,
 )
 
 private val themeCategories = listOf(
     ThemeCategory(
-        label = "Base",
+        labelRes = R.string.settings_theme_group_base,
         themes = listOf(
             AppTheme.SYSTEM,
             AppTheme.WHITE,
@@ -472,7 +505,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Color",
+        labelRes = R.string.settings_theme_group_color,
         themes = listOf(
             AppTheme.OCEAN,
             AppTheme.PURPLE,
@@ -480,7 +513,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Catppuccin",
+        labelRes = R.string.settings_theme_group_catppuccin,
         themes = listOf(
             AppTheme.LATTE,
             AppTheme.FRAPPE,
@@ -489,7 +522,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Classics",
+        labelRes = R.string.settings_theme_group_classics,
         themes = listOf(
             AppTheme.NORD,
             AppTheme.SOLARIZED_LIGHT,
@@ -499,7 +532,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Night",
+        labelRes = R.string.settings_theme_group_night,
         themes = listOf(
             AppTheme.ROSE_PINE,
             AppTheme.TOKYO_NIGHT,
