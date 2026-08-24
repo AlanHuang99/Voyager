@@ -12,10 +12,11 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
+import java.io.File
+import java.util.Date
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
-import java.io.File
 
 class FileThumbnailTest {
 
@@ -27,6 +28,7 @@ class FileThumbnailTest {
 
     @After
     fun tearDown() {
+        ApkThumbnailLoader.clear()
         PdfThumbnailLoader.clear()
         testFiles.forEach(File::delete)
     }
@@ -91,6 +93,86 @@ class FileThumbnailTest {
 
         composeTestRule.onNodeWithTag(FILE_ICON_TEST_TAG).assertExists()
     }
+
+    @Test
+    fun validLocalApkEventuallyRendersApplicationIcon() {
+        val apk = copyInstalledApk()
+        composeTestRule.setContent {
+            MaterialTheme {
+                FileThumbnailOrIcon(
+                    file = fileItem(apk),
+                    iconSize = 48.dp,
+                )
+            }
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(APK_THUMBNAIL_TEST_TAG).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag(APK_THUMBNAIL_TEST_TAG).assertExists()
+    }
+
+    @Test
+    fun corruptLocalApkUsesGenericIconFallback() {
+        val apk = context.cacheDir.resolve("corrupt-${System.nanoTime()}.apk")
+            .also(testFiles::add)
+            .apply { writeText("not an apk") }
+
+        renderApk(fileItem(apk))
+
+        composeTestRule.onNodeWithTag(FILE_ICON_TEST_TAG).assertExists()
+        composeTestRule.onNodeWithTag(APK_THUMBNAIL_TEST_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun safApkUsesGenericIconFallback() {
+        renderApk(
+            FileItem(
+                name = "saf.apk",
+                path = "content://documents/saf.apk",
+                isDirectory = false,
+                source = FileSource.SAF,
+            ),
+        )
+
+        composeTestRule.onNodeWithTag(FILE_ICON_TEST_TAG).assertExists()
+        composeTestRule.onNodeWithTag(APK_THUMBNAIL_TEST_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun webDavApkUsesGenericIconFallback() {
+        renderApk(
+            FileItem(
+                name = "remote.apk",
+                path = "/remote.apk",
+                isDirectory = false,
+                source = FileSource.WEBDAV,
+            ),
+        )
+
+        composeTestRule.onNodeWithTag(FILE_ICON_TEST_TAG).assertExists()
+        composeTestRule.onNodeWithTag(APK_THUMBNAIL_TEST_TAG).assertDoesNotExist()
+    }
+
+    private fun renderApk(file: FileItem) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                FileThumbnailOrIcon(file = file, iconSize = 48.dp)
+            }
+        }
+    }
+
+    private fun copyInstalledApk(): File = context.cacheDir.resolve("file-thumbnail-${System.nanoTime()}.apk")
+        .also(testFiles::add)
+        .also { File(context.applicationInfo.sourceDir).copyTo(it, overwrite = true) }
+
+    private fun fileItem(file: File) = FileItem(
+        name = file.name,
+        path = file.absolutePath,
+        isDirectory = false,
+        size = file.length(),
+        lastModified = Date(file.lastModified()),
+    )
 
     private fun createPdf(): File {
         val file = context.cacheDir.resolve("file-thumbnail-${System.nanoTime()}.pdf")
