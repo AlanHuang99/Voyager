@@ -6,6 +6,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.voyagerfiles.R
+import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.viewmodel.OperationState
 import com.voyagerfiles.viewmodel.TransferProgress
 import org.junit.Rule
@@ -19,7 +21,7 @@ class BrowserOperationProgressTest {
     @Test
     fun displaysDeterminateTransferDetailsAndAccessibleStatus() {
         val progress = TransferProgress(
-            label = "Copying",
+            label = UiText.Resource(R.string.progress_copying),
             completedItems = 2,
             totalItems = 5,
             currentItemName = "report.pdf",
@@ -48,7 +50,7 @@ class BrowserOperationProgressTest {
     @Test
     fun leavesUnknownProgressIndeterminateWithoutInventingPercentage() {
         val progress = TransferProgress(
-            label = "Downloading",
+            label = UiText.Resource(R.string.progress_downloading),
             currentItemName = "unknown.bin",
             copiedBytes = 1_024,
             totalBytes = null,

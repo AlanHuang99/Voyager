@@ -1,11 +1,12 @@
 package com.voyagerfiles.viewmodel
 
 import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.ui.text.UiText
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 data class TransferProgress(
-    val label: String,
+    val label: UiText,
     val completedItems: Int = 0,
     val totalItems: Int? = null,
     val currentItemName: String? = null,
@@ -14,7 +15,7 @@ data class TransferProgress(
     val elapsedNanos: Long = 0,
 ) {
     init {
-        require(label.isNotBlank()) { "Progress label must not be blank" }
+        require(label !is UiText.Dynamic || label.value.isNotBlank()) { "Progress label must not be blank" }
         require(completedItems >= 0) { "Completed item count must not be negative" }
         require(totalItems == null || totalItems >= 0) { "Total item count must not be negative" }
         require(copiedBytes >= 0) { "Copied byte count must not be negative" }
@@ -76,9 +77,8 @@ data class TransferProgress(
             speedText?.let(::add)
         }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
 
-    val stateDescription: String
-        get() = buildList {
-            add(label)
+    fun stateDescription(resolvedLabel: String): String = buildList {
+            add(resolvedLabel)
             currentItemName?.takeIf { it.isNotBlank() }?.let(::add)
             itemProgressText?.let(::add)
             byteProgressText?.let(::add)

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
+import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
 import java.text.DateFormat
@@ -72,15 +73,17 @@ fun TrashScreen(
     val state by viewModel.trashState.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val snackbarHostState = remember { SnackbarHostState() }
     val runningOperation = operationState as? OperationState.Running
+    val runningOperationLabel = runningOperation?.label?.let { it.asString() }
     val isSelectionMode = state.selectedIds.isNotEmpty()
     var showPermanentDeleteDialog by remember { mutableStateOf(false) }
     var showEmptyDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.refreshTrash() }
     LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let { message ->
+        resolvedSnackbarMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
             viewModel.clearSnackbar()
         }
@@ -147,10 +150,10 @@ fun TrashScreen(
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { stateDescription = operation.label },
+                        .semantics { stateDescription = runningOperationLabel.orEmpty() },
                 )
                 Text(
-                    operation.label,
+                    runningOperationLabel.orEmpty(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -180,7 +183,7 @@ fun TrashScreen(
                             Text("Could not load Trash", style = MaterialTheme.typography.titleMedium)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                state.error ?: "Unknown error",
+                                state.error?.asString().orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

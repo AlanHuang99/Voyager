@@ -1,6 +1,7 @@
 package com.voyagerfiles.data.model
 
 import android.webkit.MimeTypeMap
+import com.voyagerfiles.ui.text.UiText
 import java.text.DecimalFormat
 import java.util.Date
 
@@ -124,7 +125,7 @@ data class BrowseState(
     val currentPath: String = "/",
     val files: List<FileItem> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
     val selectedFiles: Set<String> = emptySet(),
     val sortBy: SortBy = SortBy.NAME,
     val sortOrder: SortOrder = SortOrder.ASCENDING,

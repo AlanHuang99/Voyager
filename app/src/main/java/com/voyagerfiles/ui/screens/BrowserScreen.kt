@@ -126,6 +126,7 @@ import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
 import com.voyagerfiles.playback.WebDavPlaybackProvider
+import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
@@ -152,6 +153,7 @@ fun BrowserScreen(
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
@@ -331,7 +333,7 @@ fun BrowserScreen(
 
     // Show snackbar messages from ViewModel
     LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let { msg ->
+        resolvedSnackbarMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearSnackbar()
         }
@@ -814,7 +816,7 @@ fun BrowserScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                state.error ?: "Unknown error",
+                                state.error?.asString().orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1079,9 +1081,10 @@ internal fun OperationProgressContent(
     modifier: Modifier = Modifier,
 ) {
     val progress = operation.progress
+    val progressLabel = progress.label.asString()
     Column(
         modifier = modifier.semantics {
-            stateDescription = progress.stateDescription
+            stateDescription = progress.stateDescription(progressLabel)
         },
     ) {
         val fraction = progress.fraction
@@ -1094,7 +1097,7 @@ internal fun OperationProgressContent(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
         Text(
-            progress.label,
+            progressLabel,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

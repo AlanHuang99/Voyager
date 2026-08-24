@@ -1,6 +1,9 @@
 package com.voyagerfiles.viewmodel
 
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveConflictException
+import com.voyagerfiles.ui.text.UiText
 import java.io.FileNotFoundException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
@@ -8,31 +11,43 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 object OperationMessages {
-    fun failure(action: String, error: Throwable): String = "$action failed: ${reason(error)}"
+    fun failure(@StringRes action: Int, error: Throwable): UiText = UiText.Resource(
+        R.string.operation_failed,
+        listOf(UiText.Resource(action), reason(error)),
+    )
 
     fun partial(
         failed: Int,
         total: Int,
-        action: String,
+        @StringRes action: Int,
         error: Throwable,
-    ): String = "$failed of $total item${if (total == 1) "" else "s"} could not be $action. ${reason(error)}"
+    ): UiText = UiText.Plural(
+        R.plurals.partial_operation_failed,
+        total,
+        listOf(failed, total, UiText.Resource(action), reason(error)),
+    )
 
-    fun reason(error: Throwable): String {
+    fun reason(error: Throwable): UiText {
         val causes = generateSequence(error) { it.cause }.toList()
         val conflict = causes.firstOrNull {
             it is DestinationConflictException || it is ArchiveConflictException
         }
         return when {
-            conflict != null -> "${conflict.message}. Rename or remove it, then try again."
+            conflict != null -> UiText.Resource(
+                R.string.error_conflict,
+                listOf(UiText.Dynamic(conflict.message.orEmpty())),
+            )
             causes.any { it is SecurityException } ->
-                "Permission denied. Grant access to this location and try again."
+                UiText.Resource(R.string.error_permission_denied)
             causes.any { it is UnknownHostException || it is ConnectException || it is NoRouteToHostException } ->
-                "Server unavailable. Check the address and network connection."
+                UiText.Resource(R.string.error_server_unavailable)
             causes.any { it is SocketTimeoutException } ->
-                "Connection timed out. Check the server and try again."
+                UiText.Resource(R.string.error_connection_timeout)
             causes.any { it is FileNotFoundException } ->
-                "The item is no longer available. Refresh the folder and try again."
-            else -> error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error"
+                UiText.Resource(R.string.error_item_unavailable)
+            else -> error.message?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let(UiText::Dynamic)
+                ?: UiText.Resource(R.string.unknown_error)
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -11,15 +12,15 @@ class TransferProgressTest {
     fun byteFractionIsDeterminateFromZeroAndClamped() {
         assertEquals(
             0f,
-            TransferProgress(label = "Copying", copiedBytes = 0, totalBytes = 100).fraction,
+            TransferProgress(label = label("Copying"), copiedBytes = 0, totalBytes = 100).fraction,
         )
         assertEquals(
             0.25f,
-            TransferProgress(label = "Copying", copiedBytes = 25, totalBytes = 100).fraction,
+            TransferProgress(label = label("Copying"), copiedBytes = 25, totalBytes = 100).fraction,
         )
         assertEquals(
             1f,
-            TransferProgress(label = "Copying", copiedBytes = 150, totalBytes = 100).fraction,
+            TransferProgress(label = label("Copying"), copiedBytes = 150, totalBytes = 100).fraction,
         )
     }
 
@@ -28,7 +29,7 @@ class TransferProgressTest {
         assertEquals(
             0.4f,
             TransferProgress(
-                label = "Moving",
+                label = label("Moving"),
                 completedItems = 2,
                 totalItems = 5,
                 copiedBytes = 50,
@@ -38,7 +39,7 @@ class TransferProgressTest {
         assertEquals(
             0.4f,
             TransferProgress(
-                label = "Moving",
+                label = label("Moving"),
                 completedItems = 2,
                 totalItems = 5,
                 copiedBytes = 0,
@@ -49,15 +50,15 @@ class TransferProgressTest {
 
     @Test
     fun fractionIsUnknownWithoutTruthfulDenominator() {
-        assertNull(TransferProgress(label = "Copying").fraction)
-        assertNull(TransferProgress(label = "Copying", totalBytes = 0).fraction)
-        assertNull(TransferProgress(label = "Copying", totalItems = 0).fraction)
+        assertNull(TransferProgress(label = label("Copying")).fraction)
+        assertNull(TransferProgress(label = label("Copying"), totalBytes = 0).fraction)
+        assertNull(TransferProgress(label = label("Copying"), totalItems = 0).fraction)
     }
 
     @Test
     fun exposesReaderFacingItemAndPercentageText() {
         val progress = TransferProgress(
-            label = "Copying",
+            label = label("Copying"),
             completedItems = 2,
             totalItems = 5,
             currentItemName = "report.pdf",
@@ -69,14 +70,14 @@ class TransferProgressTest {
         assertEquals("40%", progress.percentageText)
         assertEquals(
             "Copying, report.pdf, 2 of 5, 40 B of 100 B, 40%",
-            progress.stateDescription,
+            progress.stateDescription("Copying"),
         )
     }
 
     @Test
     fun formatsTransferredBytesAndAverageSpeedWithoutInventingTotals() {
         val known = TransferProgress(
-            label = "Downloading",
+            label = label("Downloading"),
             copiedBytes = 1_572_864,
             totalBytes = 3_145_728,
             elapsedNanos = 1_500_000_000,
@@ -85,7 +86,7 @@ class TransferProgressTest {
         assertEquals("1 MB/s", known.speedText)
 
         val unknown = TransferProgress(
-            label = "Downloading",
+            label = label("Downloading"),
             copiedBytes = 1_024,
             totalBytes = null,
             elapsedNanos = 1_000_000_000,
@@ -97,19 +98,21 @@ class TransferProgressTest {
     @Test
     fun rejectsNegativeCountsAndByteValues() {
         assertThrows(IllegalArgumentException::class.java) {
-            TransferProgress(label = "Copying", completedItems = -1)
+            TransferProgress(label = label("Copying"), completedItems = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TransferProgress(label = "Copying", totalItems = -1)
+            TransferProgress(label = label("Copying"), totalItems = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TransferProgress(label = "Copying", copiedBytes = -1)
+            TransferProgress(label = label("Copying"), copiedBytes = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TransferProgress(label = "Copying", totalBytes = -1)
+            TransferProgress(label = label("Copying"), totalBytes = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TransferProgress(label = "Copying", elapsedNanos = -1)
+            TransferProgress(label = label("Copying"), elapsedNanos = -1)
         }
     }
+
+    private fun label(value: String) = UiText.Dynamic(value)
 }
