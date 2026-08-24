@@ -68,6 +68,18 @@ export VOYAGER_SMB_DOMAIN='optional-domain'
 
 The SMB test creates a uniquely named directory and removes it during teardown. Use a test share, not irreplaceable data.
 
+Run the digest-pinned authenticated Samba discovery and binary-compatibility gate with:
+
+```bash
+VOYAGER_RUN_DOCKER_TESTS=true ./gradlew testDebugUnitTest --tests com.voyagerfiles.data.remote.smb.SmbDockerIntegrationTest --stacktrace
+```
+
+The test starts `dperson/samba@sha256:66088b78a19810dd1457a8f39340e95e663c728083efa5fe7dc0d40b2478e869` on a random loopback port, discovers two writable disk shares through RPC, verifies exact bytes, exercises direct-share mode, reconnects repeatedly, and always force-removes its uniquely named container. To verify the same RPC path on an Android device, expose an equivalent disposable Samba fixture to the device and pass its address to the opt-in instrumentation test:
+
+```bash
+ANDROID_SERIAL=DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.data.remote.smb.SmbAndroidIntegrationTest -Pandroid.testInstrumentationRunnerArguments.smbHost=SERVER_ADDRESS -Pandroid.testInstrumentationRunnerArguments.smbPort=SERVER_PORT --stacktrace
+```
+
 ## SAF write regression
 
 Use Android's document-tree picker to create or select a disposable `VoyagerSafTest` folder. From a direct-local browser session, copy a small file and a directory containing a nested file, switch to the document-tree session, and paste them. Repeat with Cut so the source is removed only after the destination completes. Verify exact file bytes at the destination, no existing item is overwritten, a deliberately interrupted transfer leaves no partial destination, and logcat contains neither `rbDocOpen` nor `EPERM`. Remove all disposable fixtures when finished.
