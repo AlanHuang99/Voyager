@@ -1,6 +1,7 @@
 package com.voyagerfiles.ui.screens
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -124,6 +125,7 @@ import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
+import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
@@ -142,6 +144,7 @@ fun BrowserScreen(
     onNavigateBack: () -> Unit,
     isTelevision: Boolean =
         LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION,
+    launchPlaybackIntent: ((Intent) -> Unit)? = null,
 ) {
     val state by viewModel.browseState.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
@@ -158,6 +161,7 @@ fun BrowserScreen(
     val firstItemFocusRequester = remember { FocusRequester() }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val playbackIntentLauncher: (Intent) -> Unit = launchPlaybackIntent ?: context::startActivity
     val uploadLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -177,6 +181,7 @@ fun BrowserScreen(
     var showSessionsSheet by remember { mutableStateOf(false) }
     var archiveNameDialogDefault by remember { mutableStateOf<String?>(null) }
     var archiveToExtract by remember { mutableStateOf<FileItem?>(null) }
+    var playbackFallbackFor by remember { mutableStateOf<FileItem?>(null) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
@@ -297,6 +302,29 @@ fun BrowserScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    fun handleRemoteFileTap(file: FileItem) {
+        when (remoteFileTapAction(file)) {
+            RemoteFileTapAction.NAVIGATE -> navigateTo(file.path)
+            RemoteFileTapAction.DOWNLOAD -> viewModel.downloadFile(file.path)
+            RemoteFileTapAction.STREAM_WEBDAV -> scope.launch {
+                viewModel.prepareWebDavPlayback(file).fold(
+                    onSuccess = { uri ->
+                        try {
+                            playbackIntentLauncher(FileUtils.createRemotePlaybackIntent(uri, file))
+                        } catch (_: ActivityNotFoundException) {
+                            WebDavPlaybackProvider.revoke(uri)
+                            snackbarHostState.showSnackbar("No app can play this media")
+                        } catch (_: Throwable) {
+                            WebDavPlaybackProvider.revoke(uri)
+                            snackbarHostState.showSnackbar("Could not open this media")
+                        }
+                    },
+                    onFailure = { playbackFallbackFor = file },
+                )
             }
         }
     }
@@ -845,10 +873,10 @@ fun BrowserScreen(
                                 onClick = {
                                     if (isSelectionMode) {
                                         toggleSelection(file.path)
+                                    } else if (isNetwork) {
+                                        handleRemoteFileTap(file)
                                     } else if (file.isDirectory) {
                                         navigateTo(file.path)
-                                    } else if (isNetwork) {
-                                        viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                         handleDeviceFileTap(file)
                                     }
@@ -883,10 +911,10 @@ fun BrowserScreen(
                                 onClick = {
                                     if (isSelectionMode) {
                                         toggleSelection(file.path)
+                                    } else if (isNetwork) {
+                                        handleRemoteFileTap(file)
                                     } else if (file.isDirectory) {
                                         navigateTo(file.path)
-                                    } else if (isNetwork) {
-                                        viewModel.downloadFile(file.path)
                                     } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                         handleDeviceFileTap(file)
                                     }
@@ -975,6 +1003,29 @@ fun BrowserScreen(
             },
             dismissButton = {
                 TextButton(onClick = { archiveToExtract = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    playbackFallbackFor?.let { file ->
+        AlertDialog(
+            onDismissRequest = { playbackFallbackFor = null },
+            title = { Text("Direct playback unavailable") },
+            text = { Text("This server does not provide the byte ranges required for seeking. Download the file instead?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        playbackFallbackFor = null
+                        viewModel.downloadFile(file.path)
+                    },
+                ) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playbackFallbackFor = null }) {
                     Text("Cancel")
                 }
             },

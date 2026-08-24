@@ -141,6 +141,10 @@ class WebDavPlaybackProvider : ContentProvider() {
                 .build()
         }
 
+        internal fun revoke(uri: Uri) {
+            uri.pathSegments.singleOrNull()?.let { currentStore().remove(it) }
+        }
+
         internal fun setStoreForTest(store: PlaybackTokenStore) {
             synchronized(storeLock) {
                 tokenStore.clear()

@@ -26,6 +26,7 @@ import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.remote.saf.SafFileProvider
+import com.voyagerfiles.data.remote.webdav.WebDavFileProvider
 import com.voyagerfiles.data.repository.ConnectionRepository
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
@@ -34,6 +35,8 @@ import com.voyagerfiles.data.repository.FileProviderFactory
 import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.security.AndroidCredentialCipher
+import com.voyagerfiles.playback.PlaybackEntry
+import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
@@ -52,7 +55,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
+fun interface RemoteFileProviderFactory {
+    fun create(context: Application, connection: RemoteConnection): FileProvider
+}
+
+fun interface WebDavPlaybackPreparer {
+    suspend fun prepare(context: Application, provider: FileProvider, file: FileItem): Result<Uri>
+}
+
+private val defaultRemoteFileProviderFactory = RemoteFileProviderFactory { context, connection ->
+    FileProviderFactory.createRemote(context, connection)
+}
+
+private val defaultWebDavPlaybackPreparer = WebDavPlaybackPreparer { context, provider, file ->
+    runCatching {
+        val webDavProvider = provider as? WebDavFileProvider
+            ?: error("The active provider is not WebDAV")
+        val prepared = webDavProvider.createPlaybackSource(file.path).getOrThrow()
+        try {
+            WebDavPlaybackProvider.register(
+                context,
+                PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
+            )
+        } catch (error: Throwable) {
+            prepared.source.close()
+            throw error
+        }
+    }
+}
+
+class FileBrowserViewModel @JvmOverloads constructor(
+    application: Application,
+    private val remoteProviderFactory: RemoteFileProviderFactory = defaultRemoteFileProviderFactory,
+    private val playbackPreparer: WebDavPlaybackPreparer = defaultWebDavPlaybackPreparer,
+) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
     private val db = AppDatabase.getInstance(application)
@@ -805,6 +841,20 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
         downloadPaths(listOf(path), clearSelection = false)
     }
 
+    suspend fun prepareWebDavPlayback(file: FileItem): Result<Uri> = runCatching {
+        val state = _browseState.value
+        require(state.source == FileSource.WEBDAV && file.source == FileSource.WEBDAV) {
+            "Direct playback requires the active WebDAV session"
+        }
+        require(!file.isDirectory && (file.isAudio || file.isVideo)) {
+            "Direct playback requires an audio or video file"
+        }
+        require(state.files.any { it.path == file.path && it.source == file.source }) {
+            "The WebDAV file is no longer active"
+        }
+        playbackPreparer.prepare(getApplication(), fileProvider, file).getOrThrow()
+    }
+
     fun downloadSelected() {
         downloadPaths(_browseState.value.selectedFiles.toList(), clearSelection = true)
     }
@@ -900,10 +950,7 @@ class FileBrowserViewModel(application: Application) : AndroidViewModel(applicat
             if (_sessions.value.none { it.id == sessionId }) {
                 val normalizedPath = BrowserNavigationBounds.normalizePath(connection.remotePath)
                 val source = sourceForProtocol(connection.protocol)
-                sessionProviders[sessionId] = FileProviderFactory.createRemote(
-                    context = getApplication(),
-                    connection = connection,
-                )
+                sessionProviders[sessionId] = remoteProviderFactory.create(getApplication(), connection)
                 _sessions.update { sessions ->
                     sessions + BrowserSession(
                         id = sessionId,
