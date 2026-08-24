@@ -1,6 +1,7 @@
 package com.voyagerfiles.ui.screens
 
 import android.content.ActivityNotFoundException
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,11 +90,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,11 +133,15 @@ import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+internal const val BROWSER_SEARCH_TEST_TAG = "browser-search"
+
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen(
     viewModel: FileBrowserViewModel,
     onNavigateBack: () -> Unit,
+    isTelevision: Boolean =
+        LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION,
 ) {
     val state by viewModel.browseState.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
@@ -142,6 +154,8 @@ fun BrowserScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val hapticFeedback = LocalHapticFeedback.current
+    val inputModeManager = LocalInputModeManager.current
+    val firstItemFocusRequester = remember { FocusRequester() }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uploadLauncher = rememberLauncherForActivityResult(
@@ -197,6 +211,14 @@ fun BrowserScreen(
         )
     }
     val runningOperation = operationState as? OperationState.Running
+    val firstVisiblePath = state.visibleFiles.firstOrNull()?.path
+
+    LaunchedEffect(isTelevision, state.isLoading, firstVisiblePath, state.viewMode) {
+        if (isTelevision && !state.isLoading && firstVisiblePath != null) {
+            inputModeManager.requestInputMode(InputMode.Keyboard)
+            firstItemFocusRequester.requestFocus()
+        }
+    }
 
     fun leaveBrowser() {
         onNavigateBack()
@@ -811,9 +833,15 @@ fun BrowserScreen(
                         items(state.visibleFiles, key = { it.path }) { file ->
                             FileListItem(
                                 file = file,
+                                modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                    Modifier.focusRequester(firstItemFocusRequester)
+                                } else {
+                                    Modifier
+                                },
                                 compact = state.viewMode == ViewMode.COMPACT,
                                 isSelected = file.path in state.selectedFiles,
                                 isSelectionMode = isSelectionMode,
+                                enableRemoteSelect = isTelevision,
                                 onClick = {
                                     if (isSelectionMode) {
                                         toggleSelection(file.path)
@@ -844,8 +872,14 @@ fun BrowserScreen(
                         items(state.visibleFiles, key = { it.path }) { file ->
                             FileGridItem(
                                 file = file,
+                                modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                    Modifier.focusRequester(firstItemFocusRequester)
+                                } else {
+                                    Modifier
+                                },
                                 isSelected = file.path in state.selectedFiles,
                                 isSelectionMode = isSelectionMode,
+                                enableRemoteSelect = isTelevision,
                                 onClick = {
                                     if (isSelectionMode) {
                                         toggleSelection(file.path)
@@ -1093,7 +1127,7 @@ private fun BrowserSearchField(
         },
         placeholder = { Text("Search this folder") },
         singleLine = true,
-        modifier = modifier,
+        modifier = modifier.testTag(BROWSER_SEARCH_TEST_TAG),
     )
 }
 
