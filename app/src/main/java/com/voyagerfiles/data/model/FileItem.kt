@@ -1,6 +1,8 @@
 package com.voyagerfiles.data.model
 
 import android.webkit.MimeTypeMap
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
 import com.voyagerfiles.ui.text.UiText
 import java.text.DecimalFormat
 import java.util.Date
@@ -150,8 +152,8 @@ data class BrowseState(
         }
 }
 
-enum class ViewMode(val label: String) {
-    LIST("List"),
-    COMPACT("Compact list"),
-    GRID("Grid"),
+enum class ViewMode(@StringRes val labelRes: Int) {
+    LIST(R.string.view_mode_list),
+    COMPACT(R.string.view_mode_compact_list),
+    GRID(R.string.view_mode_grid),
 }

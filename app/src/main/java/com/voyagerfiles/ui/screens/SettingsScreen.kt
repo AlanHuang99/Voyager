@@ -1,5 +1,6 @@
 package com.voyagerfiles.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,10 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.BuildConfig
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.theme.BlackColors
@@ -131,7 +134,7 @@ fun SettingsScreen(
                     Tab(
                         selected = selectedThemeCategoryIndex == index,
                         onClick = { selectedThemeCategoryIndex = index },
-                        text = { Text(category.label) },
+                        text = { Text(stringResource(category.labelRes)) },
                     )
                 }
             }
@@ -206,6 +209,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 layout.sectionOrder.forEachIndexed { index, section ->
+                    val sectionLabel = stringResource(section.labelRes)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -213,7 +217,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            section.label,
+                            sectionLabel,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f),
                         )
@@ -223,7 +227,7 @@ fun SettingsScreen(
                                 viewModel.setHomeSectionVisible(section, visible)
                             },
                             modifier = Modifier.semantics {
-                                contentDescription = "Show ${section.label} on Home"
+                                contentDescription = "Show $sectionLabel on Home"
                             },
                         )
                         IconButton(
@@ -232,7 +236,7 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 Icons.Filled.KeyboardArrowUp,
-                                contentDescription = "Move ${section.label} up",
+                                contentDescription = "Move $sectionLabel up",
                             )
                         }
                         IconButton(
@@ -241,7 +245,7 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 Icons.Filled.KeyboardArrowDown,
-                                contentDescription = "Move ${section.label} down",
+                                contentDescription = "Move $sectionLabel down",
                             )
                         }
                     }
@@ -283,6 +287,7 @@ fun SettingsScreen(
             }
 
             if (autoCloseSessions) {
+                val timeoutLabel = stringResource(sessionAutoCloseTimeout.labelRes)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -296,10 +301,10 @@ fun SettingsScreen(
                             onClick = { timeoutMenuExpanded = true },
                             modifier = Modifier.semantics {
                                 contentDescription =
-                                    "Session timeout, current ${sessionAutoCloseTimeout.label}"
+                                    "Session timeout, current $timeoutLabel"
                             },
                         ) {
-                            Text(sessionAutoCloseTimeout.label)
+                            Text(timeoutLabel)
                         }
                         DropdownMenu(
                             expanded = timeoutMenuExpanded,
@@ -307,7 +312,7 @@ fun SettingsScreen(
                         ) {
                             SessionAutoCloseTimeout.entries.forEach { timeout ->
                                 DropdownMenuItem(
-                                    text = { Text(timeout.label) },
+                                    text = { Text(stringResource(timeout.labelRes)) },
                                     onClick = {
                                         timeoutMenuExpanded = false
                                         viewModel.setSessionAutoCloseTimeout(timeout)
@@ -439,7 +444,7 @@ private fun ThemeOptionRow(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            theme.displayName,
+            stringResource(theme.displayNameRes),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -455,13 +460,13 @@ private fun ThemeOptionRow(
 }
 
 private data class ThemeCategory(
-    val label: String,
+    @param:StringRes val labelRes: Int,
     val themes: List<AppTheme>,
 )
 
 private val themeCategories = listOf(
     ThemeCategory(
-        label = "Base",
+        labelRes = R.string.settings_theme_group_base,
         themes = listOf(
             AppTheme.SYSTEM,
             AppTheme.WHITE,
@@ -472,7 +477,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Color",
+        labelRes = R.string.settings_theme_group_color,
         themes = listOf(
             AppTheme.OCEAN,
             AppTheme.PURPLE,
@@ -480,7 +485,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Catppuccin",
+        labelRes = R.string.settings_theme_group_catppuccin,
         themes = listOf(
             AppTheme.LATTE,
             AppTheme.FRAPPE,
@@ -489,7 +494,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Classics",
+        labelRes = R.string.settings_theme_group_classics,
         themes = listOf(
             AppTheme.NORD,
             AppTheme.SOLARIZED_LIGHT,
@@ -499,7 +504,7 @@ private val themeCategories = listOf(
         ),
     ),
     ThemeCategory(
-        label = "Night",
+        labelRes = R.string.settings_theme_group_night,
         themes = listOf(
             AppTheme.ROSE_PINE,
             AppTheme.TOKYO_NIGHT,

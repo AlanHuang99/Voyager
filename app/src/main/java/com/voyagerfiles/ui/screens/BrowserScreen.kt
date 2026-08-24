@@ -103,10 +103,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
@@ -569,7 +571,7 @@ fun BrowserScreen(
                                             ViewMode.COMPACT -> Icons.Filled.ViewAgenda
                                             ViewMode.GRID -> Icons.Filled.GridView
                                         },
-                                        contentDescription = "View options, current ${state.viewMode.label}",
+                                        contentDescription = "View options, current ${stringResource(state.viewMode.labelRes)}",
                                     )
                                 }
                                 DropdownMenu(
@@ -578,7 +580,7 @@ fun BrowserScreen(
                                 ) {
                                     ViewMode.entries.forEach { mode ->
                                         DropdownMenuItem(
-                                            text = { Text(mode.label) },
+                                            text = { Text(stringResource(mode.labelRes)) },
                                             leadingIcon = {
                                                 Icon(
                                                     imageVector = when (mode) {
@@ -1201,7 +1203,7 @@ private fun FileTypeFilterRow(
             FilterChip(
                 selected = selectedFilter == filter,
                 onClick = { onFilterChange(filter) },
-                label = { Text(filter.label) },
+                label = { Text(stringResource(filter.labelRes)) },
             )
         }
     }

@@ -1,31 +1,40 @@
 package com.voyagerfiles.ui.components
 
+import com.voyagerfiles.R
+import com.voyagerfiles.ui.text.UiText
+
 data class DeleteDialogModel(
-    val title: String,
-    val message: String,
-    val confirmLabel: String,
+    val title: UiText,
+    val message: UiText,
+    val confirmLabel: UiText,
 ) {
     companion object {
         fun localTrash(count: Int, fileName: String): DeleteDialogModel =
             DeleteDialogModel(
-                title = "Move to Trash",
+                title = UiText.Resource(R.string.dialog_move_to_trash),
                 message = if (count == 1) {
-                    "Move \"$fileName\" to Trash? You can restore it later."
+                    UiText.Resource(
+                        R.string.dialog_move_named_to_trash,
+                        listOf(UiText.Dynamic(fileName)),
+                    )
                 } else {
-                    "Move $count items to Trash? You can restore them later."
+                    UiText.Plural(R.plurals.dialog_move_items_to_trash, count, listOf(count))
                 },
-                confirmLabel = "Move",
+                confirmLabel = UiText.Resource(R.string.action_move),
             )
 
         fun permanent(count: Int, fileName: String): DeleteDialogModel =
             DeleteDialogModel(
-                title = "Delete permanently",
+                title = UiText.Resource(R.string.dialog_delete_permanently),
                 message = if (count == 1) {
-                    "Permanently delete \"$fileName\"? This cannot be undone."
+                    UiText.Resource(
+                        R.string.dialog_delete_named_permanently,
+                        listOf(UiText.Dynamic(fileName)),
+                    )
                 } else {
-                    "Permanently delete $count items? This cannot be undone."
+                    UiText.Plural(R.plurals.dialog_delete_items_permanently, count, listOf(count))
                 },
-                confirmLabel = "Delete",
+                confirmLabel = UiText.Resource(R.string.action_delete),
             )
     }
 }

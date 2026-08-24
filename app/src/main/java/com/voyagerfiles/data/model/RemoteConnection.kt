@@ -3,6 +3,8 @@ package com.voyagerfiles.data.model
 import androidx.room.Entity
 import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
 
 @Entity(tableName = "remote_connections")
 data class RemoteConnection(
@@ -24,9 +26,9 @@ data class RemoteConnection(
     val isFavorite: Boolean = false,
 )
 
-enum class ConnectionProtocol(val displayName: String, val defaultPort: Int) {
-    SFTP("SFTP", 22),
-    FTP("FTP", 21),
-    SMB("SMB", 445),
-    WEBDAV("WebDAV", 443),
+enum class ConnectionProtocol(@StringRes val displayNameRes: Int, val defaultPort: Int) {
+    SFTP(R.string.protocol_sftp, 22),
+    FTP(R.string.protocol_ftp, 21),
+    SMB(R.string.protocol_smb, 445),
+    WEBDAV(R.string.protocol_webdav, 443),
 }

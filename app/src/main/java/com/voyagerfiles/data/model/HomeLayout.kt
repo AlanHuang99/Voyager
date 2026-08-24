@@ -1,12 +1,15 @@
 package com.voyagerfiles.data.model
 
-enum class HomeSection(val label: String) {
-    STORAGE("Storage"),
-    ACTIVE_SESSIONS("Active sessions"),
-    QUICK_ACCESS("Quick access"),
-    REMOTE_CONNECTIONS("Remote connections"),
-    BOOKMARKS("Bookmarks"),
-    FOLDERS("Folders"),
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
+
+enum class HomeSection(@StringRes val labelRes: Int) {
+    STORAGE(R.string.home_storage),
+    ACTIVE_SESSIONS(R.string.home_active_sessions),
+    QUICK_ACCESS(R.string.home_quick_access),
+    REMOTE_CONNECTIONS(R.string.home_remote_connections),
+    BOOKMARKS(R.string.home_bookmarks),
+    FOLDERS(R.string.home_folders),
 }
 
 data class HomeLayout(

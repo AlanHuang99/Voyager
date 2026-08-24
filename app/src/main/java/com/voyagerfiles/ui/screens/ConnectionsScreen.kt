@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
@@ -225,7 +226,7 @@ private fun ConnectionCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    "${connection.protocol.displayName} • ${connection.host}:${connection.port}",
+                    "${stringResource(connection.protocol.displayNameRes)} • ${connection.host}:${connection.port}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

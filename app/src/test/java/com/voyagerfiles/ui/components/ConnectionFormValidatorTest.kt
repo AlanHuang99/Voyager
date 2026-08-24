@@ -1,6 +1,8 @@
 package com.voyagerfiles.ui.components
 
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ConnectionProtocol
+import com.voyagerfiles.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,15 +15,15 @@ class ConnectionFormValidatorTest {
         val scheme = ConnectionFormValidator.validate(ConnectionProtocol.SFTP, "ssh://server.example", "22", "")
         val path = ConnectionFormValidator.validate(ConnectionProtocol.WEBDAV, "server.example/dav", "443", "")
 
-        assertEquals("Enter a host without a scheme or path", scheme.hostError)
-        assertEquals("Enter a host without a scheme or path", path.hostError)
+        assertEquals(R.string.validation_host_without_scheme, scheme.hostErrorRes)
+        assertEquals(R.string.validation_host_without_scheme, path.hostErrorRes)
     }
 
     @Test
     fun rejectsInvalidPortInsteadOfSilentlyUsingDefault() {
-        assertEquals("Enter a port from 1 to 65535", validatePort("not-a-port").portError)
-        assertEquals("Enter a port from 1 to 65535", validatePort("0").portError)
-        assertEquals("Enter a port from 1 to 65535", validatePort("65536").portError)
+        assertEquals(R.string.validation_port_range, validatePort("not-a-port").portErrorRes)
+        assertEquals(R.string.validation_port_range, validatePort("0").portErrorRes)
+        assertEquals(R.string.validation_port_range, validatePort("65536").portErrorRes)
     }
 
     @Test
@@ -29,7 +31,7 @@ class ConnectionFormValidatorTest {
         val result = ConnectionFormValidator.validate(ConnectionProtocol.SMB, "server.example", "445", "")
 
         assertTrue(result.isValid)
-        assertNull(result.shareNameError)
+        assertNull(result.shareNameErrorRes)
     }
 
     @Test
@@ -37,14 +39,20 @@ class ConnectionFormValidatorTest {
         val result = ConnectionFormValidator.validate(ConnectionProtocol.SFTP, "server.example", "22", "")
 
         assertTrue(result.isValid)
-        assertNull(result.hostError)
-        assertNull(result.portError)
+        assertNull(result.hostErrorRes)
+        assertNull(result.portErrorRes)
     }
 
     @Test
     fun cleartextWarningCoversFtpAndHttpWebDavOnly() {
-        assertEquals("Use unencrypted FTP?", connectionTransportWarning(ConnectionProtocol.FTP, useTls = false)?.title)
-        assertEquals("Use unencrypted HTTP?", connectionTransportWarning(ConnectionProtocol.WEBDAV, useTls = false)?.title)
+        assertEquals(
+            UiText.Resource(R.string.warning_ftp_title),
+            connectionTransportWarning(ConnectionProtocol.FTP, useTls = false)?.title,
+        )
+        assertEquals(
+            UiText.Resource(R.string.warning_http_title),
+            connectionTransportWarning(ConnectionProtocol.WEBDAV, useTls = false)?.title,
+        )
         assertNull(connectionTransportWarning(ConnectionProtocol.WEBDAV, useTls = true))
         assertNull(connectionTransportWarning(ConnectionProtocol.SFTP, useTls = false))
     }

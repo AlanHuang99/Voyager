@@ -37,11 +37,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.remote.sftp.SshKeyGenerator
+import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import kotlinx.coroutines.Dispatchers
@@ -132,13 +135,13 @@ fun DeleteConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(model.title) },
-        text = { Text(model.message) },
+        title = { Text(model.title.asString()) },
+        text = { Text(model.message.asString()) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text(model.confirmLabel) }
+            TextButton(onClick = onConfirm) { Text(model.confirmLabel.asString()) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -200,7 +203,7 @@ fun ConnectionDialog(
 
     fun connectionFromFields(): RemoteConnection = RemoteConnection(
         id = existingConnection?.id ?: 0,
-        name = name.trim().ifBlank { "${host.trim()} (${protocol.displayName})" },
+        name = name.trim().ifBlank { "${host.trim()} (${context.getString(protocol.displayNameRes)})" },
         protocol = protocol,
         host = host.trim(),
         port = checkNotNull(port.toIntOrNull()),
@@ -233,7 +236,7 @@ fun ConnectionDialog(
                     onExpandedChange = { protocolExpanded = !protocolExpanded },
                 ) {
                     OutlinedTextField(
-                        value = protocol.displayName,
+                        value = stringResource(protocol.displayNameRes),
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Protocol") },
@@ -248,7 +251,7 @@ fun ConnectionDialog(
                     ) {
                         ConnectionProtocol.entries.forEach { proto ->
                             DropdownMenuItem(
-                                text = { Text(proto.displayName) },
+                                text = { Text(stringResource(proto.displayNameRes)) },
                                 onClick = {
                                     protocol = proto
                                     port = proto.defaultPort.toString()
@@ -266,8 +269,10 @@ fun ConnectionDialog(
                     value = host,
                     onValueChange = { host = it },
                     label = { Text("Host") },
-                    isError = validation.hostError != null,
-                    supportingText = validation.hostError?.let { message -> { Text(message) } },
+                    isError = validation.hostErrorRes != null,
+                    supportingText = validation.hostErrorRes?.let { messageRes ->
+                        { Text(stringResource(messageRes)) }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -305,8 +310,10 @@ fun ConnectionDialog(
                     value = port,
                     onValueChange = { port = it },
                     label = { Text("Port") },
-                    isError = validation.portError != null,
-                    supportingText = validation.portError?.let { message -> { Text(message) } },
+                    isError = validation.portErrorRes != null,
+                    supportingText = validation.portErrorRes?.let { messageRes ->
+                        { Text(stringResource(messageRes)) }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -392,9 +399,13 @@ fun ConnectionDialog(
                         value = shareName,
                         onValueChange = { shareName = it },
                         label = { Text("Share name (optional)") },
-                        isError = validation.shareNameError != null,
+                        isError = validation.shareNameErrorRes != null,
                         supportingText = {
-                            Text(validation.shareNameError ?: "Leave blank to browse available shares")
+                            Text(
+                                stringResource(
+                                    validation.shareNameErrorRes ?: R.string.smb_share_supporting,
+                                ),
+                            )
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -441,15 +452,15 @@ fun ConnectionDialog(
         val warning = checkNotNull(transportWarning)
         AlertDialog(
             onDismissRequest = { showCleartextConfirmation = false },
-            title = { Text(warning.title) },
-            text = { Text(warning.message) },
+            title = { Text(warning.title.asString()) },
+            text = { Text(warning.message.asString()) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showCleartextConfirmation = false
                         onSave(connectionFromFields())
                     },
-                ) { Text(warning.confirmLabel) }
+                ) { Text(warning.confirmLabel.asString()) }
             },
             dismissButton = {
                 TextButton(onClick = { showCleartextConfirmation = false }) { Text("Cancel") }

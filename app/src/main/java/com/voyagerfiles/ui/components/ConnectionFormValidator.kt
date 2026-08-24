@@ -1,14 +1,17 @@
 package com.voyagerfiles.ui.components
 
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ConnectionProtocol
+import com.voyagerfiles.ui.text.UiText
 
 data class ConnectionFormValidation(
-    val hostError: String? = null,
-    val portError: String? = null,
-    val shareNameError: String? = null,
+    @StringRes val hostErrorRes: Int? = null,
+    @StringRes val portErrorRes: Int? = null,
+    @StringRes val shareNameErrorRes: Int? = null,
 ) {
     val isValid: Boolean
-        get() = hostError == null && portError == null && shareNameError == null
+        get() = hostErrorRes == null && portErrorRes == null && shareNameErrorRes == null
 }
 
 object ConnectionFormValidator {
@@ -19,27 +22,27 @@ object ConnectionFormValidator {
         shareName: String,
     ): ConnectionFormValidation {
         val normalizedHost = host.trim()
-        val hostError = when {
-            normalizedHost.isEmpty() -> "Host is required"
+        val hostErrorRes = when {
+            normalizedHost.isEmpty() -> R.string.validation_host_required
             "://" in normalizedHost || '/' in normalizedHost || normalizedHost.any(Char::isWhitespace) ->
-                "Enter a host without a scheme or path"
+                R.string.validation_host_without_scheme
             else -> null
         }
         val parsedPort = port.toIntOrNull()
-        val portError = if (parsedPort == null || parsedPort !in 1..65535) {
-            "Enter a port from 1 to 65535"
+        val portErrorRes = if (parsedPort == null || parsedPort !in 1..65535) {
+            R.string.validation_port_range
         } else {
             null
         }
-        val shareNameError: String? = null
-        return ConnectionFormValidation(hostError, portError, shareNameError)
+        val shareNameErrorRes: Int? = null
+        return ConnectionFormValidation(hostErrorRes, portErrorRes, shareNameErrorRes)
     }
 }
 
 data class ConnectionTransportWarning(
-    val title: String,
-    val message: String,
-    val confirmLabel: String,
+    val title: UiText,
+    val message: UiText,
+    val confirmLabel: UiText,
 )
 
 fun connectionTransportWarning(
@@ -47,14 +50,14 @@ fun connectionTransportWarning(
     useTls: Boolean,
 ): ConnectionTransportWarning? = when {
     protocol == ConnectionProtocol.FTP -> ConnectionTransportWarning(
-        title = "Use unencrypted FTP?",
-        message = "FTP sends the username, password, and files without transport encryption. Use it only on an isolated trusted network.",
-        confirmLabel = "Use FTP",
+        title = UiText.Resource(R.string.warning_ftp_title),
+        message = UiText.Resource(R.string.warning_ftp_message),
+        confirmLabel = UiText.Resource(R.string.warning_ftp_confirm),
     )
     protocol == ConnectionProtocol.WEBDAV && !useTls -> ConnectionTransportWarning(
-        title = "Use unencrypted HTTP?",
-        message = "The WebDAV username, password, and files can be exposed on the network. Use HTTPS unless this is an isolated trusted network.",
-        confirmLabel = "Use HTTP",
+        title = UiText.Resource(R.string.warning_http_title),
+        message = UiText.Resource(R.string.warning_http_message),
+        confirmLabel = UiText.Resource(R.string.warning_http_confirm),
     )
     else -> null
 }

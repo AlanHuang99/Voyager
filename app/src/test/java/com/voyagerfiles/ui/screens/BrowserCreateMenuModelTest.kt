@@ -1,9 +1,17 @@
 package com.voyagerfiles.ui.screens
 
+import com.voyagerfiles.R
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BrowserCreateMenuModelTest {
+
+    @Test
+    fun actionsUseResourceLabels() {
+        assertEquals(R.string.create_new_folder, BrowserCreateAction.NEW_FOLDER.labelRes)
+        assertEquals(R.string.create_new_file, BrowserCreateAction.NEW_FILE.labelRes)
+        assertEquals(R.string.create_upload_files, BrowserCreateAction.UPLOAD_FILES.labelRes)
+    }
 
     @Test
     fun remoteMenuIncludesCreateAndUploadActions() {
