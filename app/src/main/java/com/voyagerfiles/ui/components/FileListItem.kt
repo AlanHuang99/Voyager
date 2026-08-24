@@ -38,6 +38,7 @@ fun FileListItem(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    enableRemoteSelect: Boolean = false,
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -57,6 +58,11 @@ fun FileListItem(
         color = backgroundColor,
         modifier = modifier
             .fillMaxWidth()
+            .remoteSelectActions(
+                enabled = enableRemoteSelect,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

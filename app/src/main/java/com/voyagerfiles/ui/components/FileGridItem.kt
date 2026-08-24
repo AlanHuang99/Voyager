@@ -27,6 +27,7 @@ fun FileGridItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enableRemoteSelect: Boolean = false,
 ) {
     val bgColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -38,6 +39,11 @@ fun FileGridItem(
         color = bgColor,
         shape = MaterialTheme.shapes.medium,
         modifier = modifier
+            .remoteSelectActions(
+                enabled = enableRemoteSelect,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
