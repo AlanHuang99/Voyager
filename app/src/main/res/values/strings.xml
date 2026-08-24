@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Voyager</string>
+    <string name="app_name" translatable="false">Voyager</string>
+    <string name="protocol_sftp" translatable="false">SFTP</string>
+    <string name="protocol_ftp" translatable="false">FTP</string>
+    <string name="protocol_smb" translatable="false">SMB</string>
+    <string name="protocol_webdav" translatable="false">WebDAV</string>
+    <string name="unknown_error">Unknown error</string>
+    <string name="operation_failed">Could not %1$s: %2$s</string>
+    <string name="operation_download">download</string>
+    <string name="localized_integer">%1$,d</string>
+    <plurals name="items_selected">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="items_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
 </resources>
