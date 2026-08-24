@@ -147,6 +147,17 @@ object FileUtils {
             Intent.createChooser(target, "Open with")
         }
 
+    fun createRemotePlaybackIntent(uri: Uri, file: FileItem): Intent {
+        require(file.source == FileSource.WEBDAV && !file.isDirectory && (file.isAudio || file.isVideo)) {
+            "Direct playback requires a WebDAV audio or video file"
+        }
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, file.mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newRawUri(file.name, uri)
+        }
+    }
+
     fun openFileWith(context: Context, file: FileItem): Result<Unit> =
         createOpenWithIntent(context, file).mapCatching { chooser ->
             if (context !is Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

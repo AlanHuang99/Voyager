@@ -68,6 +68,8 @@ data class FileItem(
             "heif" to "image/heif",
             "jpg" to "image/jpeg",
             "jpeg" to "image/jpeg",
+            "mp3" to "audio/mpeg",
+            "mp4" to "video/mp4",
             "png" to "image/png",
             "webp" to "image/webp",
         )
