@@ -434,7 +434,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
             val validatedSources = sources.map { source ->
                 when (val result = FileNameValidator.validate(source.name)) {
                     is FileNameValidationResult.Valid -> source.copy(name = result.name)
-                    is FileNameValidationResult.Invalid -> throw IllegalArgumentException(result.message)
+                    is FileNameValidationResult.Invalid -> {
+                        throw UiTextException(UiText.Resource(result.messageRes))
+                    }
                 }
             }
             var failed = 0
@@ -1276,7 +1278,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         when (val result = FileNameValidator.validate(name)) {
             is FileNameValidationResult.Valid -> result.name
             is FileNameValidationResult.Invalid -> {
-                showSnackbar(UiText.Dynamic(result.message))
+                showSnackbar(UiText.Resource(result.messageRes))
                 null
             }
         }

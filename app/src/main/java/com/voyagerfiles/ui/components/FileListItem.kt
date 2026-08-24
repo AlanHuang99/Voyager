@@ -22,11 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.text.DateFormat
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -40,6 +41,10 @@ fun FileListItem(
     compact: Boolean = false,
     enableRemoteSelect: Boolean = false,
 ) {
+    val selectionContentDescription = stringResource(
+        if (isSelected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
+        file.name,
+    )
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -79,7 +84,7 @@ fun FileListItem(
                     checked = isSelected,
                     onCheckedChange = null,
                     modifier = Modifier.semantics {
-                        contentDescription = if (isSelected) "Deselect ${file.name}" else "Select ${file.name}"
+                        contentDescription = selectionContentDescription
                     },
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -122,4 +127,4 @@ fun FileListItem(
 }
 
 private fun formatDate(date: java.util.Date): String =
-    SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(date)
+    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(date)

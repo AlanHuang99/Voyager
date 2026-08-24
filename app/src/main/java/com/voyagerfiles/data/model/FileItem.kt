@@ -111,11 +111,11 @@ val FileSource.isNetwork: Boolean
         this == FileSource.SMB ||
         this == FileSource.WEBDAV
 
-enum class SortBy {
-    NAME,
-    SIZE,
-    DATE,
-    TYPE,
+enum class SortBy(@StringRes val labelRes: Int) {
+    NAME(R.string.browser_sort_name),
+    SIZE(R.string.browser_sort_size),
+    DATE(R.string.browser_sort_date),
+    TYPE(R.string.browser_sort_type),
 }
 
 enum class SortOrder {

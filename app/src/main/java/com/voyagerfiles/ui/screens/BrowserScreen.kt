@@ -103,6 +103,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -129,6 +130,7 @@ import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
 import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.text.asString
+import com.voyagerfiles.ui.text.resolve
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.ShareIntentPlan
 import com.voyagerfiles.viewmodel.BrowserSession
@@ -159,6 +161,15 @@ fun BrowserScreen(
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val context = LocalContext.current
+    val shareFailedMessage = stringResource(R.string.browser_share_failed)
+    val noFileHandlerMessage = stringResource(R.string.browser_no_file_handler)
+    val fileOpenFailedMessage = stringResource(R.string.browser_file_open_failed)
+    val archiveUnsupportedMessage = stringResource(R.string.browser_archive_unsupported)
+    val noMediaPlayerMessage = stringResource(R.string.browser_no_media_player)
+    val mediaOpenFailedMessage = stringResource(R.string.browser_media_open_failed)
+    val bookmarkToggledMessage = stringResource(R.string.browser_bookmark_toggled)
+    val rootLabel = stringResource(R.string.browser_root)
+    val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
     val focusManager = LocalFocusManager.current
     val hapticFeedback = LocalHapticFeedback.current
     val inputModeManager = LocalInputModeManager.current
@@ -257,9 +268,7 @@ fun BrowserScreen(
             onSuccess = { viewModel.clearSelection() },
             onFailure = {
                 scope.launch {
-                    snackbarHostState.showSnackbar(
-                        "Could not share the selected files. Check that access is still available and try again."
-                    )
+                    snackbarHostState.showSnackbar(shareFailedMessage)
                 }
             },
         )
@@ -273,9 +282,9 @@ fun BrowserScreen(
                 scope.launch {
                     snackbarHostState.showSnackbar(
                         if (error is ActivityNotFoundException) {
-                            "No app can open this file type"
+                            noFileHandlerMessage
                         } else {
-                            "Could not open this file"
+                            fileOpenFailedMessage
                         }
                     )
                 }
@@ -290,7 +299,8 @@ fun BrowserScreen(
                 scope.launch {
                     snackbarHostState.showSnackbar(
                         BrowserArchiveActions.unsupportedExtractionReason(listOf(file))
-                            ?: "This archive type cannot be extracted"
+                            ?.resolve(context.resources)
+                            ?: archiveUnsupportedMessage
                     )
                 }
             }
@@ -299,9 +309,9 @@ fun BrowserScreen(
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             if (error is ActivityNotFoundException) {
-                                "No app can open this file type"
+                                noFileHandlerMessage
                             } else {
-                                "Could not open this file"
+                                fileOpenFailedMessage
                             }
                         )
                     }
@@ -321,10 +331,10 @@ fun BrowserScreen(
                             playbackIntentLauncher(FileUtils.createRemotePlaybackIntent(uri, file))
                         } catch (_: ActivityNotFoundException) {
                             WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar("No app can play this media")
+                            snackbarHostState.showSnackbar(noMediaPlayerMessage)
                         } catch (_: Throwable) {
                             WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar("Could not open this media")
+                            snackbarHostState.showSnackbar(mediaOpenFailedMessage)
                         }
                     },
                     onFailure = { playbackFallbackFor = file },
@@ -354,10 +364,18 @@ fun BrowserScreen(
         topBar = {
             if (isSelectionMode) {
                 TopAppBar(
-                    title = { Text("${state.selectedFiles.size} selected") },
+                    title = {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.items_selected,
+                                state.selectedFiles.size,
+                                state.selectedFiles.size,
+                            ),
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.clearSelection() }) {
-                            Icon(Icons.Filled.Close, "Clear selection")
+                            Icon(Icons.Filled.Close, stringResource(R.string.content_desc_clear_selection))
                         }
                     },
                     actions = {
@@ -366,7 +384,7 @@ fun BrowserScreen(
                                 onClick = { viewModel.copyToClipboard(state.selectedFiles.toList()) },
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.ContentCopy, "Copy")
+                                Icon(Icons.Filled.ContentCopy, stringResource(R.string.content_desc_copy))
                             }
                         }
                         if (SelectionToolbarAction.CUT in selectionToolbarModel.primaryActions) {
@@ -374,7 +392,7 @@ fun BrowserScreen(
                                 onClick = { viewModel.cutToClipboard(state.selectedFiles.toList()) },
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.ContentCut, "Cut")
+                                Icon(Icons.Filled.ContentCut, stringResource(R.string.content_desc_cut))
                             }
                         }
                         if (SelectionToolbarAction.RENAME in selectionToolbarModel.primaryActions) {
@@ -382,7 +400,7 @@ fun BrowserScreen(
                                 onClick = { showRenameDialog = state.selectedFiles.single() },
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
+                                Icon(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.content_desc_rename))
                             }
                         }
                         if (SelectionToolbarAction.SHARE in selectionToolbarModel.primaryActions) {
@@ -390,7 +408,7 @@ fun BrowserScreen(
                                 onClick = ::shareSelected,
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.Share, "Share")
+                                Icon(Icons.Filled.Share, stringResource(R.string.content_desc_share))
                             }
                         }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
@@ -398,7 +416,7 @@ fun BrowserScreen(
                                 onClick = { showDeleteDialog = true },
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.Delete, "Delete")
+                                Icon(Icons.Filled.Delete, stringResource(R.string.content_desc_delete))
                             }
                         }
                         Box {
@@ -406,7 +424,10 @@ fun BrowserScreen(
                                 onClick = { showSelectionMoreMenu = true },
                                 enabled = runningOperation == null,
                             ) {
-                                Icon(Icons.Filled.MoreVert, "More selection actions")
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    stringResource(R.string.content_desc_more_selection_actions),
+                                )
                             }
                             DropdownMenu(
                                 expanded = showSelectionMoreMenu,
@@ -414,7 +435,7 @@ fun BrowserScreen(
                             ) {
                                 if (BrowserArchiveAction.COMPRESS_TO_ZIP in archiveActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Compress to ZIP") },
+                                        text = { Text(stringResource(R.string.dialog_compress_zip)) },
                                         leadingIcon = { Icon(Icons.Filled.Archive, null) },
                                         onClick = {
                                             archiveNameDialogDefault =
@@ -422,6 +443,7 @@ fun BrowserScreen(
                                                     selectedItems = selectedItems,
                                                     existingNames = state.files
                                                         .mapTo(mutableSetOf()) { it.name },
+                                                    fallbackBaseName = archiveDefaultName,
                                                 )
                                             showSelectionMoreMenu = false
                                         },
@@ -429,7 +451,7 @@ fun BrowserScreen(
                                 }
                                 if (BrowserArchiveAction.EXTRACT_HERE in archiveActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Extract here") },
+                                        text = { Text(stringResource(R.string.action_extract_here)) },
                                         leadingIcon = { Icon(Icons.Filled.FolderOpen, null) },
                                         onClick = {
                                             viewModel.extractSelectedArchive()
@@ -441,9 +463,10 @@ fun BrowserScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Column {
-                                                Text("Extract here")
+                                                Text(stringResource(R.string.action_extract_here))
                                                 BrowserArchiveActions
                                                     .unsupportedExtractionReason(selectedItems)
+                                                    ?.asString()
                                                     ?.let { reason ->
                                                         Text(
                                                             text = reason,
@@ -459,7 +482,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.COPY in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Copy") },
+                                        text = { Text(stringResource(R.string.action_copy)) },
                                         leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
                                         onClick = {
                                             viewModel.copyToClipboard(state.selectedFiles.toList())
@@ -469,7 +492,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.CUT in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Cut") },
+                                        text = { Text(stringResource(R.string.action_cut)) },
                                         leadingIcon = { Icon(Icons.Filled.ContentCut, null) },
                                         onClick = {
                                             viewModel.cutToClipboard(state.selectedFiles.toList())
@@ -479,7 +502,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.SELECT_ALL in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Select all visible") },
+                                        text = { Text(stringResource(R.string.action_select_all_visible)) },
                                         leadingIcon = { Icon(Icons.Filled.SelectAll, null) },
                                         onClick = {
                                             viewModel.selectAll()
@@ -489,7 +512,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.DOWNLOAD in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Download") },
+                                        text = { Text(stringResource(R.string.action_download)) },
                                         leadingIcon = { Icon(Icons.Filled.Download, null) },
                                         onClick = {
                                             viewModel.downloadSelected()
@@ -499,7 +522,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.RENAME in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Rename") },
+                                        text = { Text(stringResource(R.string.action_rename)) },
                                         leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, null) },
                                         onClick = {
                                             showRenameDialog = state.selectedFiles.first()
@@ -509,7 +532,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.DETAILS in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Details") },
+                                        text = { Text(stringResource(R.string.details_title)) },
                                         leadingIcon = { Icon(Icons.Filled.Info, null) },
                                         onClick = {
                                             showDetailsFor = selectedItems.singleOrNull()
@@ -519,7 +542,7 @@ fun BrowserScreen(
                                 }
                                 if (SelectionToolbarAction.OPEN_WITH in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
-                                        text = { Text("Open with") },
+                                        text = { Text(stringResource(R.string.action_open_with)) },
                                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
                                         onClick = {
                                             showSelectionMoreMenu = false
@@ -554,14 +577,14 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             IconButton(onClick = ::navigateUpOrLeave) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             IconButton(onClick = { showSessionsSheet = true }) {
-                                Icon(Icons.Filled.Folder, "Sessions")
+                                Icon(Icons.Filled.Folder, stringResource(R.string.content_desc_sessions))
                             }
                             IconButton(onClick = { viewModel.refresh() }) {
-                                Icon(Icons.Filled.Refresh, "Refresh")
+                                Icon(Icons.Filled.Refresh, stringResource(R.string.content_desc_refresh))
                             }
                             Box {
                                 IconButton(onClick = { showViewMenu = true }) {
@@ -571,7 +594,10 @@ fun BrowserScreen(
                                             ViewMode.COMPACT -> Icons.Filled.ViewAgenda
                                             ViewMode.GRID -> Icons.Filled.GridView
                                         },
-                                        contentDescription = "View options, current ${stringResource(state.viewMode.labelRes)}",
+                                        contentDescription = stringResource(
+                                            R.string.content_desc_view_options_current,
+                                            stringResource(state.viewMode.labelRes),
+                                        ),
                                     )
                                 }
                                 DropdownMenu(
@@ -593,7 +619,10 @@ fun BrowserScreen(
                                             },
                                             trailingIcon = {
                                                 if (state.viewMode == mode) {
-                                                    Icon(Icons.Filled.Check, contentDescription = "Selected")
+                                                    Icon(
+                                                        Icons.Filled.Check,
+                                                        contentDescription = stringResource(R.string.content_desc_selected),
+                                                    )
                                                 }
                                             },
                                             onClick = {
@@ -606,7 +635,7 @@ fun BrowserScreen(
                             }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, "Sort")
+                                    Icon(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.content_desc_sort))
                                 }
                                 DropdownMenu(
                                     expanded = showSortMenu,
@@ -614,13 +643,19 @@ fun BrowserScreen(
                                 ) {
                                     SortBy.entries.forEach { sort ->
                                         DropdownMenuItem(
-                                            text = { Text(sort.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                                            text = { Text(stringResource(sort.labelRes)) },
                                             trailingIcon = {
                                                 if (state.sortBy == sort) {
                                                     Icon(
                                                         if (state.sortOrder == SortOrder.ASCENDING) Icons.Filled.KeyboardArrowUp
                                                         else Icons.Filled.KeyboardArrowDown,
-                                                        if (state.sortOrder == SortOrder.ASCENDING) "Ascending" else "Descending",
+                                                        stringResource(
+                                                            if (state.sortOrder == SortOrder.ASCENDING) {
+                                                                R.string.browser_sort_ascending
+                                                            } else {
+                                                                R.string.browser_sort_descending
+                                                            },
+                                                        ),
                                                     )
                                                 }
                                             },
@@ -634,8 +669,13 @@ fun BrowserScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                if (state.sortOrder == SortOrder.ASCENDING) "Sort descending"
-                                                else "Sort ascending",
+                                                stringResource(
+                                                    if (state.sortOrder == SortOrder.ASCENDING) {
+                                                        R.string.browser_sort_descending_action
+                                                    } else {
+                                                        R.string.browser_sort_ascending_action
+                                                    },
+                                                ),
                                             )
                                         },
                                         leadingIcon = {
@@ -657,7 +697,7 @@ fun BrowserScreen(
                             }
                             Box {
                                 IconButton(onClick = { showMoreMenu = true }) {
-                                    Icon(Icons.Filled.MoreVert, "More")
+                                    Icon(Icons.Filled.MoreVert, stringResource(R.string.content_desc_more))
                                 }
                                 DropdownMenu(
                                     expanded = showMoreMenu,
@@ -665,7 +705,7 @@ fun BrowserScreen(
                                 ) {
                                     if (BrowserToolbarAction.DISCONNECT in toolbarModel.overflowActions) {
                                         DropdownMenuItem(
-                                            text = { Text("Disconnect") },
+                                            text = { Text(stringResource(R.string.action_disconnect)) },
                                             leadingIcon = { Icon(Icons.Filled.Close, null) },
                                             onClick = {
                                                 showMoreMenu = false
@@ -676,7 +716,14 @@ fun BrowserScreen(
                                         )
                                     }
                                     DropdownMenuItem(
-                                        text = { Text(if (state.showHidden) "Hide hidden files" else "Show hidden files") },
+                                        text = {
+                                            Text(
+                                                stringResource(
+                                                    if (state.showHidden) R.string.browser_hide_hidden
+                                                    else R.string.browser_show_hidden,
+                                                ),
+                                            )
+                                        },
                                         onClick = {
                                             viewModel.setShowHidden(!state.showHidden)
                                             showMoreMenu = false
@@ -684,16 +731,16 @@ fun BrowserScreen(
                                     )
                                     if (state.source == FileSource.LOCAL) {
                                         DropdownMenuItem(
-                                            text = { Text("Bookmark this folder") },
+                                            text = { Text(stringResource(R.string.action_bookmark_folder)) },
                                             leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
                                             onClick = {
                                                 viewModel.toggleBookmark(
                                                     state.currentPath,
-                                                    state.currentPath.substringAfterLast("/").ifEmpty { "Root" },
+                                                    state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
                                                 )
                                                 showMoreMenu = false
                                                 scope.launch {
-                                                    snackbarHostState.showSnackbar("Bookmark toggled")
+                                                    snackbarHostState.showSnackbar(bookmarkToggledMessage)
                                                 }
                                             },
                                         )
@@ -728,7 +775,15 @@ fun BrowserScreen(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Text(
-                        "${clipboardPaths.size} item${if (clipboardPaths.size > 1) "s" else ""} (${clipboardOp.name.lowercase()})",
+                        pluralStringResource(
+                            R.plurals.browser_clipboard_summary,
+                            clipboardPaths.size,
+                            clipboardPaths.size,
+                            stringResource(
+                                if (clipboardOp == ClipboardOperation.CUT) R.string.browser_clipboard_cut
+                                else R.string.browser_clipboard_copy,
+                            ),
+                        ),
                         modifier = Modifier
                             .weight(1f)
                             .padding(start = 16.dp),
@@ -737,7 +792,7 @@ fun BrowserScreen(
                     TextButton(onClick = {
                         viewModel.clearClipboard()
                     }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
                     IconButton(
                         onClick = { viewModel.paste() },
@@ -745,7 +800,7 @@ fun BrowserScreen(
                     ) {
                         Icon(
                             Icons.Filled.ContentPaste,
-                            "Paste here",
+                            stringResource(R.string.browser_paste_here),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
@@ -759,7 +814,7 @@ fun BrowserScreen(
                         onClick = { showCreateMenu = true },
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                     ) {
-                        Icon(Icons.Filled.CreateNewFolder, "Create")
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.content_desc_create))
                     }
                     BrowserCreateMenu(
                         expanded = showCreateMenu,
@@ -812,7 +867,7 @@ fun BrowserScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                "Could not load files",
+                                stringResource(R.string.browser_load_failed),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -824,7 +879,7 @@ fun BrowserScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             TextButton(onClick = { viewModel.refresh() }) {
-                                Text("Retry")
+                                Text(stringResource(R.string.action_retry))
                             }
                         }
                     }
@@ -844,14 +899,17 @@ fun BrowserScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                if (state.files.isEmpty()) "Empty folder" else "No matching files",
+                                stringResource(
+                                    if (state.files.isEmpty()) R.string.browser_empty_folder
+                                    else R.string.browser_no_matching_files,
+                                ),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             if (state.files.isNotEmpty()) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 TextButton(onClick = viewModel::clearFilters) {
-                                    Text("Clear search and filters")
+                                    Text(stringResource(R.string.browser_clear_search_filters))
                                 }
                             }
                         }
@@ -991,9 +1049,9 @@ fun BrowserScreen(
     archiveToExtract?.let { archive ->
         AlertDialog(
             onDismissRequest = { archiveToExtract = null },
-            title = { Text("Extract archive?") },
+            title = { Text(stringResource(R.string.browser_extract_archive_title)) },
             text = {
-                Text("Extract ${archive.name} into a new folder in this location?")
+                Text(stringResource(R.string.browser_extract_archive_message, archive.name))
             },
             confirmButton = {
                 TextButton(
@@ -1002,12 +1060,12 @@ fun BrowserScreen(
                         archiveToExtract = null
                     },
                 ) {
-                    Text("Extract")
+                    Text(stringResource(R.string.browser_extract))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { archiveToExtract = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -1016,8 +1074,8 @@ fun BrowserScreen(
     playbackFallbackFor?.let { file ->
         AlertDialog(
             onDismissRequest = { playbackFallbackFor = null },
-            title = { Text("Direct playback unavailable") },
-            text = { Text("This server does not provide the byte ranges required for seeking. Download the file instead?") },
+            title = { Text(stringResource(R.string.playback_direct_unavailable_title)) },
+            text = { Text(stringResource(R.string.playback_direct_unavailable_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1025,12 +1083,12 @@ fun BrowserScreen(
                         viewModel.downloadFile(file.path)
                     },
                 ) {
-                    Text("Download")
+                    Text(stringResource(R.string.action_download))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { playbackFallbackFor = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -1177,11 +1235,11 @@ private fun BrowserSearchField(
         trailingIcon = {
             if (query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Filled.Close, "Clear search")
+                    Icon(Icons.Filled.Close, stringResource(R.string.content_desc_clear_search))
                 }
             }
         },
-        placeholder = { Text("Search this folder") },
+        placeholder = { Text(stringResource(R.string.browser_search_placeholder)) },
         singleLine = true,
         modifier = modifier.testTag(BROWSER_SEARCH_TEST_TAG),
     )
@@ -1317,13 +1375,13 @@ private fun SessionSwitcherSheet(
                 .padding(bottom = 24.dp),
         ) {
             Text(
-                "Sessions",
+                stringResource(R.string.browser_sessions),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
             if (sessions.isEmpty()) {
                 Text(
-                    "No active sessions",
+                    stringResource(R.string.browser_no_active_sessions),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
@@ -1380,7 +1438,7 @@ private fun SessionRow(
                 if (isActive) {
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(
-                        "Active",
+                        stringResource(R.string.browser_session_active),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -1395,7 +1453,7 @@ private fun SessionRow(
             )
         }
         IconButton(onClick = onClose) {
-            Icon(Icons.Filled.Close, "Close session")
+            Icon(Icons.Filled.Close, stringResource(R.string.content_desc_close_session))
         }
     }
 }

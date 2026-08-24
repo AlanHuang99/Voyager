@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.ui.components.ConnectionDialog
@@ -67,10 +68,10 @@ fun ConnectionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Remote Connections") },
+                title = { Text(stringResource(R.string.connection_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -83,7 +84,7 @@ fun ConnectionsScreen(
                 onClick = { showAddDialog = true },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
             ) {
-                Icon(Icons.Filled.Add, "Add connection")
+                Icon(Icons.Filled.Add, stringResource(R.string.content_desc_add_connection))
             }
         },
     ) { padding ->
@@ -103,12 +104,12 @@ fun ConnectionsScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "No connections yet",
+                    stringResource(R.string.connection_empty_title),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Tap + to add SFTP, FTP, SMB, or WebDAV",
+                    stringResource(R.string.connection_empty_message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
@@ -179,16 +180,16 @@ internal fun ConnectionDeleteDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete connection?") },
-        text = { Text("Delete \"$connectionName\"? Saved login details will be removed from this device.") },
+        title = { Text(stringResource(R.string.connection_delete_title)) },
+        text = { Text(stringResource(R.string.connection_delete_message, connectionName)) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Delete", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -226,7 +227,12 @@ private fun ConnectionCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    "${stringResource(connection.protocol.displayNameRes)} • ${connection.host}:${connection.port}",
+                    stringResource(
+                        R.string.connection_summary,
+                        stringResource(connection.protocol.displayNameRes),
+                        connection.host,
+                        connection.port,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -239,10 +245,18 @@ private fun ConnectionCard(
                 }
             }
             IconButton(onClick = onEdit) {
-                Icon(Icons.Filled.Edit, "Edit ${connection.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    Icons.Filled.Edit,
+                    stringResource(R.string.content_desc_edit_named, connection.name),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, "Delete ${connection.name}", tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    Icons.Filled.Delete,
+                    stringResource(R.string.content_desc_delete_named, connection.name),
+                    tint = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }

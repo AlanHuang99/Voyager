@@ -13,9 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -29,6 +31,10 @@ fun FileGridItem(
     modifier: Modifier = Modifier,
     enableRemoteSelect: Boolean = false,
 ) {
+    val selectionContentDescription = stringResource(
+        if (isSelected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
+        file.name,
+    )
     val bgColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
     } else {
@@ -60,7 +66,7 @@ fun FileGridItem(
                     modifier = Modifier
                         .align(Alignment.End)
                         .semantics {
-                            contentDescription = if (isSelected) "Deselect ${file.name}" else "Select ${file.name}"
+                            contentDescription = selectionContentDescription
                         },
                 )
             }

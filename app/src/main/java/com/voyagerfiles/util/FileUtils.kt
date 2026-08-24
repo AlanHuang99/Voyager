@@ -11,6 +11,7 @@ import android.os.StatFs
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
 import androidx.core.content.FileProvider
+import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import java.io.File
@@ -144,7 +145,7 @@ object FileUtils {
 
     fun createOpenWithIntent(context: Context, file: FileItem): Result<Intent> =
         createOpenFileIntent(context, file).map { target ->
-            Intent.createChooser(target, "Open with")
+            Intent.createChooser(target, context.getString(R.string.action_open_with))
         }
 
     fun createRemotePlaybackIntent(uri: Uri, file: FileItem): Intent {
@@ -209,7 +210,7 @@ object FileUtils {
 
     fun shareFiles(context: Context, files: List<FileItem>): Result<Unit> =
         createShareIntent(context, files).mapCatching { intent ->
-            val chooser = Intent.createChooser(intent, "Share")
+            val chooser = Intent.createChooser(intent, context.getString(R.string.action_share))
             if (context !is Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(chooser)
         }

@@ -33,6 +33,8 @@ object OperationMessages {
             it is DestinationConflictException || it is ArchiveConflictException
         }
         return when {
+            causes.filterIsInstance<UiTextException>().firstOrNull() != null ->
+                causes.filterIsInstance<UiTextException>().first().uiText
             conflict != null -> UiText.Resource(
                 R.string.error_conflict,
                 listOf(UiText.Dynamic(conflict.message.orEmpty())),
@@ -51,3 +53,5 @@ object OperationMessages {
         }
     }
 }
+
+class UiTextException(val uiText: UiText) : IllegalArgumentException()
