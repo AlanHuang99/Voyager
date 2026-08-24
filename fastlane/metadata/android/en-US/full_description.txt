@@ -4,14 +4,15 @@ Features:
 • Local file browsing with file management (copy, move, rename, Trash, permanent delete, create)
 • Share one or several local and document-tree files through Android's system share sheet
 • File details with selectable metadata
-• Image and first-page PDF thumbnails
+• Image, first-page PDF, and readable local APK application-icon thumbnails
 • Storage Access Framework document-tree browsing and file management
 • Open files through Android defaults or choose a handler with Open with
 • Create ZIP archives and safely extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files
 • SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication whose public key can be copied or saved
 • FTP remote access
-• SMB/CIFS network share browsing
-• WebDAV remote access
+• SMB/CIFS browsing, including disk-share discovery when a connection omits the share name
+• WebDAV remote access with direct audio/video playback and seeking when the server supports byte ranges
+• HTTPS WebDAV trust through Android system and user-installed certificate authorities
 • Copy and move files between local storage and a remote server, in both directions
 • Create remote files and folders, and upload documents through Android's system picker
 • Download remote files and folders to the device
@@ -23,6 +24,7 @@ Features:
 • Custom theme support
 • AMOLED black theme
 • List, compact list, and grid view modes
+• Focus-aware Android TV remote navigation with select and long-press actions
 • Bookmarks, quick access, and customizable Home section visibility and order
 • Storage usage overview
 • Hidden files toggle

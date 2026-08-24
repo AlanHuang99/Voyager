@@ -1,0 +1,7 @@
+Voyager 1.8.0:
+- Trust user-installed certificate authorities for private HTTPS WebDAV servers
+- Improve Android TV focus and remote select-key behavior
+- Show application icons for readable local APK files
+- Browse SMB shares without entering a share name
+- Stream and seek WebDAV audio and video with a download fallback
+- Add localization-ready resources and translation guidance
