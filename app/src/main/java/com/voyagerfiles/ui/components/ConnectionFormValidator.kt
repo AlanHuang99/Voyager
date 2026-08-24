@@ -31,11 +31,7 @@ object ConnectionFormValidator {
         } else {
             null
         }
-        val shareNameError = if (protocol == ConnectionProtocol.SMB && shareName.isBlank()) {
-            "Share name is required for SMB"
-        } else {
-            null
-        }
+        val shareNameError: String? = null
         return ConnectionFormValidation(hostError, portError, shareNameError)
     }
 }

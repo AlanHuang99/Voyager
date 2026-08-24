@@ -391,9 +391,11 @@ fun ConnectionDialog(
                     OutlinedTextField(
                         value = shareName,
                         onValueChange = { shareName = it },
-                        label = { Text("Share Name") },
+                        label = { Text("Share name (optional)") },
                         isError = validation.shareNameError != null,
-                        supportingText = validation.shareNameError?.let { message -> { Text(message) } },
+                        supportingText = {
+                            Text(validation.shareNameError ?: "Leave blank to browse available shares")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )

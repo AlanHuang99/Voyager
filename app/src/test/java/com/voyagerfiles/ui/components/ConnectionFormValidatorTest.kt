@@ -2,7 +2,6 @@ package com.voyagerfiles.ui.components
 
 import com.voyagerfiles.data.model.ConnectionProtocol
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,11 +25,11 @@ class ConnectionFormValidatorTest {
     }
 
     @Test
-    fun requiresShareNameForSmb() {
+    fun acceptsBlankShareNameForSmbDiscovery() {
         val result = ConnectionFormValidator.validate(ConnectionProtocol.SMB, "server.example", "445", "")
 
-        assertFalse(result.isValid)
-        assertEquals("Share name is required for SMB", result.shareNameError)
+        assertTrue(result.isValid)
+        assertNull(result.shareNameError)
     }
 
     @Test
