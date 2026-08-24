@@ -36,11 +36,13 @@ The CI workflow uploads debug APKs and verification reports as short-lived workf
 
 ## GitHub Release And Pages
 
-Create a version tag that matches `versionName` in `app/build.gradle.kts`:
+Before tagging, confirm the version code and name in `app/build.gradle.kts`, add identical changelogs under `fastlane/metadata/android/en-US/changelogs/` and `metadata/en-US/changelogs/`, and run the complete clean local and connected-device gates. Voyager 1.8.0 uses version code 16, so both release changelogs are named `16.txt`.
+
+Create an annotated version tag that matches `versionName` in `app/build.gradle.kts`:
 
 ```bash
-git tag v1.0.2
-git push origin v1.0.2
+git tag -a v1.8.0 -m "Voyager 1.8.0"
+git push origin v1.8.0
 ```
 
 The release workflow will:
