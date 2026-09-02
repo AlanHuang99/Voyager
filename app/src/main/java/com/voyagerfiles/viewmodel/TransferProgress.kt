@@ -41,7 +41,7 @@ data class TransferProgress(
         }
 
     val itemProgressText: String?
-        get() = totalItems?.takeIf { it > 0 }?.let { "$completedItems of $it" }
+        get() = totalItems?.takeIf { it > 0 }?.let { "${(completedItems + 1).coerceAtMost(it)} of $it" }
 
     val percentageText: String?
         get() = fraction?.let { "${(it * 100).roundToInt()}%" }
