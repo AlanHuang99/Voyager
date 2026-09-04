@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.thegrizzlylabs.sardineandroid.DavResource
@@ -20,7 +21,6 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okio.BufferedSink
 import java.io.File
 import java.io.FileOutputStream
-import java.io.FilterOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -189,7 +189,7 @@ class WebDavFileProvider(
                     ".upload",
                     temporaryDirectory,
                 )
-                object : FilterOutputStream(FileOutputStream(temporaryFile)) {
+                object : ForwardingOutputStream(FileOutputStream(temporaryFile)) {
                     private var closed = false
 
                     override fun close() {

@@ -14,8 +14,8 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import java.io.FilterInputStream
-import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
@@ -382,7 +382,7 @@ class SmbFileProvider internal constructor(
                 null,
             )
             try {
-                object : FilterOutputStream(file.outputStream) {
+                object : ForwardingOutputStream(file.outputStream) {
                     private var closed = false
 
                     override fun close() {
