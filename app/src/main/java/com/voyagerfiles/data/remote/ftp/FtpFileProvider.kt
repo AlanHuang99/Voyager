@@ -11,8 +11,10 @@ import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.commons.net.MalformedServerReplyException
 import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
+import org.apache.commons.net.ftp.FTPFile
 import org.apache.commons.net.ftp.FTPReply
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -76,16 +78,8 @@ class FtpFileProvider(
                 ensureConnected()
                 val ftp = ftpClient!!
                 ftp.listFiles(path).filter { it.name != "." && it.name != ".." }.map { file ->
-                    FileItem(
-                        name = file.name,
-                        path = if (path.endsWith("/")) "$path${file.name}" else "$path/${file.name}",
-                        isDirectory = file.isDirectory,
-                        size = file.size,
-                        lastModified = Date(file.timestamp.timeInMillis),
-                        isHidden = file.name.startsWith("."),
-                        owner = file.user,
-                        source = FileSource.FTP,
-                    )
+                    val name = file.name.substringAfterLast('/')
+                    file.toFileItem(name = name, path = joinPath(path, name))
                 }
             }
         }
@@ -283,7 +277,7 @@ class FtpFileProvider(
         withContext(Dispatchers.IO) {
             try {
                 ensureConnected()
-                ftpClient!!.listFiles(path).isNotEmpty()
+                ftpClient!!.statPath(path) != null
             } catch (_: Exception) {
                 false
             }
@@ -293,19 +287,56 @@ class FtpFileProvider(
         withContext(Dispatchers.IO) {
             runCatching {
                 ensureConnected()
-                val files = ftpClient!!.listFiles(path)
-                if (files.isEmpty()) throw IllegalArgumentException("Not found: $path")
-                val file = files[0]
-                FileItem(
-                    name = file.name,
-                    path = path,
-                    isDirectory = file.isDirectory,
-                    size = file.size,
-                    lastModified = Date(file.timestamp.timeInMillis),
-                    source = FileSource.FTP,
-                )
+                ftpClient!!.statPath(path) ?: throw IllegalArgumentException("Not found: $path")
             }
         }
+
+    /**
+     * Describes the entry at [path], or returns null when nothing is there.
+     *
+     * The name always comes from the path. Servers answer `LIST file` either with the file name
+     * or, like ProFTPD and Pure-FTPd, with the path exactly as the client sent it, and `LIST
+     * directory` describes the directory's children rather than the directory itself, so a
+     * listing cannot be trusted for the name or the type. MLST reports both for the path itself
+     * in one round trip where the server advertises it. Otherwise a directory is recognised by
+     * changing into it and a file by its one-entry listing.
+     */
+    private fun FTPClient.statPath(path: String): FileItem? {
+        val name = nameOf(path)
+        if (hasFeature("MLST")) {
+            val listed = try {
+                mlistFile(path)
+            } catch (_: MalformedServerReplyException) {
+                null
+            }
+            if (listed != null) return listed.toFileItem(name, path)
+        }
+        if (isDirectory(path)) {
+            return FileItem(
+                name = name,
+                path = path,
+                isDirectory = true,
+                isHidden = name.startsWith("."),
+                source = FileSource.FTP,
+            )
+        }
+        val entry = listFiles(path).singleOrNull { it.name != "." && it.name != ".." }
+        return entry?.toFileItem(name, path)
+    }
+
+    private fun FTPFile.toFileItem(name: String, path: String): FileItem = FileItem(
+        name = name,
+        path = path,
+        isDirectory = isDirectory,
+        size = size,
+        lastModified = timestamp?.let { Date(it.timeInMillis) } ?: Date(),
+        isHidden = name.startsWith("."),
+        owner = user,
+        source = FileSource.FTP,
+    )
+
+    private fun nameOf(path: String): String =
+        path.trimEnd('/').substringAfterLast('/').ifEmpty { "/" }
 
     override fun getParentPath(path: String): String? {
         if (path == "/") return null
