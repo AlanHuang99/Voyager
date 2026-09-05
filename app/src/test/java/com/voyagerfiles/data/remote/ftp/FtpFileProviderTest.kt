@@ -4,12 +4,24 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.ForwardingOutputStream
+import com.voyagerfiles.data.repository.LocalFileProvider
+import com.voyagerfiles.viewmodel.FileOperationCoordinator
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeout
 import org.apache.ftpserver.FtpServer
 import org.apache.ftpserver.FtpServerFactory
+import org.apache.ftpserver.command.Command
+import org.apache.ftpserver.command.CommandFactoryFactory
+import org.apache.ftpserver.ftplet.DefaultFtpReply
+import org.apache.ftpserver.ftplet.FileSystemFactory
+import org.apache.ftpserver.ftplet.FileSystemView
+import org.apache.ftpserver.ftplet.FtpFile
+import org.apache.ftpserver.ftplet.FtpRequest
+import org.apache.ftpserver.ftplet.User
+import org.apache.ftpserver.impl.FtpIoSession
+import org.apache.ftpserver.impl.FtpServerContext
 import org.apache.ftpserver.listener.ListenerFactory
 import org.apache.ftpserver.usermanager.impl.BaseUser
 import org.apache.ftpserver.usermanager.impl.WritePermission
@@ -22,9 +34,11 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 class FtpFileProviderTest {
 
@@ -253,6 +267,78 @@ class FtpFileProviderTest {
         assertEquals("existing", String(Files.readAllBytes(server.root.resolve("target/source.txt"))))
     }
 
+    @Test
+    fun getFileInfoNamesFileFromRequestedPath() = runBlocking {
+        for (flavor in ServerFlavor.entries) {
+            val server = startServer(flavor = flavor)
+            Files.createDirectories(server.root.resolve("docs"))
+            Files.write(server.root.resolve("docs/report.txt"), "report".toByteArray())
+            val provider = createProvider(server.port)
+
+            val item = provider.getFileInfo("/docs/report.txt").getOrThrow()
+
+            assertEquals(flavor.name, "report.txt", item.name)
+            assertEquals(flavor.name, "/docs/report.txt", item.path)
+            assertFalse(flavor.name, item.isDirectory)
+            assertEquals(flavor.name, 6L, item.size)
+            assertTrue(flavor.name, provider.exists("/docs/report.txt"))
+            if (!flavor.advertisesMlst) assertEquals(flavor.name, 0, server.mlstRequests.get())
+        }
+    }
+
+    @Test
+    fun getFileInfoDescribesDirectoryRatherThanItsChildren() = runBlocking {
+        for (flavor in ServerFlavor.entries) {
+            val server = startServer(flavor = flavor)
+            Files.createDirectories(server.root.resolve("docs/empty"))
+            Files.write(server.root.resolve("docs/notes.txt"), "notes".toByteArray())
+            val provider = createProvider(server.port)
+
+            val docs = provider.getFileInfo("/docs").getOrThrow()
+            val empty = provider.getFileInfo("/docs/empty").getOrThrow()
+
+            assertEquals(flavor.name, "docs", docs.name)
+            assertTrue(flavor.name, docs.isDirectory)
+            assertEquals(flavor.name, "empty", empty.name)
+            assertTrue(flavor.name, empty.isDirectory)
+            assertTrue(flavor.name, provider.exists("/docs/empty"))
+            if (!flavor.advertisesMlst) assertEquals(flavor.name, 0, server.mlstRequests.get())
+        }
+    }
+
+    @Test
+    fun getFileInfoFailsForMissingPath() = runBlocking {
+        for (flavor in ServerFlavor.entries) {
+            val server = startServer(flavor = flavor)
+            Files.createDirectories(server.root.resolve("docs"))
+            val provider = createProvider(server.port)
+
+            assertTrue(flavor.name, provider.getFileInfo("/docs/missing.txt").isFailure)
+            assertFalse(flavor.name, provider.exists("/docs/missing.txt"))
+            assertTrue(flavor.name, provider.getFileInfo("/missing").isFailure)
+            assertFalse(flavor.name, provider.exists("/missing"))
+        }
+    }
+
+    @Test
+    fun copyToLocalStorageKeepsFileNameWhenServerEchoesRequestedPath() = runBlocking {
+        val server = startServer(flavor = ServerFlavor.ECHOES_PATHS_WITH_MLST)
+        Files.createDirectories(server.root.resolve("docs"))
+        Files.write(server.root.resolve("docs/report.txt"), "report".toByteArray())
+        val provider = createProvider(server.port)
+        val destination = temp.newFolder("local")
+
+        FileOperationCoordinator.copyPath(
+            sourceProvider = provider,
+            destinationProvider = LocalFileProvider(),
+            sourcePath = "/docs/report.txt",
+            destinationDirectoryPath = destination.absolutePath,
+        ).getOrThrow()
+
+        assertEquals(listOf("report.txt"), destination.list().orEmpty().toList())
+        assertEquals("report", File(destination, "report.txt").readText())
+    }
+
     private fun createProvider(port: Int): FtpFileProvider {
         val provider = FtpFileProvider(
             RemoteConnection(
@@ -269,13 +355,18 @@ class FtpFileProviderTest {
         return provider
     }
 
-    private fun startServer(): RunningServer {
+    private fun startServer(flavor: ServerFlavor = ServerFlavor.NAMES_FILES): RunningServer {
         val root = temp.newFolder("ftp-root-${servers.size}").toPath()
         val port = freePort()
-        return startServer(root, port)
+        return startServer(root, port, flavor)
     }
 
-    private fun startServer(root: Path, port: Int): RunningServer {
+    private fun startServer(
+        root: Path,
+        port: Int,
+        flavor: ServerFlavor = ServerFlavor.NAMES_FILES,
+    ): RunningServer {
+        val mlstRequests = AtomicInteger()
         val user = BaseUser().apply {
             name = USERNAME
             password = PASSWORD
@@ -292,12 +383,21 @@ class FtpFileProviderTest {
                     serverAddress = "127.0.0.1"
                 }.createListener(),
             )
+            if (flavor.echoesRequestedPaths) {
+                fileSystem = RequestedPathEchoingFileSystem(fileSystem)
+            }
+            if (!flavor.advertisesMlst) {
+                commandFactory = CommandFactoryFactory().apply {
+                    addCommand("FEAT", ReplyCommand(211, "Extensions supported\n SIZE\n MDTM\n UTF8\nEnd"))
+                    addCommand("MLST", ReplyCommand(502, "Command not implemented") { mlstRequests.incrementAndGet() })
+                }.createCommandFactory()
+            }
         }
 
         val server = factory.createServer()
         server.start()
         servers += server
-        return RunningServer(root, port)
+        return RunningServer(root, port, mlstRequests)
     }
 
     private fun freePort(): Int =
@@ -306,7 +406,53 @@ class FtpFileProviderTest {
     private data class RunningServer(
         val root: Path,
         val port: Int,
+        val mlstRequests: AtomicInteger = AtomicInteger(),
     )
+
+    /** How the embedded server names the entry in a single-file `LIST` reply and whether it offers MLST. */
+    private enum class ServerFlavor(val echoesRequestedPaths: Boolean, val advertisesMlst: Boolean) {
+        /** Apache FtpServer as shipped: the file name alone. */
+        NAMES_FILES(echoesRequestedPaths = false, advertisesMlst = true),
+
+        /** Like ProFTPD and Pure-FTPd: the path exactly as the client sent it. */
+        ECHOES_PATHS_WITH_MLST(echoesRequestedPaths = true, advertisesMlst = true),
+
+        /** The same listing on a server without MLST, so only LIST and CWD are available. */
+        ECHOES_PATHS_WITHOUT_MLST(echoesRequestedPaths = true, advertisesMlst = false),
+    }
+
+    /** Names a file by the path the client requested, as ProFTPD and Pure-FTPd do for `LIST file`. */
+    private class RequestedPathEchoingFileSystem(
+        private val delegate: FileSystemFactory,
+    ) : FileSystemFactory {
+        override fun createFileSystemView(user: User): FileSystemView =
+            EchoingView(delegate.createFileSystemView(user))
+
+        private class EchoingView(private val delegate: FileSystemView) : FileSystemView by delegate {
+            override fun getFile(file: String): FtpFile {
+                val resolved = delegate.getFile(file)
+                return if (resolved.isFile) RequestedPathFile(resolved, file) else resolved
+            }
+        }
+
+        private class RequestedPathFile(
+            delegate: FtpFile,
+            private val requestedPath: String,
+        ) : FtpFile by delegate {
+            override fun getName(): String = requestedPath
+        }
+    }
+
+    private class ReplyCommand(
+        private val code: Int,
+        private val message: String,
+        private val onExecute: () -> Unit = {},
+    ) : Command {
+        override fun execute(session: FtpIoSession, context: FtpServerContext, request: FtpRequest) {
+            onExecute()
+            session.write(DefaultFtpReply(code, message))
+        }
+    }
 
     private companion object {
         const val USERNAME = "tester"
