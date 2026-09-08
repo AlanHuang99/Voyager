@@ -46,6 +46,7 @@ import com.voyagerfiles.playback.PlaybackEntry
 import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.text.UiText
+import com.voyagerfiles.ui.text.resolve
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
@@ -97,6 +98,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val remoteProviderFactory: RemoteFileProviderFactory = defaultRemoteFileProviderFactory,
     private val playbackPreparer: WebDavPlaybackPreparer = defaultWebDavPlaybackPreparer,
     private val rootProviderFactory: () -> com.voyagerfiles.data.repository.RootFileProvider = { com.voyagerfiles.data.repository.RootFileProvider() },
+    private val operationController: TransferOperationController = (application as VoyagerApp).transfers,
 ) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
@@ -138,7 +140,6 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val _snackbarMessage = MutableStateFlow<UiText?>(null)
     val snackbarMessage: StateFlow<UiText?> = _snackbarMessage.asStateFlow()
 
-    private val operationController = (application as VoyagerApp).transfers
     val operationState: StateFlow<OperationState> = operationController.state
     val lastOperationResult = operationController.lastResult
     val transferConflict = operationController.conflicts.pending
@@ -334,11 +335,26 @@ class FileBrowserViewModel @JvmOverloads constructor(
             return
         }
         _rootEditor.value = state.copy(busy = true, error = null)
-        viewModelScope.launch {
-            provider.saveText(document, state.text).fold(
-                onSuccess = { _rootEditor.value = null; refreshFiles() },
-                onFailure = { _rootEditor.value = state.copy(busy = false, error = it.message) },
-            )
+        val label = UiText.Resource(R.string.root_editor_save)
+        val started = operationController.launch(
+            label = label,
+            cancellable = false,
+            onFailure = { error ->
+                _rootEditor.value = state.copy(busy = false,
+                    error = OperationMessages.failure(R.string.root_editor_save, error).resolve(getApplication<Application>().resources))
+            },
+            onFinished = { _rootEditor.update { it?.copy(busy = false) } },
+        ) {
+            updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = File(document.path).name))
+            provider.saveText(document, state.text).getOrThrow()
+            updateOperationProgress(TransferProgress(label, completedItems = 1, totalItems = 1))
+            _rootEditor.value = null
+            refreshFiles()
+        }
+        if (!started) {
+            val active = operationState.value as OperationState.Running
+            _rootEditor.value = state.copy(busy = false,
+                error = UiText.Resource(R.string.operation_already_running, listOf(active.label)).resolve(getApplication<Application>().resources))
         }
     }
 
