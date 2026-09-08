@@ -138,7 +138,8 @@ class SftpKnownHosts(private val file: File) : HostKeyRepository {
 
         fun endpoint(host: String, port: Int): String {
             require(host.isNotBlank() && port in 1..65535)
-            val address = host.trim().removeSurrounding("[", "]")
+            // JSch preserves supplied IPv6 brackets, then adds another pair for a nondefault port. Keep the same identity for existing pins.
+            val address = host.trim()
             return if (port == 22) address else "[$address]:$port"
         }
 

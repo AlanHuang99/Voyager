@@ -122,6 +122,39 @@ class SftpKnownHostsTest {
         assertThrows(IOException::class.java) { SftpKnownHosts(directory).check("server", key()) }
     }
 
+    @Test fun bracketedIpv6DefaultPortInspectsAndForgetsTheJschPin() {
+        assertIpv6InspectionAndRemoval("[::1]", 22, "[::1]")
+    }
+
+    @Test fun bracketedIpv6NondefaultPortInspectsAndForgetsTheJschPin() {
+        assertIpv6InspectionAndRemoval("[::1]", 2222, "[[::1]]:2222")
+    }
+
+    @Test fun unbracketedIpv6DefaultPortInspectsAndForgetsTheJschPin() {
+        assertIpv6InspectionAndRemoval("::1", 22, "::1")
+    }
+
+    @Test fun unbracketedIpv6NondefaultPortInspectsAndForgetsTheJschPin() {
+        assertIpv6InspectionAndRemoval("::1", 2222, "[::1]:2222")
+    }
+
+    private fun assertIpv6InspectionAndRemoval(host: String, port: Int, savedEndpoint: String) {
+        val endpoints = listOf("::1", "[::1]", "[::1]:2222", "[[::1]]:2222", "[::2]:2222")
+        val file = temp.newFile().apply {
+            writeText(endpoints.joinToString("\n", postfix = "\n") { "$it ssh-ed25519 $KEY" })
+        }
+        val store = SftpKnownHosts(file)
+        assertEquals(HostKeyRepository.OK, store.check(savedEndpoint, key()))
+        assertEquals(1, store.fingerprints(host, port).size)
+        store.forget(host, port)
+        val restored = SftpKnownHosts(file)
+        assertTrue(restored.fingerprints(host, port).isEmpty())
+        assertEquals(HostKeyRepository.NOT_INCLUDED, restored.check(savedEndpoint, key()))
+        endpoints.filterNot { it == savedEndpoint }.forEach { retained ->
+            assertEquals("Preserve $retained when forgetting $savedEndpoint", HostKeyRepository.OK, restored.check(retained, key()))
+        }
+    }
+
     private fun key() = Base64.getDecoder().decode(KEY)
     private companion object {
         const val KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIEAfZB2qUvRvxwyWZabtaXITLWeg8cWfcyyZ7VPMuztD"
