@@ -2,7 +2,17 @@
 
 Voyager keeps user-facing copy in `app/src/main/res/values/strings.xml`. A translation should preserve the meaning and tone of the default English resources while fitting naturally in the target language.
 
-## Add a locale
+## Translate with Crowdin
+
+Join [Voyager on Crowdin](https://crowdin.com/project/voyagerandroid) to translate or review strings in the browser. English is the source language. Existing French and Simplified Chinese resources are imported during initial setup so their contributors' work is preserved.
+
+The repository's `crowdin.yml` maps Android resources to `values-%android_code%/strings.xml`, with explicit mappings for French (`values-fr`) and Simplified Chinese (`values-zh-rCN`). Resources marked `translatable="false"` remain in the English source file. Untranslated strings are exported with English source text so incomplete locales can pass Android's missing-translation checks. Crowdin retains their untranslated status.
+
+The Crowdin translations workflow uploads English resource changes from `master`. It downloads translations daily, runs unit tests, lint, and debug and release builds, and opens or updates a translation pull request. Translation pull requests require review and are not merged automatically. These checks run in the synchronization workflow itself because pull requests created with `GITHUB_TOKEN` do not trigger the regular pull request workflow.
+
+Maintainers can run the workflow manually from GitHub Actions. For the initial import, enable **Import repository translations into Crowdin** once. Leave it disabled for normal synchronization to avoid reimporting older repository translations. The project ID is `927407`; the token is stored only in the repository's `CROWDIN_PERSONAL_TOKEN` Actions secret. The repository must allow GitHub Actions to create pull requests.
+
+## Add a locale directly
 
 Copy the default resource file into an Android locale directory, then translate its values. For example, French uses `app/src/main/res/values-fr/strings.xml`, Brazilian Portuguese uses `values-pt-rBR`, and Traditional Chinese for Taiwan uses `values-zh-rTW`.
 
