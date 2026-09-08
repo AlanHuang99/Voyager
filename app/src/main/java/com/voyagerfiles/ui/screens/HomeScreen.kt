@@ -255,25 +255,25 @@ fun HomeScreen(
                                         icon = Icons.Filled.Download,
                                         label = stringResource(R.string.home_downloads),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_downloads }?.path ?: "/storage/emulated/0/Download") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.Image,
                                         label = stringResource(R.string.home_pictures),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_pictures }?.path ?: "/storage/emulated/0/Pictures") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.MusicNote,
                                         label = stringResource(R.string.home_music),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_music }?.path ?: "/storage/emulated/0/Music") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.VideoLibrary,
                                         label = stringResource(R.string.home_videos),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_videos }?.path ?: "/storage/emulated/0/Movies") },
                                     )
                                 }
                             }
@@ -374,13 +374,13 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
+                                        if (dir.isPrimary) Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(24.dp),
                                     )
                                     Spacer(modifier = Modifier.width(16.dp))
-                                    Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(dir.labelRes), style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
@@ -438,6 +438,7 @@ internal fun StorageVolumeCard(
     storageInfo: StorageInfo?,
     onClick: () -> Unit,
 ) {
+    val statusLabel = volume.statusLabelRes?.let { stringResource(it) }
     val isInternal = volume.isPrimary
     val availableLabel = stringResource(R.string.home_storage_available)
     val storageUsage = if (storageInfo != null) {
@@ -453,7 +454,7 @@ internal fun StorageVolumeCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("storage-volume:${volume.description}")
-            .semantics { stateDescription = volume.statusLabel ?: availableLabel }
+            .semantics { stateDescription = statusLabel ?: availableLabel }
             .clickable(enabled = volume.isAvailable, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isInternal)
@@ -481,7 +482,7 @@ internal fun StorageVolumeCard(
                         else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        volume.statusLabel ?: storageUsage ?: volume.path.orEmpty(),
+                        statusLabel ?: storageUsage ?: volume.path.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isInternal)
                             MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -491,7 +492,7 @@ internal fun StorageVolumeCard(
                     )
                 }
             }
-            if (storageInfo != null && volume.statusLabel == null) {
+            if (storageInfo != null && statusLabel == null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { storageInfo.usedPercentage },

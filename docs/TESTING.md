@@ -144,3 +144,5 @@ adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT exec-out screencap -p > /tmp/voyag
 adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT shell uiautomator dump /sdcard/window.xml
 adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT pull /sdcard/window.xml /tmp/voyager-window.xml
 ```
+
+The opt-in `SmbDockerIntegrationTest` matrix checks optional encryption, required SMB3 encryption, and SMB2-only servers, including wrong-password rejection, discovery, direct shares, and exact read/write bytes. On September 8, 2026, the K60 SMB instrumentation also passed against a disposable Samba 4.12.2 server with `server min protocol = SMB3_00` and `smb encrypt = required`.

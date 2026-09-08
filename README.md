@@ -50,7 +50,7 @@ Saved remote passwords are encrypted with AES-GCM using a device-bound Android K
 
 Generated SFTP private keys remain in app-private storage. Voyager displays the corresponding OpenSSH public key and provides Copy and Save actions so it can be installed on a server without exposing the private key.
 
-SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager does not force SMB transport encryption; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
+SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager negotiates SMB encryption, including with servers that require it, while retaining SMB2 compatibility; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
 
 HTTPS WebDAV follows Android's system and user-installed certificate authorities. A private authority must be installed by the device owner, and normal certificate-chain and hostname validation still apply.
 
@@ -110,3 +110,5 @@ Issues and pull requests are welcome. For substantial changes, open an issue fir
 ## License
 
 Voyager is licensed under the [GNU General Public License v3.0](LICENSE).
+
+Use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions) for questions, usage tips, working configurations, and general feedback. Report reproducible bugs and concrete feature requests in GitHub Issues.

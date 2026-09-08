@@ -80,7 +80,11 @@ object FileUtils {
             )
         }
 
-        return mergeStorageVolumes(platformVolumes, fallbackPaths, primaryPath)
+        return mergeStorageVolumes(
+            platformVolumes, fallbackPaths, primaryPath,
+            internalLabel = context.getString(R.string.storage_internal),
+            externalLabel = { index -> context.getString(R.string.storage_external_numbered, index) },
+        )
     }
 
     fun buildStorageDirectories(
@@ -108,14 +112,14 @@ object FileUtils {
         }
     }
 
-    fun getCommonDirectories(): List<StorageDirectory> = listOf(
-        StorageDirectory("Internal Storage", Environment.getExternalStorageDirectory().absolutePath),
-        StorageDirectory("Downloads", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath),
-        StorageDirectory("Documents", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath),
-        StorageDirectory("Pictures", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath),
-        StorageDirectory("Music", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath),
-        StorageDirectory("Movies", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath),
-        StorageDirectory("DCIM", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath),
+    fun getCommonDirectories(): List<CommonDirectory> = listOf(
+        CommonDirectory(R.string.storage_internal, Environment.getExternalStorageDirectory().absolutePath, isPrimary = true),
+        CommonDirectory(R.string.home_downloads, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath),
+        CommonDirectory(R.string.filter_documents, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath),
+        CommonDirectory(R.string.home_pictures, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath),
+        CommonDirectory(R.string.home_music, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath),
+        CommonDirectory(R.string.home_videos, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath),
+        CommonDirectory(R.string.home_camera_folder, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath),
     )
 
     fun createOpenFileIntent(context: Context, file: FileItem): Result<Intent> = runCatching {
@@ -253,4 +257,10 @@ data class StorageInfo(
 data class StorageDirectory(
     val name: String,
     val path: String,
+)
+
+data class CommonDirectory(
+    @androidx.annotation.StringRes val labelRes: Int,
+    val path: String,
+    val isPrimary: Boolean = false,
 )

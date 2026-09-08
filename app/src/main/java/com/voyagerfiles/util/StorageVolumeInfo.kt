@@ -1,5 +1,8 @@
 package com.voyagerfiles.util
 
+import androidx.annotation.StringRes
+import com.voyagerfiles.R
+
 data class StorageVolumeInfo(
     val description: String,
     val path: String?,
@@ -13,10 +16,11 @@ data class StorageVolumeInfo(
     val isReadOnly: Boolean
         get() = state == STATE_MOUNTED_READ_ONLY
 
-    val statusLabel: String?
+    @get:StringRes
+    val statusLabelRes: Int?
         get() = when {
-            !isAvailable -> "Unavailable"
-            isReadOnly -> "Read only"
+            !isAvailable -> R.string.storage_unavailable
+            isReadOnly -> R.string.storage_read_only
             else -> null
         }
 
@@ -30,6 +34,8 @@ fun mergeStorageVolumes(
     platformVolumes: List<StorageVolumeInfo>,
     fallbackPaths: List<String>,
     primaryPath: String,
+    internalLabel: String = "Internal storage",
+    externalLabel: (Int) -> String = { "External storage $it" },
 ): List<StorageVolumeInfo> {
     val normalizedPrimary = primaryPath.normalizedStoragePath()
     val byPath = linkedMapOf<String, StorageVolumeInfo>()
@@ -50,7 +56,7 @@ fun mergeStorageVolumes(
         val isPrimary = path == normalizedPrimary
         if (!isPrimary) externalIndex++
         byPath[path] = StorageVolumeInfo(
-            description = if (isPrimary) "Internal storage" else if (externalIndex == 1) "External storage" else "External storage $externalIndex",
+            description = if (isPrimary) internalLabel else externalLabel(externalIndex),
             path = path,
             isPrimary = isPrimary,
             isRemovable = !isPrimary,

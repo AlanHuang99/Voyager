@@ -400,4 +400,9 @@
         <item quantity="one">%d 项</item>
         <item quantity="other">%d 项</item>
     </plurals>
+    <string name="storage_internal">Internal storage</string>
+    <string name="storage_external_numbered">External storage %1$d</string>
+    <string name="storage_unavailable">Unavailable</string>
+    <string name="storage_read_only">Read only</string>
+    <string name="home_camera_folder">Camera</string>
 </resources>
