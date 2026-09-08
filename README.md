@@ -30,6 +30,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
 - Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
 - Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
+- Browse Home categories for APKs, videos, audio, images and documents across mounted shared storage, with cancellable scanning and explicit coverage information.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
 - Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
 - Keep file transfers running through Activity recreation and backgrounding, cancel supported transfers from the app or notification, and retain their final completed-item count.

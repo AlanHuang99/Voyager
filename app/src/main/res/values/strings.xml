@@ -461,4 +461,19 @@
     <string name="duplicates_group">%1$d copies, %2$s each</string>
     <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
     <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
+    <string name="category_scope">Files across mounted shared storage. App-private storage and document-provider grants are not scanned.</string>
+    <string name="category_hidden_included">Hidden files included (Settings).</string>
+    <string name="category_hidden_excluded">Hidden files excluded (Settings).</string>
+    <string name="category_pending">Not scanned</string>
+    <string name="category_scanning">Scanning</string>
+    <string name="category_complete">Scan complete</string>
+    <string name="category_partial">Partial coverage</string>
+    <string name="category_cancelled">Scan cancelled. Results are incomplete.</string>
+    <string name="category_limited">Result limit reached. Showing the first 50,000 matches; coverage is incomplete.</string>
+    <string name="category_failed">Scan failed. Refresh to try again; results are incomplete.</string>
+    <string name="category_permission_required">Full storage access is required to scan categories.</string>
+    <string name="category_results">Matches: %1$d · Stale entries removed: %2$d</string>
+    <string name="category_coverage_counts">Files checked: %1$d · Inaccessible entries: %2$d · Skipped entries: %3$d</string>
+    <string name="category_skipped_explanation">Counts describe visited entries only. Skipped entries include excluded hidden folders, links, duplicate roots, special files and folders deeper than 128 levels. Contents of skipped or inaccessible folders are unknown.</string>
+    <string name="category_stale_file">This file changed or is no longer accessible. Refresh the category and try again.</string>
 </resources>

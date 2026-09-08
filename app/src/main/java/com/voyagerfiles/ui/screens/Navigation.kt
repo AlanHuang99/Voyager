@@ -29,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.data.index.StorageCategory
 import com.voyagerfiles.R
 import com.voyagerfiles.util.FolderShortcuts
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,9 @@ sealed class Screen(val route: String) {
     }
     data object Duplicates : Screen("duplicates/{path}") {
         fun createRoute(path: String): String = "duplicates/${Uri.encode(path)}"
+    }
+    data object Category : Screen("category/{category}") {
+        fun createRoute(category: StorageCategory): String = "category/${category.name}"
     }
     data object Connections : Screen("connections")
     data object Trash : Screen("trash")
@@ -137,6 +141,7 @@ fun AppNavigation(
                 },
                 hasAllFilesAccess = hasAllFilesAccess,
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
+                onNavigateToCategory = { navController.navigate(Screen.Category.createRoute(it)) },
             )
         }
 
@@ -156,6 +161,23 @@ fun AppNavigation(
                 viewModel.refresh()
                 navController.popBackStack()
             })
+        }
+
+        composable(
+            route = Screen.Category.route,
+            arguments = listOf(navArgument("category") { type = NavType.StringType }),
+        ) { entry ->
+            val category = StorageCategory.entries.firstOrNull { it.name == entry.arguments?.getString("category") }
+            val browseState by viewModel.browseState.collectAsState()
+            if (category != null) {
+                CategoryScreen(
+                    category = category,
+                    showHidden = browseState.showHidden,
+                    hasAllFilesAccess = hasAllFilesAccess,
+                    onRequestAllFilesAccess = onRequestAllFilesAccess,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(Screen.Connections.route) {

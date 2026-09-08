@@ -453,4 +453,19 @@
     <string name="duplicates_group">%1$d copies, %2$s each</string>
     <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
     <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
+    <string name="category_scope">Fichiers du stockage partagé monté. Le stockage privé des applications et les accès accordés aux fournisseurs de documents ne sont pas analysés.</string>
+    <string name="category_hidden_included">Fichiers cachés inclus (Paramètres).</string>
+    <string name="category_hidden_excluded">Fichiers cachés exclus (Paramètres).</string>
+    <string name="category_pending">Non analysé</string>
+    <string name="category_scanning">Analyse en cours</string>
+    <string name="category_complete">Analyse terminée</string>
+    <string name="category_partial">Couverture partielle</string>
+    <string name="category_cancelled">Analyse annulée. Les résultats sont incomplets.</string>
+    <string name="category_limited">Limite atteinte. Les 50 000 premiers résultats sont affichés ; la couverture est incomplète.</string>
+    <string name="category_failed">Échec de l’analyse. Actualisez pour réessayer ; les résultats sont incomplets.</string>
+    <string name="category_permission_required">Un accès complet au stockage est nécessaire pour analyser les catégories.</string>
+    <string name="category_results">Résultats : %1$d · Entrées obsolètes retirées : %2$d</string>
+    <string name="category_coverage_counts">Fichiers vérifiés : %1$d · Entrées inaccessibles : %2$d · Entrées ignorées : %3$d</string>
+    <string name="category_skipped_explanation">Les compteurs décrivent uniquement les entrées visitées. Les entrées ignorées incluent les dossiers cachés exclus, les liens, les racines en double, les fichiers spéciaux et les dossiers au-delà de 128 niveaux. Le contenu des dossiers ignorés ou inaccessibles est inconnu.</string>
+    <string name="category_stale_file">Ce fichier a changé ou est devenu inaccessible. Actualisez la catégorie et réessayez.</string>
 </resources>

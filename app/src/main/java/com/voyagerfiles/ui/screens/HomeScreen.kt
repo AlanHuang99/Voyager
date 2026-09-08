@@ -23,7 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
@@ -62,6 +63,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
+import com.voyagerfiles.data.index.StorageCategory
 import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
@@ -84,6 +86,7 @@ fun HomeScreen(
     onOpenSafTree: (Uri) -> Unit,
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit,
+    onNavigateToCategory: (StorageCategory) -> Unit = {},
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
     var bookmarkToRemove by remember { mutableStateOf<Bookmark?>(null) }
@@ -245,45 +248,34 @@ fun HomeScreen(
                     }
 
                     HomeSection.QUICK_ACCESS -> {
-                        if (hasAllFilesAccess) {
-                            item(key = "quick-access-header") {
-                                Text(
-                                    stringResource(R.string.home_quick_access_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 8.dp),
-                                )
-                            }
-
-                            item(key = "quick-access-cards") {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    QuickAccessCard(
-                                        icon = Icons.Filled.Download,
-                                        label = stringResource(R.string.home_downloads),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_downloads }?.path ?: "/storage/emulated/0/Download") },
-                                    )
-                                    QuickAccessCard(
-                                        icon = Icons.Filled.Image,
-                                        label = stringResource(R.string.home_pictures),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_pictures }?.path ?: "/storage/emulated/0/Pictures") },
-                                    )
-                                    QuickAccessCard(
-                                        icon = Icons.Filled.MusicNote,
-                                        label = stringResource(R.string.home_music),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_music }?.path ?: "/storage/emulated/0/Music") },
-                                    )
-                                    QuickAccessCard(
-                                        icon = Icons.Filled.VideoLibrary,
-                                        label = stringResource(R.string.home_videos),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_videos }?.path ?: "/storage/emulated/0/Movies") },
-                                    )
+                        item(key = "quick-access-header") {
+                            Text(
+                                stringResource(R.string.home_quick_access_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                        item(key = "quick-access-cards") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                StorageCategory.entries.chunked(3).forEach { row ->
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        row.forEach { category ->
+                                            QuickAccessCard(
+                                                icon = when (category) {
+                                                    StorageCategory.APPS -> Icons.Filled.Android
+                                                    StorageCategory.VIDEOS -> Icons.Filled.VideoLibrary
+                                                    StorageCategory.AUDIO -> Icons.Filled.MusicNote
+                                                    StorageCategory.IMAGES -> Icons.Filled.Image
+                                                    StorageCategory.DOCUMENTS -> Icons.AutoMirrored.Filled.InsertDriveFile
+                                                },
+                                                label = stringResource(category.filter.labelRes),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { onNavigateToCategory(category) },
+                                            )
+                                        }
+                                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                                    }
                                 }
                             }
                         }
