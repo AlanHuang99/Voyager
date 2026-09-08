@@ -31,14 +31,18 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
 - Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
 - Browse Home categories for APKs, videos, audio, images and documents across mounted shared storage, with cancellable scanning and explicit coverage information.
+- Find duplicate files in a local folder by content, choose copies to remove, and recheck a copy to keep before removal.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
 - Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
 - Keep file transfers running through Activity recreation and backgrounding, cancel supported transfers from the app or notification, and retain their final completed-item count.
+- Resolve destination conflicts with Replace, Skip, or Cancel, including an apply-to-all choice and staged replacement that preserves the existing file until copying succeeds.
+- Long-press and drag to select ranges across list and grid views, including scrolling at the edge of the screen.
 - Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
 - Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. Writable local files receive temporary write permission so an external editor can save changes; Share grants read access only. APK files open in Android's package installer.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
 - Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
 - Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
+- Set a local or document-tree audio file as the ringtone or notification tone after granting Android's system-settings permission.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
 - Connect to SFTP, FTP, SMB, and WebDAV servers, discover disk shares when an SMB connection omits the share name, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress.
 - Open WebDAV documents, audio, and video in registered Android applications without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.

@@ -62,6 +62,10 @@ Category indexing has JVM coverage in `StorageCategoryIndexTest` for mixed file 
 
 ## Protocol integration tests
 
+Duplicate discovery has focused JVM coverage in `DuplicateScannerTest` and `DuplicateRemovalTest` for size/hash discrimination, empty files, unreadable/changed/missing coverage, cancellation, link/Trash exclusions, scan limits, keeper revalidation, and Trash move/restore. `DuplicatesScreenTest` uses disposable device files to verify explicit permanent deletion, keeper preservation, missing-keeper rejection, navigation paths containing spaces and plus signs, system Back, and foreground-service startup failure recovery.
+
+Tone instrumentation has separate granted and denied `WRITE_SETTINGS` cases. Configure the debug package appop externally before instrumentation. Tests that set tones must save both original ringtone and notification URIs, restore them in teardown, and independently read them back afterward. Never revoke the storage appop from inside instrumentation. Use disposable audio and preserve the production package and its data.
+
 Folder-shortcut launch instrumentation has separate granted and denied storage-access cases. Set the debug package’s `MANAGE_EXTERNAL_STORAGE` appop before starting instrumentation; changing it during a test can kill the instrumentation process. Run `FolderShortcutLaunchTest` once with `allow` and once with `ignore`, then restore the prior mode externally. Each run skips the cases requiring the other access mode. The granted cases cover repeated intents, Activity recreation, and a removed destination; the denied case verifies the access prompt. Native pin confirmation and launching the resulting icon also require a launcher check.
 
 The JVM suite starts isolated local FTP, SFTP, and WebDAV servers. It covers authentication, list and metadata operations, recursive copy and delete, exact terminal progress for known and unknown sizes, time and byte publication thresholds, bounded-memory streams, WebDAV HTTP request-body upload progress, WebDAV transport URLs, and SFTP host-key pinning and rotation rejection.
