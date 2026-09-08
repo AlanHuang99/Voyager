@@ -405,4 +405,13 @@
     <string name="storage_unavailable">Unavailable</string>
     <string name="storage_read_only">Read only</string>
     <string name="home_camera_folder">Camera</string>
+    <string name="sftp_host_keys_title">Saved host keys</string>
+    <string name="sftp_host_keys_loading">Loading saved host keys…</string>
+    <string name="sftp_host_keys_failed">Could not read or update saved host keys. Close this dialog and try again.</string>
+    <string name="sftp_host_keys_empty">No saved host keys for this host and port.</string>
+    <string name="sftp_host_keys_instructions">Compare these SHA256 fingerprints with the server administrator through a trusted channel.</string>
+    <string name="sftp_host_keys_forget_saved">Forget saved keys</string>
+    <string name="sftp_host_keys_forget_title">Forget saved host keys?</string>
+    <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
+    <string name="sftp_host_keys_forget">Forget</string>
 </resources>

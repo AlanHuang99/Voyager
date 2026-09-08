@@ -36,8 +36,7 @@ class SftpFileProvider(
         closeConnection()
 
         val jsch = JSch()
-        prepareKnownHostsFile()
-        jsch.setKnownHosts(knownHostsFile.absolutePath)
+        jsch.hostKeyRepository = SftpKnownHosts(knownHostsFile)
         connection.privateKeyPath?.takeIf { it.isNotBlank() }?.let { privateKeyPath ->
             jsch.addIdentity(privateKeyPath)
         }
@@ -73,16 +72,6 @@ class SftpFileProvider(
         } catch (error: Throwable) {
             runCatching { nextSession.disconnect() }
             throw error
-        }
-    }
-
-    private fun prepareKnownHostsFile() {
-        val parent = knownHostsFile.parentFile
-        check(parent == null || parent.isDirectory || parent.mkdirs()) {
-            "Could not create the SFTP security directory"
-        }
-        check(knownHostsFile.isFile || knownHostsFile.createNewFile()) {
-            "Could not create the SFTP known-hosts file"
         }
     }
 

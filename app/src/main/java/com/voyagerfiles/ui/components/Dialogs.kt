@@ -314,6 +314,11 @@ fun ConnectionDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                if (protocol == ConnectionProtocol.SFTP) {
+                    SftpHostKeysButton(host = host, port = port.toIntOrNull())
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
