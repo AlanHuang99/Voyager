@@ -18,6 +18,12 @@ import com.voyagerfiles.viewmodel.OperationState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.voyagerfiles.ui.screens.AppNavigation
@@ -26,11 +32,15 @@ import com.voyagerfiles.ui.screens.StorageAccessMode
 import com.voyagerfiles.ui.screens.storageAccessMode
 import com.voyagerfiles.ui.theme.VoyagerTheme
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.R
+import com.voyagerfiles.util.FolderShortcuts
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: FileBrowserViewModel get() = (application as VoyagerApp).browserViewModel
     private val hasStoragePermission = mutableStateOf(false)
+    private var folderShortcutPath by mutableStateOf<String?>(null)
+    private var folderShortcutGeneration by mutableLongStateOf(0L)
 
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -56,6 +66,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         hasStoragePermission.value = checkStoragePermission()
+        folderShortcutPath = if (savedInstanceState?.containsKey("folder_shortcut") == true) {
+            savedInstanceState.getString("folder_shortcut")
+        } else {
+            FolderShortcuts.requestedPath(intent)
+        }
 
         setContent {
             val operation by viewModel.operationState.collectAsState()
@@ -84,10 +99,40 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         hasAllFilesAccess = permissionGranted,
                         onRequestAllFilesAccess = ::requestStoragePermission,
+                        requestedFolder = folderShortcutPath,
+                        folderRequestGeneration = folderShortcutGeneration,
+                        onFolderRequestConsumed = { folderShortcutPath = null },
+                    )
+                }
+                if (folderShortcutPath != null && !permissionGranted) {
+                    AlertDialog(
+                        onDismissRequest = { folderShortcutPath = null },
+                        title = { Text(stringResource(R.string.shortcut_pin_folder)) },
+                        text = { Text(stringResource(R.string.shortcut_permission_required)) },
+                        confirmButton = {
+                            TextButton(onClick = ::requestStoragePermission) {
+                                Text(stringResource(R.string.permission_grant_full_access))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { folderShortcutPath = null }) { Text(stringResource(R.string.action_cancel)) }
+                        },
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        folderShortcutPath = FolderShortcuts.requestedPath(intent)
+        folderShortcutGeneration++
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("folder_shortcut", folderShortcutPath)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {

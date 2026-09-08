@@ -418,4 +418,9 @@
     <string name="transfer_completed">Completed</string>
     <string name="transfer_finished_with_errors">Finished with errors</string>
     <string name="transfer_dismiss_result">Dismiss operation result</string>
+    <string name="shortcut_pin_folder">Add folder to Home screen</string>
+    <string name="shortcut_requested">Confirm the shortcut in your launcher.</string>
+    <string name="shortcut_unavailable">Could not add a shortcut. Check that the folder is accessible and your launcher supports pinned shortcuts.</string>
+    <string name="shortcut_permission_required">Grant full storage access to open this folder shortcut.</string>
+    <string name="shortcut_folder_unavailable">This folder is no longer available. Check that the storage is connected and the folder still exists.</string>
 </resources>

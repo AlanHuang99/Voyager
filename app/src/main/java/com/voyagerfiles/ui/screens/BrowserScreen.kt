@@ -142,6 +142,7 @@ import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.DeleteMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
+import com.voyagerfiles.util.FolderShortcuts
 import kotlinx.coroutines.launch
 
 internal const val BROWSER_SEARCH_TEST_TAG = "browser-search"
@@ -180,6 +181,8 @@ fun BrowserScreen(
     val archiveUnsupportedMessage = stringResource(R.string.browser_archive_unsupported)
     val bookmarkToggledMessage = stringResource(R.string.browser_bookmark_toggled)
     val rootLabel = stringResource(R.string.browser_root)
+    val shortcutRequestedMessage = stringResource(R.string.shortcut_requested)
+    val shortcutFailedMessage = stringResource(R.string.shortcut_unavailable)
     val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
     val focusManager = LocalFocusManager.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -754,6 +757,22 @@ fun BrowserScreen(
                                         },
                                     )
                                     if (state.source == FileSource.LOCAL) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.shortcut_pin_folder)) },
+                                            leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                val path = state.currentPath
+                                                scope.launch {
+                                                    val requested = runCatching {
+                                                        FolderShortcuts.requestPin(context, path)
+                                                    }.getOrDefault(false)
+                                                    snackbarHostState.showSnackbar(
+                                                        if (requested) shortcutRequestedMessage else shortcutFailedMessage,
+                                                    )
+                                                }
+                                            },
+                                        )
                                         DropdownMenuItem(
                                             text = {
                                                 Text(stringResource(

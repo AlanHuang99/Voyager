@@ -9,11 +9,19 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -21,6 +29,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.R
+import com.voyagerfiles.util.FolderShortcuts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 
 sealed class Screen(val route: String) {
@@ -39,8 +52,13 @@ fun AppNavigation(
     viewModel: FileBrowserViewModel,
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit,
+    requestedFolder: String? = null,
+    folderRequestGeneration: Long = 0,
+    onFolderRequestConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val context = LocalContext.current
+    var shortcutFailed by remember { mutableStateOf(false) }
     val sessionClosureGeneration by viewModel.sessionClosureGeneration.collectAsState()
 
     LaunchedEffect(sessionClosureGeneration) {
@@ -156,6 +174,39 @@ fun AppNavigation(
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
             )
         }
+    }
+    LaunchedEffect(requestedFolder, folderRequestGeneration, hasAllFilesAccess) {
+        if (requestedFolder != null && hasAllFilesAccess) {
+            val folder = try {
+                withContext(Dispatchers.IO) { FolderShortcuts.resolve(context, requestedFolder) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                shortcutFailed = true
+                onFolderRequestConsumed()
+                return@LaunchedEffect
+            }
+            withContext(Dispatchers.Main.immediate) {
+                viewModel.openLocalRoot(folder.path)
+                if (navController.currentDestination?.route != Screen.Browser.route) {
+                    navController.navigate(Screen.Browser.createRoute(folder.path)) {
+                        popUpTo(Screen.Home.route)
+                        launchSingleTop = true
+                    }
+                }
+                shortcutFailed = false
+                onFolderRequestConsumed()
+            }
+        }
+    }
+    if (shortcutFailed) {
+        AlertDialog(
+            onDismissRequest = { shortcutFailed = false },
+            text = { Text(stringResource(R.string.shortcut_folder_unavailable)) },
+            confirmButton = {
+                TextButton(onClick = { shortcutFailed = false }) { Text(stringResource(R.string.action_done)) }
+            },
+        )
     }
 }
 
