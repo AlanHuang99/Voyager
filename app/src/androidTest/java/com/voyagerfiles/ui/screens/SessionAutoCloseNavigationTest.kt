@@ -14,6 +14,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.app.VoyagerApp
+import com.voyagerfiles.R
+import com.voyagerfiles.ui.text.UiText
+import kotlinx.coroutines.CompletableDeferred
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -95,6 +101,48 @@ class SessionAutoCloseNavigationTest {
         }
         composeTestRule.onNodeWithText("Voyager").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+    }
+
+    @Test
+    fun sharedDuplicateOperationDrainsDeferredSessionsAndReturnsHome() {
+        val viewModel = FileBrowserViewModel(application)
+        val operations = (application as VoyagerApp).transfers
+        val release = CompletableDeferred<Unit>()
+        composeTestRule.setContent {
+            MaterialTheme { AppNavigation(viewModel, true, {}) }
+        }
+        composeTestRule.waitUntil(10_000) {
+            viewModel.autoCloseSessions.value && viewModel.sessionAutoCloseTimeout.value == SessionAutoCloseTimeout.FIVE_MINUTES
+        }
+        composeTestRule.runOnIdle { viewModel.openLocalRoot(root.absolutePath) }
+        composeTestRule.waitUntil(10_000) { viewModel.sessions.value.size == 1 && !viewModel.browseState.value.isLoading }
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(root.name))
+        composeTestRule.onNodeWithText(root.name).performClick()
+        composeTestRule.onNodeWithContentDescription("More").performClick()
+        composeTestRule.onNodeWithText("Find duplicates").performClick()
+        composeTestRule.onNodeWithText("Scan folder").assertIsDisplayed()
+        val originalGeneration = viewModel.sessionClosureGeneration.value
+        try {
+            composeTestRule.runOnIdle {
+                assertTrue(operations.launch(UiText.Resource(R.string.duplicates_removing), onFailure = {}, onFinished = {}) { release.await() })
+                viewModel.onAppBackgrounded(1_000L)
+                viewModel.onAppForegrounded(1_000L + SessionAutoCloseTimeout.FIVE_MINUTES.durationMillis)
+                assertEquals(1, viewModel.sessions.value.size)
+            }
+            composeTestRule.runOnIdle { release.complete(Unit) }
+            composeTestRule.waitUntil(10_000) {
+                viewModel.sessions.value.isEmpty() && viewModel.sessionClosureGeneration.value == originalGeneration + 1
+            }
+            composeTestRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Scan folder").assertDoesNotExist()
+            composeTestRule.runOnIdle { viewModel.openLocalRoot(returningRoot.path) }
+            composeTestRule.waitUntil(10_000) { viewModel.sessions.value.size == 1 && !viewModel.browseState.value.isLoading }
+            composeTestRule.runOnIdle { viewModel.createFile("after-timeout.txt") }
+            composeTestRule.waitUntil(10_000) { returningRoot.resolve("after-timeout.txt").exists() }
+            assertEquals(returningRoot.path, viewModel.sessions.value.single().rootPath)
+        } finally {
+            release.complete(Unit)
+        }
     }
 
     @Test

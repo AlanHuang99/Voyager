@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -29,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
+import com.voyagerfiles.data.index.StorageCategory
 import com.voyagerfiles.R
 import com.voyagerfiles.util.FolderShortcuts
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +43,12 @@ sealed class Screen(val route: String) {
     data object Browser : Screen("browser/{path}") {
         fun createRoute(path: String): String =
             "browser/${URLEncoder.encode(path, "UTF-8")}"
+    }
+    data object Duplicates : Screen("duplicates/{path}") {
+        fun createRoute(path: String): String = "duplicates/${Uri.encode(path)}"
+    }
+    data object Category : Screen("category/{category}") {
+        fun createRoute(category: StorageCategory): String = "category/${category.name}"
     }
     data object Connections : Screen("connections")
     data object Trash : Screen("trash")
@@ -65,7 +73,7 @@ fun AppNavigation(
         if (
             sessionClosureGeneration > 0L &&
             viewModel.sessions.value.isEmpty() &&
-            navController.currentDestination?.route == Screen.Browser.route
+            navController.currentDestination?.route in setOf(Screen.Browser.route, Screen.Duplicates.route)
         ) {
             navController.navigateHome()
         }
@@ -134,6 +142,7 @@ fun AppNavigation(
                 },
                 hasAllFilesAccess = hasAllFilesAccess,
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
+                onNavigateToCategory = { navController.navigate(Screen.Category.createRoute(it)) },
             )
         }
 
@@ -144,7 +153,37 @@ fun AppNavigation(
             BrowserScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.navigateHome() },
+                onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
             )
+        }
+
+        composable(Screen.Duplicates.route, arguments = listOf(navArgument("path") { type = NavType.StringType })) { entry ->
+            val sourceSessionId by rememberSaveable { mutableStateOf(viewModel.activeSession.value?.id) }
+            DuplicatesScreen(checkNotNull(entry.arguments?.getString("path")), onNavigateBack = {
+                if (viewModel.sessions.value.any { it.id == sourceSessionId }) {
+                    viewModel.refresh()
+                    navController.popBackStack()
+                } else {
+                    navController.navigateHome()
+                }
+            })
+        }
+
+        composable(
+            route = Screen.Category.route,
+            arguments = listOf(navArgument("category") { type = NavType.StringType }),
+        ) { entry ->
+            val category = StorageCategory.entries.firstOrNull { it.name == entry.arguments?.getString("category") }
+            val browseState by viewModel.browseState.collectAsState()
+            if (category != null) {
+                CategoryScreen(
+                    category = category,
+                    showHidden = browseState.showHidden,
+                    hasAllFilesAccess = hasAllFilesAccess,
+                    onRequestAllFilesAccess = onRequestAllFilesAccess,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(Screen.Connections.route) {

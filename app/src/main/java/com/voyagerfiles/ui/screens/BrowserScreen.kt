@@ -163,6 +163,7 @@ fun BrowserScreen(
     isTelevision: Boolean =
         LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION,
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
+    onFindDuplicates: (String) -> Unit = {},
 ) {
     val state by viewModel.browseState.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
@@ -777,6 +778,11 @@ fun BrowserScreen(
                                         },
                                     )
                                     if (state.source == FileSource.LOCAL) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.duplicates_title)) },
+                                            enabled = runningOperation == null,
+                                            onClick = { showMoreMenu = false; onFindDuplicates(state.currentPath) },
+                                        )
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.shortcut_pin_folder)) },
                                             leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },

@@ -35,7 +35,7 @@ data class FileItem(
         get() = mimeType.startsWith("audio/")
 
     val isText: Boolean
-        get() = mimeType.startsWith("text/") || extension in textExtensions
+        get() = mimeType.startsWith("text/") || extension.lowercase() in textExtensions
 
     val isArchive: Boolean
         get() = extension.lowercase() in archiveExtensions
@@ -57,7 +57,7 @@ data class FileItem(
 
     companion object {
         private val textExtensions = setOf(
-            "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
+            "txt", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
             "properties", "md", "rst", "log", "csv", "tsv", "sh", "bash",
             "zsh", "fish", "py", "kt", "java", "js", "ts", "html", "css",
             "sql", "gradle", "kts",
@@ -74,6 +74,7 @@ data class FileItem(
             "heif" to "image/heif",
             "jpg" to "image/jpeg",
             "jpeg" to "image/jpeg",
+            "m4a" to "audio/mp4",
             "mp3" to "audio/mpeg",
             "mp4" to "video/mp4",
             "png" to "image/png",
