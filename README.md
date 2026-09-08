@@ -26,17 +26,20 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 
 - Browse internal storage and mounted external volumes such as SD cards and USB/OTG media.
 - Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
-- Switch among list, compact list, and grid layouts, view image, first-page PDF, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
+- Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
+- Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
 - Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
+- Keep file transfers running through Activity recreation and backgrounding, cancel supported transfers from the app or notification, and retain their final completed-item count.
 - Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
 - Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. Writable local files receive temporary write permission so an external editor can save changes; Share grants read access only. APK files open in Android's package installer.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
 - Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
+- Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
 - Connect to SFTP, FTP, SMB, and WebDAV servers, discover disk shares when an SMB connection omits the share name, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress.
-- Play WebDAV audio and video in registered Android media players without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.
-- Navigate file lists and grids with focus-aware Android TV remote controls, including select and long-press actions.
+- Open WebDAV documents, audio, and video in registered Android applications without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.
+- Navigate file lists and grids with focus-aware Android TV remote controls, including select and long-press actions and keyboard-operable protocol selection.
 - Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
 - Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
 
@@ -46,7 +49,7 @@ Network connections are user-initiated. The app contains no analytics or trackin
 
 Full local browsing uses Android's all-files special access. If that access is denied, Voyager remains usable for document trees and remote servers. The Home and Settings screens explain the active access mode and provide a route back to Android's permission settings.
 
-Saved remote passwords are encrypted with AES-GCM using a device-bound Android Keystore key. The connection database, settings, generated SSH keys, and SFTP known-host data are excluded from Android cloud backup and device transfer. SFTP uses trust on first use and rejects a server whose saved host key changes.
+Saved remote passwords are encrypted with AES-GCM using a device-bound Android Keystore key. The connection database, settings, generated SSH keys, and SFTP known-host data are excluded from Android cloud backup and device transfer. SFTP uses trust on first use and rejects a server whose saved host key changes. The connection editor displays saved fingerprints and lets you forget the key for that exact host and port after confirmation; verify a replacement fingerprint through a trusted channel before reconnecting.
 
 Generated SFTP private keys remain in app-private storage. Voyager displays the corresponding OpenSSH public key and provides Copy and Save actions so it can be installed on a server without exposing the private key.
 
@@ -54,7 +57,7 @@ SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP Web
 
 HTTPS WebDAV follows Android's system and user-installed certificate authorities. A private authority must be installed by the device owner, and normal certificate-chain and hostname validation still apply.
 
-Direct WebDAV playback exposes an opaque, expiring `content` URI to the selected media player. The URI contains no server address, remote path, username, or password. Voyager's playback provider is not exported and grants read access only to the launched handler.
+Direct WebDAV opening exposes an opaque, expiring `content` URI to the selected application. The URI contains no server address, remote path, username, or password. Voyager's playback provider is not exported and grants read access only to the launched handler.
 
 ## Requirements
 
