@@ -17,6 +17,10 @@ sealed interface OperationState {
     }
 }
 
+enum class OperationOutcome { COMPLETED, FAILED, CANCELLED }
+
+data class OperationResult(val progress: TransferProgress, val outcome: OperationOutcome)
+
 data class TrashState(
     val entries: List<TrashEntry> = emptyList(),
     val selectedIds: Set<String> = emptySet(),

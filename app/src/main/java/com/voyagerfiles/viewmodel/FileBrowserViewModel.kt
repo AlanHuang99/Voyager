@@ -135,6 +135,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     private val operationController = (application as VoyagerApp).transfers
     val operationState: StateFlow<OperationState> = operationController.state
+    val lastOperationResult = operationController.lastResult
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -404,7 +405,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.folder_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_folder, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_create_folder, it))
+                },
             )
         }
     }
@@ -419,7 +423,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.file_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_file, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_create_file, it))
+                },
             )
         }
     }
@@ -494,6 +501,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 }.onFailure { error ->
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
@@ -540,6 +548,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else provider.delete(path)
                 result.onFailure { error ->
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
@@ -575,7 +584,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.renamed_to, listOf(UiText.Dynamic(validatedName))))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_rename, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_rename, it))
+                },
             )
         }
     }
@@ -613,6 +625,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_compress, error))
                 },
             )
@@ -677,6 +690,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
                 },
             )
@@ -768,6 +782,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 )
                 if (item == null) {
                     failed++
+                    operationController.recordFailure(itemResult.exceptionOrNull() ?: IllegalStateException("The source item is unavailable"))
                     if (firstError == null) {
                         firstError = itemResult.exceptionOrNull()
                             ?: IllegalStateException("The source item is unavailable")
@@ -839,6 +854,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 }
                 result.onFailure { error ->
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
@@ -900,6 +916,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                         ?: provider.getFileInfo(path).getOrThrow()
                 }
             }.getOrElse { error ->
+                operationController.recordFailure(error)
                 showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 return@launchOperation
             }
@@ -965,6 +982,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 },
             )
@@ -1111,6 +1129,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 },
                 onFailure = { error ->
                     loadTrashEntries()
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_empty_trash, error))
                 },
             )
@@ -1169,6 +1188,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     }
 
     fun cancelOperation() = operationController.cancel()
+    fun dismissOperationResult() = operationController.dismissResult()
 
     private fun updateOperationProgress(progress: TransferProgress) = operationController.update(progress)
 
@@ -1258,6 +1278,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         successMessage: (Int) -> UiText,
         @StringRes failureAction: Int,
     ) {
+        failures.firstOrNull()?.let(operationController::recordFailure)
         val succeeded = entries.size - failures.size
         when {
             failures.isEmpty() -> showSnackbar(successMessage(succeeded))

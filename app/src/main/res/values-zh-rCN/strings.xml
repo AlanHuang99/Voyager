@@ -399,4 +399,8 @@
     <string name="transfer_cancelling">Cancelling transfer</string>
     <string name="transfer_cancelled">Transfer cancelled</string>
     <string name="action_remove_bookmark">Remove from bookmarks</string>
+    <string name="transfer_items_completed">%1$d of %2$d completed</string>
+    <string name="transfer_completed">Completed</string>
+    <string name="transfer_finished_with_errors">Finished with errors</string>
+    <string name="transfer_dismiss_result">Dismiss operation result</string>
 </resources>

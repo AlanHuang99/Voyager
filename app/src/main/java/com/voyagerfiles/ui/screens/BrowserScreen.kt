@@ -172,6 +172,7 @@ fun BrowserScreen(
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
+    val operationResult by viewModel.lastOperationResult.collectAsState()
     val context = LocalContext.current
     val shareFailedMessage = stringResource(R.string.browser_share_failed)
     val noFileHandlerMessage = stringResource(R.string.browser_no_file_handler)
@@ -882,6 +883,9 @@ fun BrowserScreen(
             runningOperation?.let { operation ->
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
+            if (runningOperation == null) {
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult) }
+            }
             PullToRefreshBox(
                 isRefreshing = pullRefreshing && state.isLoading,
                 onRefresh = {
@@ -1196,9 +1200,12 @@ internal fun OperationProgressContent(
 ) {
     val progress = operation.progress
     val progressLabel = progress.label.asString()
+    val completedItemsText = progress.totalItems?.takeIf { it > 0 }?.let {
+        stringResource(R.string.transfer_items_completed, progress.completedItems, it)
+    }
     Column(
         modifier = modifier.semantics {
-            stateDescription = progress.stateDescription(progressLabel)
+            stateDescription = progress.stateDescription(progressLabel, completedItemsText)
         },
     ) {
         if (operation.cancellable && onCancel != null) {
@@ -1221,7 +1228,7 @@ internal fun OperationProgressContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        progress.detailText?.let { detail ->
+        progress.detailText(completedItemsText)?.let { detail ->
             Text(
                 detail,
                 style = MaterialTheme.typography.bodySmall,

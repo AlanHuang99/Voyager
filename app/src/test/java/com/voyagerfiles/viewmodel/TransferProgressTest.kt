@@ -66,10 +66,10 @@ class TransferProgressTest {
             totalBytes = 100,
         )
 
-        assertEquals("2 of 5", progress.itemProgressText)
+        assertEquals("2 of 5 completed", progress.itemProgressText)
         assertEquals("40%", progress.percentageText)
         assertEquals(
-            "Copying, report.pdf, 2 of 5, 40 B of 100 B, 40%",
+            "Copying, report.pdf, 2 of 5 completed, 40 B of 100 B, 40%",
             progress.stateDescription("Copying"),
         )
     }

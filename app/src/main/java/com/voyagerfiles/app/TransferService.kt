@@ -98,12 +98,15 @@ class TransferService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val progress = operation?.progress
+        val completedItemsText = progress?.totalItems?.takeIf { it > 0 }?.let {
+            getString(R.string.transfer_items_completed, progress.completedItems, it)
+        }
         val title = if (operation?.cancelling == true) getString(R.string.transfer_cancelling)
             else progress?.label?.resolve(resources) ?: getString(R.string.transfer_channel)
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle(title)
-            .setContentText(progress?.detailText)
+            .setContentText(progress?.detailText(completedItemsText))
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

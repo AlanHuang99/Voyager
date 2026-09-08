@@ -11,6 +11,42 @@ import org.junit.Test
 
 class TransferOperationControllerTest {
     @Test
+    fun retainsFinalCompletedCountUntilDismissedOrNextOperation() = runBlocking {
+        val controller = TransferOperationController({}, this)
+        val label = UiText.Dynamic("Copying")
+        controller.launch(label, { throw it }, {}) {
+            for (completed in 0..5) controller.update(TransferProgress(label, completed, 5))
+        }
+        yield()
+        assertEquals(OperationState.Idle, controller.state.value)
+        assertEquals(OperationOutcome.COMPLETED, controller.lastResult.value!!.outcome)
+        assertEquals("5 of 5 completed", controller.lastResult.value!!.progress.itemProgressText)
+        controller.dismissResult()
+        assertNull(controller.lastResult.value)
+        controller.launch(label, {}, {}) { controller.recordFailure(IllegalStateException("Failed item")) }
+        yield()
+        assertEquals(OperationOutcome.FAILED, controller.lastResult.value!!.outcome)
+        controller.launch(label, {}, {}) {}
+        assertNull(controller.lastResult.value)
+        yield()
+    }
+
+    @Test
+    fun failureDoesNotCountAnUnfinishedItemAsCompleted() = runBlocking {
+        val controller = TransferOperationController({}, this)
+        val label = UiText.Dynamic("Downloading")
+        controller.launch(label, {}, {}) {
+            controller.update(TransferProgress(label, 1, 5, "failed.txt"))
+            throw IllegalStateException("Read failed")
+        }
+        yield()
+        val result = controller.lastResult.value!!
+        assertEquals(OperationOutcome.FAILED, result.outcome)
+        assertEquals(1, result.progress.completedItems)
+        assertNull(result.progress.currentItemName)
+    }
+
+    @Test
     fun unsupportedOperationIgnoresCancelAndFinishesNormally() = runBlocking {
         val finish = CompletableDeferred<Unit>()
         val controller = TransferOperationController({}, this)
@@ -55,6 +91,7 @@ class TransferOperationControllerTest {
         assertTrue(failure is CancellationException)
         assertTrue(finished)
         assertEquals(OperationState.Idle, controller.state.value)
+        assertEquals(OperationOutcome.CANCELLED, controller.lastResult.value!!.outcome)
     }
 
     @Test

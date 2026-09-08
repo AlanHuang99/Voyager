@@ -82,6 +82,7 @@ fun TrashScreen(
 ) {
     val state by viewModel.trashState.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
+    val operationResult by viewModel.lastOperationResult.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -173,6 +174,9 @@ fun TrashScreen(
         ) {
             runningOperation?.let { operation ->
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
+            }
+            if (runningOperation == null) {
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult) }
             }
 
             when {
