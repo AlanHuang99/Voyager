@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -83,6 +85,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -159,6 +162,10 @@ fun BrowserScreen(
     }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) pullRefreshing = false
+    }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
@@ -875,151 +882,162 @@ fun BrowserScreen(
             runningOperation?.let { operation ->
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
-            when {
-                state.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
+            PullToRefreshBox(
+                isRefreshing = pullRefreshing && state.isLoading,
+                onRefresh = {
+                    if (!state.isLoading) {
+                        pullRefreshing = true
+                        viewModel.refresh()
                     }
-                }
-
-                state.error != null -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp),
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                when {
+                    state.isLoading && !pullRefreshing -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                Icons.Filled.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                stringResource(R.string.browser_load_failed),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                state.error?.asString().orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            TextButton(onClick = { viewModel.refresh() }) {
-                                Text(stringResource(R.string.action_retry))
-                            }
+                            CircularProgressIndicator()
                         }
                     }
-                }
 
-                state.visibleFiles.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Filled.FolderOpen,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                stringResource(
-                                    if (state.files.isEmpty()) R.string.browser_empty_folder
-                                    else R.string.browser_no_matching_files,
-                                ),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (state.files.isNotEmpty()) {
+                    state.error != null -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.ErrorOutline,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    stringResource(R.string.browser_load_failed),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(onClick = viewModel::clearFilters) {
-                                    Text(stringResource(R.string.browser_clear_search_filters))
+                                Text(
+                                    state.error?.asString().orEmpty(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                TextButton(onClick = { viewModel.refresh() }) {
+                                    Text(stringResource(R.string.action_retry))
                                 }
                             }
                         }
                     }
-                }
 
-                state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.visibleFiles, key = { it.path }) { file ->
-                            FileListItem(
-                                file = file,
-                                modifier = if (isTelevision && file.path == firstVisiblePath) {
-                                    Modifier.focusRequester(firstItemFocusRequester)
-                                } else {
-                                    Modifier
-                                },
-                                compact = state.viewMode == ViewMode.COMPACT,
-                                isSelected = file.path in state.selectedFiles,
-                                isSelectionMode = isSelectionMode,
-                                enableRemoteSelect = isTelevision,
-                                onClick = {
-                                    if (isSelectionMode) {
-                                        toggleSelection(file.path)
-                                    } else if (isNetwork) {
-                                        handleRemoteFileTap(file)
-                                    } else if (file.isDirectory) {
-                                        navigateTo(file.path)
-                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        handleDeviceFileTap(file)
+                    state.visibleFiles.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Filled.FolderOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    stringResource(
+                                        if (state.files.isEmpty()) R.string.browser_empty_folder
+                                        else R.string.browser_no_matching_files,
+                                    ),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (state.files.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    TextButton(onClick = viewModel::clearFilters) {
+                                        Text(stringResource(R.string.browser_clear_search_filters))
                                     }
-                                },
-                                onLongClick = {
-                                    toggleSelection(file.path)
-                                },
-                            )
+                                }
+                            }
                         }
                     }
-                }
 
-                state.viewMode == ViewMode.GRID -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(100.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.visibleFiles, key = { it.path }) { file ->
-                            FileGridItem(
-                                file = file,
-                                modifier = if (isTelevision && file.path == firstVisiblePath) {
-                                    Modifier.focusRequester(firstItemFocusRequester)
-                                } else {
-                                    Modifier
-                                },
-                                isSelected = file.path in state.selectedFiles,
-                                isSelectionMode = isSelectionMode,
-                                enableRemoteSelect = isTelevision,
-                                onClick = {
-                                    if (isSelectionMode) {
+                    state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            items(state.visibleFiles, key = { it.path }) { file ->
+                                FileListItem(
+                                    file = file,
+                                    modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                    compact = state.viewMode == ViewMode.COMPACT,
+                                    isSelected = file.path in state.selectedFiles,
+                                    isSelectionMode = isSelectionMode,
+                                    enableRemoteSelect = isTelevision,
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            toggleSelection(file.path)
+                                        } else if (isNetwork) {
+                                            handleRemoteFileTap(file)
+                                        } else if (file.isDirectory) {
+                                            navigateTo(file.path)
+                                        } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
+                                            handleDeviceFileTap(file)
+                                        }
+                                    },
+                                    onLongClick = {
                                         toggleSelection(file.path)
-                                    } else if (isNetwork) {
-                                        handleRemoteFileTap(file)
-                                    } else if (file.isDirectory) {
-                                        navigateTo(file.path)
-                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        handleDeviceFileTap(file)
-                                    }
-                                },
-                                onLongClick = {
-                                    toggleSelection(file.path)
-                                },
-                            )
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    state.viewMode == ViewMode.GRID -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(100.dp),
+                            contentPadding = PaddingValues(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            items(state.visibleFiles, key = { it.path }) { file ->
+                                FileGridItem(
+                                    file = file,
+                                    modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                    isSelected = file.path in state.selectedFiles,
+                                    isSelectionMode = isSelectionMode,
+                                    enableRemoteSelect = isTelevision,
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            toggleSelection(file.path)
+                                        } else if (isNetwork) {
+                                            handleRemoteFileTap(file)
+                                        } else if (file.isDirectory) {
+                                            navigateTo(file.path)
+                                        } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
+                                            handleDeviceFileTap(file)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        toggleSelection(file.path)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
