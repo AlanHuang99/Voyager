@@ -1,5 +1,6 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ object FileOperationCoordinator {
         onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            TransferCancellation.check()
             requireNameAvailable(destinationProvider, destinationDirectoryPath, source.name)
 
             var createdTargetPath: String? = null
@@ -82,6 +84,7 @@ object FileOperationCoordinator {
                 destinationDirectoryPath,
                 onProgress,
             )
+            TransferCancellation.check()
             sourceProvider.delete(sourcePath).getOrThrow()
         }
     }
@@ -93,6 +96,7 @@ object FileOperationCoordinator {
         destinationDirectoryPath: String,
         onProgress: (StreamTransferProgress) -> Unit,
     ) {
+        TransferCancellation.check()
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
         requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
 

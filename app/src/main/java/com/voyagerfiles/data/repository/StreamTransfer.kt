@@ -33,9 +33,11 @@ object StreamTransfer {
         var bytesTransferred = 0L
         var reported = false
         while (true) {
+            TransferCancellation.check()
             val read = input.read(buffer)
             if (read < 0) break
             if (read == 0) continue
+            TransferCancellation.check()
             output.write(buffer, 0, read)
             bytesTransferred += read
             reported = true

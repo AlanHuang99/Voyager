@@ -6,7 +6,12 @@ import com.voyagerfiles.ui.text.UiText
 sealed interface OperationState {
     data object Idle : OperationState
 
-    data class Running(val progress: TransferProgress) : OperationState {
+    data class Running(
+        val progress: TransferProgress,
+        val id: Long = 0,
+        val cancellable: Boolean = false,
+        val cancelling: Boolean = false,
+    ) : OperationState {
         val label: UiText
             get() = progress.label
     }

@@ -849,7 +849,7 @@ fun BrowserScreen(
                 .padding(padding),
         ) {
             runningOperation?.let { operation ->
-                OperationProgressContent(operation)
+                OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
             when {
                 state.isLoading -> {
@@ -1150,6 +1150,7 @@ fun BrowserScreen(
 internal fun OperationProgressContent(
     operation: OperationState.Running,
     modifier: Modifier = Modifier,
+    onCancel: (() -> Unit)? = null,
 ) {
     val progress = operation.progress
     val progressLabel = progress.label.asString()
@@ -1158,6 +1159,11 @@ internal fun OperationProgressContent(
             stateDescription = progress.stateDescription(progressLabel)
         },
     ) {
+        if (operation.cancellable && onCancel != null) {
+            TextButton(onClick = onCancel, enabled = !operation.cancelling) {
+                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
+            }
+        }
         val fraction = progress.fraction
         if (fraction != null) {
             LinearProgressIndicator(

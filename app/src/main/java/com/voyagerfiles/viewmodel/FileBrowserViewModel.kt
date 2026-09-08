@@ -1,5 +1,8 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.app.VoyagerApp
+import kotlinx.coroutines.CancellationException
+
 import android.app.Application
 import android.net.Uri
 import android.os.Environment
@@ -130,8 +133,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val _snackbarMessage = MutableStateFlow<UiText?>(null)
     val snackbarMessage: StateFlow<UiText?> = _snackbarMessage.asStateFlow()
 
-    private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
-    val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
+    private val operationController = (application as VoyagerApp).transfers
+    val operationState: StateFlow<OperationState> = operationController.state
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -714,7 +717,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
             nowMillis = nowMillis,
             enabled = autoCloseSessions.value,
             timeoutMillis = sessionAutoCloseTimeout.value.durationMillis,
-            operationRunning = _operationState.value is OperationState.Running,
+            operationRunning = operationState.value is OperationState.Running,
         )
         when (decision) {
             SessionAutoCloseDecision.KEEP_OPEN -> Unit
@@ -1144,36 +1147,32 @@ class FileBrowserViewModel @JvmOverloads constructor(
         @StringRes operationName: Int,
         block: suspend () -> Unit,
     ) {
-        val active = _operationState.value as? OperationState.Running
-        if (active != null) {
-            showSnackbar(
-                UiText.Resource(R.string.operation_already_running, listOf(active.label)),
-            )
-            return
-        }
-        val label = UiText.Resource(progressLabel)
-        _operationState.value = OperationState.Running(TransferProgress(label))
-        viewModelScope.launch {
-            try {
-                block()
-            } catch (error: Throwable) {
-                showSnackbar(OperationMessages.failure(operationName, error))
-            } finally {
-                _operationState.value = OperationState.Idle
+        val started = operationController.launch(
+            label = UiText.Resource(progressLabel),
+            onFailure = { error ->
+                showSnackbar(
+                    if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)
+                    else OperationMessages.failure(operationName, error),
+                )
+            },
+            onFinished = {
                 if (autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
                     val sessionIds = deferredAutoCloseSessionIds
                     deferredAutoCloseSessionIds = emptySet()
                     closeSessionsAfterInactivity(sessionIds)
                 }
-            }
+            },
+            block = block,
+        )
+        if (!started) {
+            val active = operationState.value as? OperationState.Running ?: return
+            showSnackbar(UiText.Resource(R.string.operation_already_running, listOf(active.label)))
         }
     }
 
-    private fun updateOperationProgress(progress: TransferProgress) {
-        if (_operationState.value is OperationState.Running) {
-            _operationState.value = OperationState.Running(progress)
-        }
-    }
+    fun cancelOperation() = operationController.cancel()
+
+    private fun updateOperationProgress(progress: TransferProgress) = operationController.update(progress)
 
     private fun cancelInitialNavigation() {
         initialNavigationJob?.cancel()

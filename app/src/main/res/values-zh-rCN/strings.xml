@@ -414,4 +414,7 @@
     <string name="sftp_host_keys_forget_title">Forget saved host keys?</string>
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
+    <string name="transfer_channel">File transfers</string>
+    <string name="transfer_cancelling">Cancelling transfer</string>
+    <string name="transfer_cancelled">Transfer cancelled</string>
 </resources>

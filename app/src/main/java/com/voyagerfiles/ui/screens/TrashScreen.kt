@@ -86,7 +86,6 @@ fun TrashScreen(
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val snackbarHostState = remember { SnackbarHostState() }
     val runningOperation = operationState as? OperationState.Running
-    val runningOperationLabel = runningOperation?.label?.let { it.asString() }
     val isSelectionMode = state.selectedIds.isNotEmpty()
     var showPermanentDeleteDialog by remember { mutableStateOf(false) }
     var showEmptyDialog by remember { mutableStateOf(false) }
@@ -173,17 +172,7 @@ fun TrashScreen(
                 .padding(padding),
         ) {
             runningOperation?.let { operation ->
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { stateDescription = runningOperationLabel.orEmpty() },
-                )
-                Text(
-                    runningOperationLabel.orEmpty(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
 
             when {

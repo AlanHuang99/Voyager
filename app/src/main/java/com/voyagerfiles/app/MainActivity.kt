@@ -13,7 +13,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
+import com.voyagerfiles.viewmodel.OperationState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +29,10 @@ import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: FileBrowserViewModel by viewModels()
+    private val viewModel: FileBrowserViewModel get() = (application as VoyagerApp).browserViewModel
     private val hasStoragePermission = mutableStateOf(false)
+
+    private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     private val requestLegacyPermission = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -55,6 +58,18 @@ class MainActivity : ComponentActivity() {
         hasStoragePermission.value = checkStoragePermission()
 
         setContent {
+            val operation by viewModel.operationState.collectAsState()
+            LaunchedEffect(operation is OperationState.Running) {
+                if (operation is OperationState.Running && Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    val permissionPrefs = getSharedPreferences("notification_permission", MODE_PRIVATE)
+                    if (!permissionPrefs.getBoolean("requested", false)) {
+                        permissionPrefs.edit().putBoolean("requested", true).apply()
+                        requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
             val theme by viewModel.theme.collectAsState()
             val permissionGranted by hasStoragePermission
             val limitedAccessAccepted by viewModel.limitedAccessAccepted.collectAsState()

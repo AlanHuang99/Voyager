@@ -6,6 +6,9 @@ import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import com.voyagerfiles.data.repository.TransferCancellation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -20,6 +23,35 @@ import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicReference
 
 class FileOperationCoordinatorTest {
+
+    @Test
+    fun cancelledMovePreservesSourceAndRemovesPartialTarget() = runBlocking {
+        val payload = "x".repeat(3 * 64 * 1024)
+        val source = MemoryProvider().apply { putFile("/source/large.bin", payload) }
+        val destination = MemoryProvider().apply { putDirectory("/destination") }
+        val cancellation = TransferCancellation()
+        val result = withContext(cancellation.contextElement()) {
+            FileOperationCoordinator.movePath(source, destination, "/source/large.bin", "/destination") {
+                cancellation.cancel()
+            }
+        }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertEquals(payload, source.readFile("/source/large.bin"))
+        assertFalse(destination.exists("/destination/large.bin"))
+    }
+
+    @Test
+    fun cancellationBeforeCopyCreatesNoDestination() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/source/report.txt", "report") }
+        val destination = MemoryProvider().apply { putDirectory("/destination") }
+        val cancellation = TransferCancellation().apply { cancel() }
+        val result = withContext(cancellation.contextElement()) {
+            FileOperationCoordinator.copyPath(source, destination, "/source/report.txt", "/destination")
+        }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertFalse(destination.exists("/destination/report.txt"))
+        assertEquals("report", source.readFile("/source/report.txt"))
+    }
 
     @Test
     fun uploadStreamsSelectedDocumentOffTheCallingThread() = runBlocking {
