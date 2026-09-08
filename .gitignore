@@ -14,3 +14,7 @@ local.properties
 *.aab
 *.jks
 *.keystore
+
+/.worktrees/
+/.superpowers/
+/.kotlin/
