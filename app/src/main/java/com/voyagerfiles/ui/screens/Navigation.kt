@@ -1,6 +1,11 @@
 package com.voyagerfiles.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +59,36 @@ fun AppNavigation(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
+        enterTransition = {
+            val direction = if (targetState.destination.route == Screen.Home.route) {
+                AnimatedContentTransitionScope.SlideDirection.End
+            } else {
+                AnimatedContentTransitionScope.SlideDirection.Start
+            }
+            slideIntoContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeIn(tween(220))
+        },
+        exitTransition = {
+            val direction = if (targetState.destination.route == Screen.Home.route) {
+                AnimatedContentTransitionScope.SlideDirection.End
+            } else {
+                AnimatedContentTransitionScope.SlideDirection.Start
+            }
+            slideOutOfContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeOut(tween(180))
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.End,
+                tween(300, easing = FastOutSlowInEasing),
+            ) { it / 8 } + fadeIn(tween(220))
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.End,
+                tween(300, easing = FastOutSlowInEasing),
+            ) { it / 8 } + fadeOut(tween(180))
+        },
     ) {
         composable(Screen.Home.route) {
             HomeScreen(

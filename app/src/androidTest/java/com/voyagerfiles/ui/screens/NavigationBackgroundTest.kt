@@ -24,7 +24,7 @@ class NavigationBackgroundTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun darkNavigationCrossfadeKeepsHostBackgroundDark() {
+    fun darkNavigationForwardAndBackKeepHostBackgroundDark() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(application)
         composeTestRule.mainClock.autoAdvance = false
@@ -40,8 +40,17 @@ class NavigationBackgroundTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithContentDescription("Settings").performClick()
-        composeTestRule.mainClock.advanceTimeBy(350L)
+        composeTestRule.mainClock.advanceTimeBy(150L)
+        assertDarkHostEdge()
+        composeTestRule.mainClock.advanceTimeBy(250L)
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule.mainClock.advanceTimeBy(150L)
+        assertDarkHostEdge()
+        composeTestRule.mainClock.advanceTimeBy(250L)
+        composeTestRule.onNodeWithContentDescription("Settings").assertExists()
+    }
 
+    private fun assertDarkHostEdge() {
         val image = composeTestRule.onRoot().captureToImage()
         val edgePixel = image.toPixelMap()[1, image.height / 2]
         assertColorNear(DarkColors.background, edgePixel)
