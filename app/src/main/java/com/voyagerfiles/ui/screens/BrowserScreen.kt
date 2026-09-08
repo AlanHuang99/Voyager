@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -103,6 +105,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -131,6 +135,7 @@ import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
 import com.voyagerfiles.ui.components.FileDetailsSheet
+import com.voyagerfiles.ui.components.dragFileSelection
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
@@ -1007,8 +1012,14 @@ fun BrowserScreen(
                     }
 
                     state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
+                        val listState = rememberLazyListState()
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            state = listState,
+                            modifier = Modifier.fillMaxSize().testTag("browser-files")
+                                .dragFileSelection(state.visibleFiles.map { it.path }, state.selectedFiles,
+                                    enabled = !isTelevision && runningOperation == null, listState = listState,
+                                    onSelection = viewModel::setDragSelection,
+                                    onStartHaptic = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }),
                         ) {
                             items(state.visibleFiles, key = { it.path }) { file ->
                                 FileListItem(
@@ -1022,6 +1033,7 @@ fun BrowserScreen(
                                     isSelected = file.path in state.selectedFiles,
                                     isSelectionMode = isSelectionMode,
                                     enableRemoteSelect = isTelevision,
+                                    enableDragSelection = !isTelevision && runningOperation == null,
                                     onClick = {
                                         if (isSelectionMode) {
                                             toggleSelection(file.path)
@@ -1042,12 +1054,20 @@ fun BrowserScreen(
                     }
 
                     state.viewMode == ViewMode.GRID -> {
+                        val gridState = rememberLazyGridState()
+                        val gridPadding = with(LocalDensity.current) { 8.dp.toPx() }
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(100.dp),
                             contentPadding = PaddingValues(8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().testTag("browser-files")
+                                .dragFileSelection(state.visibleFiles.map { it.path }, state.selectedFiles,
+                                    enabled = !isTelevision && runningOperation == null, gridState = gridState,
+                                    gridContentOffset = Offset(gridPadding, gridPadding),
+                                    onSelection = viewModel::setDragSelection,
+                                    onStartHaptic = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }),
                         ) {
                             items(state.visibleFiles, key = { it.path }) { file ->
                                 FileGridItem(
@@ -1060,6 +1080,7 @@ fun BrowserScreen(
                                     isSelected = file.path in state.selectedFiles,
                                     isSelectionMode = isSelectionMode,
                                     enableRemoteSelect = isTelevision,
+                                    enableDragSelection = !isTelevision && runningOperation == null,
                                     onClick = {
                                         if (isSelectionMode) {
                                             toggleSelection(file.path)

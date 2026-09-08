@@ -366,6 +366,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setDragSelection(paths: Set<String>) {
+        _browseState.update { state -> state.copy(selectedFiles = paths.intersect(state.visibleFiles.mapTo(mutableSetOf()) { it.path })) }
+    }
+
     fun selectAll() {
         _browseState.update { state ->
             state.copy(selectedFiles = state.visibleFiles.map { it.path }.toSet())

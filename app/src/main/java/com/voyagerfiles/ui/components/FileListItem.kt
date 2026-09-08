@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onLongClick as semanticLongClick
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ fun FileListItem(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     enableRemoteSelect: Boolean = false,
+    enableDragSelection: Boolean = false,
 ) {
     val selectionContentDescription = stringResource(
         if (isSelected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
@@ -70,8 +72,11 @@ fun FileListItem(
             )
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick,
-            ),
+                onLongClick = if (enableDragSelection) null else onLongClick,
+            )
+            .semantics {
+                if (enableDragSelection) semanticLongClick { onLongClick(); true }
+            },
     ) {
         Row(
             modifier = Modifier
