@@ -1117,23 +1117,20 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
-    fun toggleBookmark(path: String, name: String) {
-        if (_browseState.value.source != FileSource.LOCAL) {
+    fun addBookmark(path: String, name: String) {
+        val source = _browseState.value.source
+        if (source != FileSource.LOCAL) {
             showSnackbar(UiText.Resource(R.string.bookmarks_local_only))
             return
         }
         viewModelScope.launch {
-            if (bookmarkDao.isBookmarked(path)) {
-                bookmarkDao.deleteByPath(path)
-            } else {
-                bookmarkDao.insert(
-                    Bookmark(
-                        name = name,
-                        path = path,
-                        source = _browseState.value.source,
-                    )
-                )
-            }
+            bookmarkDao.insertIfAbsent(Bookmark(name = name, path = path, source = source))
+        }
+    }
+
+    fun removeBookmark(path: String, source: FileSource) {
+        viewModelScope.launch {
+            bookmarkDao.deleteByPath(path, source)
         }
     }
 

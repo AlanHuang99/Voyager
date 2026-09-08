@@ -5,7 +5,9 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.voyagerfiles.data.model.Bookmark
+import com.voyagerfiles.data.model.FileSource
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,9 +21,14 @@ interface BookmarkDao {
     @Delete
     suspend fun delete(bookmark: Bookmark)
 
-    @Query("DELETE FROM bookmarks WHERE path = :path")
-    suspend fun deleteByPath(path: String)
+    @Query("DELETE FROM bookmarks WHERE path = :path AND source = :source")
+    suspend fun deleteByPath(path: String, source: FileSource)
 
-    @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE path = :path LIMIT 1)")
-    suspend fun isBookmarked(path: String): Boolean
+    @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE path = :path AND source = :source LIMIT 1)")
+    suspend fun isBookmarked(path: String, source: FileSource): Boolean
+
+    @Transaction
+    suspend fun insertIfAbsent(bookmark: Bookmark) {
+        if (!isBookmarked(bookmark.path, bookmark.source)) insert(bookmark)
+    }
 }

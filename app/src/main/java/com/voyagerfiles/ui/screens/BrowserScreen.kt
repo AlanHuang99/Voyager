@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
@@ -152,6 +153,10 @@ fun BrowserScreen(
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
 ) {
     val state by viewModel.browseState.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
+    val isCurrentFolderBookmarked = bookmarks.any {
+        it.path == state.currentPath && it.source == state.source
+    }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
@@ -742,13 +747,32 @@ fun BrowserScreen(
                                     )
                                     if (state.source == FileSource.LOCAL) {
                                         DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.action_bookmark_folder)) },
-                                            leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
-                                            onClick = {
-                                                viewModel.toggleBookmark(
-                                                    state.currentPath,
-                                                    state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
+                                            text = {
+                                                Text(stringResource(
+                                                    if (isCurrentFolderBookmarked) R.string.action_remove_bookmark
+                                                    else R.string.action_bookmark_folder,
+                                                ))
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    if (isCurrentFolderBookmarked) Icons.Filled.BookmarkRemove
+                                                    else Icons.Filled.BookmarkAdd,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.testTag(
+                                                        if (isCurrentFolderBookmarked) "bookmark-remove-icon"
+                                                        else "bookmark-add-icon",
+                                                    ),
                                                 )
+                                            },
+                                            onClick = {
+                                                if (isCurrentFolderBookmarked) {
+                                                    viewModel.removeBookmark(state.currentPath, state.source)
+                                                } else {
+                                                    viewModel.addBookmark(
+                                                        state.currentPath,
+                                                        state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
+                                                    )
+                                                }
                                                 showMoreMenu = false
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar(bookmarkToggledMessage)

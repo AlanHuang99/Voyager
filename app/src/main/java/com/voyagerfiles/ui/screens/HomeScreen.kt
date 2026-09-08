@@ -4,7 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,12 +42,15 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -56,6 +62,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
+import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.HomeSection
@@ -65,7 +72,7 @@ import com.voyagerfiles.util.StorageVolumeInfo
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel: FileBrowserViewModel,
@@ -79,6 +86,8 @@ fun HomeScreen(
     onRequestAllFilesAccess: () -> Unit,
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
+    var bookmarkToRemove by remember { mutableStateOf<Bookmark?>(null) }
+    val removeBookmarkLabel = stringResource(R.string.action_remove_bookmark)
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val homeLayout by viewModel.homeLayout.collectAsState()
@@ -332,7 +341,12 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { onNavigateToBrowser(bookmark.path) }
+                                        .testTag("home-bookmark:${bookmark.id}")
+                                        .combinedClickable(
+                                            onClick = { onNavigateToBrowser(bookmark.path) },
+                                            onLongClickLabel = removeBookmarkLabel,
+                                            onLongClick = { bookmarkToRemove = bookmark },
+                                        )
                                         .padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -390,6 +404,24 @@ fun HomeScreen(
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
+    }
+    bookmarkToRemove?.let { bookmark ->
+        AlertDialog(
+            onDismissRequest = { bookmarkToRemove = null },
+            title = { Text(removeBookmarkLabel) },
+            text = { Text(bookmark.name) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeBookmark(bookmark.path, bookmark.source)
+                    bookmarkToRemove = null
+                }) { Text(removeBookmarkLabel) }
+            },
+            dismissButton = {
+                TextButton(onClick = { bookmarkToRemove = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 

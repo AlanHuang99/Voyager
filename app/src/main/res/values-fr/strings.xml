@@ -421,4 +421,5 @@
     <string name="transfer_channel">File transfers</string>
     <string name="transfer_cancelling">Cancelling transfer</string>
     <string name="transfer_cancelled">Transfer cancelled</string>
+    <string name="action_remove_bookmark">Remove from bookmarks</string>
 </resources>
