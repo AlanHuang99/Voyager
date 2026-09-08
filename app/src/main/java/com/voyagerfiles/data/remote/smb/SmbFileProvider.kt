@@ -16,6 +16,8 @@ import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.ForwardingOutputStream
+import com.voyagerfiles.data.repository.TransferAbortable
+import javax.net.SocketFactory
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -36,10 +38,15 @@ internal interface SmbSessionHandle {
 
 internal fun interface SmbSessionHandleFactory {
     fun connect(connection: RemoteConnection): SmbSessionHandle
+    fun connectTransfer(connection: RemoteConnection, sockets: SocketFactory): SmbSessionHandle = connect(connection)
 }
 
 private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
-    override fun connect(connection: RemoteConnection): SmbSessionHandle {
+    override fun connect(connection: RemoteConnection): SmbSessionHandle = connect(connection, null)
+
+    override fun connectTransfer(connection: RemoteConnection, sockets: SocketFactory): SmbSessionHandle = connect(connection, sockets)
+
+    private fun connect(connection: RemoteConnection, sockets: SocketFactory?): SmbSessionHandle {
         var client: SMBClient? = null
         var smbConnection: Connection? = null
         var session: Session? = null
@@ -47,6 +54,7 @@ private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
             client = SMBClient(
                 SmbConfig.builder()
                     .withEncryptData(true)
+                    .apply { if (sockets != null) withSocketFactory(sockets) }
                     .build(),
             )
             smbConnection = client.connect(connection.host, connection.port)
@@ -59,6 +67,7 @@ private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
             )
             return RealSmbSessionHandle(client, smbConnection, session)
         } catch (error: Throwable) {
+            if (sockets is SmbTransferSocketFactory) sockets.close()
             runCatching { session?.close() }
             runCatching { smbConnection?.close() }
             runCatching { client?.close() }
@@ -92,6 +101,7 @@ class SmbFileProvider internal constructor(
     private val connection: RemoteConnection,
     private val shareDiscovery: SmbShareDiscovery = DceRpcSmbShareDiscovery,
     private val sessionFactory: SmbSessionHandleFactory = DefaultSmbSessionHandleFactory,
+    private val transferSocketFactory: () -> SmbTransferSocketFactory = { SmbTransferSocketFactory() },
 ) : FileProvider {
     override fun isSameStorage(other: FileProvider): Boolean = other is SmbFileProvider &&
         connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
@@ -350,30 +360,21 @@ class SmbFileProvider internal constructor(
     override suspend fun getInputStream(path: String): Result<InputStream> = withContext(Dispatchers.IO) {
         runCatching {
             val resolved = resolveFile(path)
-            val file = ensureShare(resolved.shareName).openFile(
-                resolved.relativePath,
-                EnumSet.of(AccessMask.GENERIC_READ),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OPEN,
-                null,
-            )
+            val owner = SmbTransferFile(transferSocketFactory())
+            owner.open(sessionFactory, connection, resolved.shareName, resolved.relativePath, writing = false)
             try {
-                object : FilterInputStream(file.inputStream) {
+                object : FilterInputStream(owner.file.inputStream), TransferAbortable {
                     private var closed = false
-
+                    override fun abortTransfer() = owner.abortTransfer()
                     override fun close() {
                         if (closed) return
                         closed = true
-                        try {
-                            super.close()
-                        } finally {
-                            file.close()
-                        }
+                        owner.finishStream { super.close() }
                     }
                 } as InputStream
             } catch (error: Throwable) {
-                file.close()
+                owner.abortTransfer()
+                runCatching { owner.close() }.onFailure(error::addSuppressed)
                 throw error
             }
         }
@@ -382,30 +383,21 @@ class SmbFileProvider internal constructor(
     override suspend fun getOutputStream(path: String): Result<OutputStream> = withContext(Dispatchers.IO) {
         runCatching {
             val resolved = resolveFile(path)
-            val file = ensureShare(resolved.shareName).openFile(
-                resolved.relativePath,
-                EnumSet.of(AccessMask.GENERIC_WRITE),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OVERWRITE_IF,
-                null,
-            )
+            val owner = SmbTransferFile(transferSocketFactory())
+            owner.open(sessionFactory, connection, resolved.shareName, resolved.relativePath, writing = true)
             try {
-                object : ForwardingOutputStream(file.outputStream) {
+                object : ForwardingOutputStream(owner.file.outputStream), TransferAbortable {
                     private var closed = false
-
+                    override fun abortTransfer() = owner.abortTransfer()
                     override fun close() {
                         if (closed) return
                         closed = true
-                        try {
-                            super.close()
-                        } finally {
-                            file.close()
-                        }
+                        owner.finishStream { super.close() }
                     }
                 } as OutputStream
             } catch (error: Throwable) {
-                file.close()
+                owner.abortTransfer()
+                runCatching { owner.close() }.onFailure(error::addSuppressed)
                 throw error
             }
         }

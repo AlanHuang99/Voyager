@@ -6,6 +6,17 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import com.voyagerfiles.data.repository.LocalFileProvider
+import com.voyagerfiles.data.repository.TransferCancellation
+import com.voyagerfiles.viewmodel.FileOperationCoordinator
+import java.net.Socket
+import java.util.concurrent.atomic.AtomicReference
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -126,6 +137,94 @@ class SmbDockerIntegrationTest {
             } finally {
                 provider?.disconnect()
                 directProvider?.disconnect()
+            }
+        }
+    }
+
+    @Test
+    fun cancelSmbBufferedFlushPreservesSourceAndBrowserConnection() =
+        stalledTransfer(SmbStallingProxy.Stall.WRITE_REPLY)
+
+    @Test
+    fun cancelBlockedSmbSocketWritePreservesSourceAndBrowserConnection() =
+        stalledTransfer(SmbStallingProxy.Stall.WRITE_BODY)
+
+    @Test
+    fun cancelSmbHandleClosePreservesSourceAndBrowserConnection() =
+        stalledTransfer(SmbStallingProxy.Stall.CLOSE_REPLY)
+
+    @Test
+    fun cancelSmbInputReplyPreservesSourceAndBrowserConnection() =
+        stalledTransfer(SmbStallingProxy.Stall.READ_REPLY)
+
+    @Test
+    fun cancelSmbConnectionAcquisitionPreservesSourceAndBrowserConnection() =
+        stalledTransfer(SmbStallingProxy.Stall.NEGOTIATE_REPLY)
+
+    private fun stalledTransfer(stall: SmbStallingProxy.Stall) = runBlocking {
+        assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba("server min protocol = SMB2_02", "server max protocol = SMB2_10", "smb encrypt = off") { port ->
+            waitUntilReady(port).disconnect()
+            SmbStallingProxy(port, stall).use { proxy ->
+                val provider = SmbFileProvider(
+                    connection(proxy.port, shareName = "media"),
+                    transferSocketFactory = { SmbTransferSocketFactory { Socket().apply { if (stall == SmbStallingProxy.Stall.WRITE_BODY) sendBufferSize = 16 * 1024 } } },
+                )
+                val remoteRoot = temp.root.resolve("media")
+                val payload = ByteArray(if (stall == SmbStallingProxy.Stall.WRITE_BODY) 4 * 1024 * 1024 else 64 * 1024) { (it % 251).toByte() }
+                val reading = stall == SmbStallingProxy.Stall.READ_REPLY
+                val source = if (reading) remoteRoot.resolve("source.bin") else temp.newFolder("local-source").resolve("source.bin")
+                if (reading) provider.getOutputStream("/source.bin").getOrThrow().use { it.write(payload) }
+                else source.writeBytes(payload)
+                val destination = if (reading) temp.newFolder("local-target") else remoteRoot
+                provider.getOutputStream("/unrelated.txt").getOrThrow().use { it.write("keep".toByteArray()) }
+                val before = provider.listFiles("/").getOrThrow().map { it.name }
+                assertTrue(before.contains("unrelated.txt"))
+                proxy.arm()
+                val token = TransferCancellation()
+                val worker = AtomicReference<Thread>()
+                val transfer = async(Dispatchers.IO + token.contextElement()) {
+                    worker.set(Thread.currentThread())
+                    if (reading) FileOperationCoordinator.movePath(provider, LocalFileProvider(), "/source.bin", destination.path)
+                    else FileOperationCoordinator.movePath(LocalFileProvider(), provider, source.path, "/")
+                }
+                try {
+                    val reachedStall = proxy.stalled.await(10, TimeUnit.SECONDS)
+                    assertTrue("Proxy must reach the selected SMB stall: ${proxy.frames.toList().takeLast(20)}", reachedStall)
+                    if (stall == SmbStallingProxy.Stall.WRITE_BODY) {
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+                        fun blockedSocketWrite() = worker.get()?.stackTrace?.any {
+                            it.methodName.contains("write", ignoreCase = true) && (it.className.startsWith("java.net.") || it.className.startsWith("sun.nio.ch."))
+                        } == true
+                        while (!blockedSocketWrite() && System.nanoTime() < deadline) Thread.sleep(10)
+                        assertTrue("The transfer must be blocked in a socket write, not only waiting for a reply", blockedSocketWrite())
+                        assertTrue("The server must retain a partial destination", remoteRoot.resolve("source.bin").length() > 0L)
+                    }
+                    assertFalse(transfer.isCompleted)
+                    val started = System.nanoTime()
+                    token.cancel()
+                    assertTrue("Cancel must return without transport I/O", System.nanoTime() - started < TimeUnit.MILLISECONDS.toNanos(500))
+                    val result = withTimeoutOrNull(5_000) { transfer.await() }
+                    assertNotNull("Cancellation must complete while the proxy is still stalled", result)
+                    assertTrue(result!!.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+                    assertArrayEquals(payload, source.readBytes())
+                    if (reading) assertFalse("Owned partial destination must be removed", destination.resolve("source.bin").exists())
+                    else assertFalse("Owned partial destination must be inaccessible after rollback", provider.exists("/source.bin"))
+                    assertEquals("keep", remoteRoot.resolve("unrelated.txt").readText())
+                    assertTrue(provider.listFiles("/").getOrThrow().any { it.name == "unrelated.txt" })
+                    provider.createDirectory("/", "after-cancel").getOrThrow()
+                    provider.delete("/after-cancel").getOrThrow()
+                    assertEquals(1L, proxy.release.count)
+                    proxy.close()
+                    val cleanupDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+                    while (destination.resolve("source.bin").exists() && System.nanoTime() < cleanupDeadline) Thread.sleep(10)
+                    assertFalse("Deletion must finish after the held server handle closes", destination.resolve("source.bin").exists())
+                } finally {
+                    token.cancel()
+                    proxy.release.countDown()
+                    withTimeout(10_000) { transfer.await() }
+                    provider.disconnect()
+                }
             }
         }
     }
