@@ -6,6 +6,40 @@ Voyager keeps user-facing copy in `app/src/main/res/values/strings.xml`. A trans
 
 Join [Voyager on Crowdin](https://crowdin.com/project/voyagerandroid) to translate or review strings in the browser. English is the source language. Existing French and Simplified Chinese resources are imported during initial setup so their contributors' work is preserved.
 
+### Get started
+
+1. Open [Voyager on Crowdin](https://crowdin.com/project/voyagerandroid), sign in or create an account, and choose your language. Join the language team if prompted.
+2. Open the Android `strings.xml` file. Start with a few untranslated strings, or suggest improvements to existing translations.
+3. Preserve placeholders and formatting, and use natural wording for an Android file manager. You do not need to translate the entire app or build it locally to contribute.
+4. If a phrase is unclear, leave a comment on that string with the screen or action involved. Use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions) to request another language or offer to help review a language.
+
+The [README screenshots](../README.md#screenshots) provide an overview of the interface. When reporting a wording or layout problem, include the language, screen, app version, and a screenshot if useful. Remove personal filenames, paths, and server details from screenshots before sharing them.
+
+### Wording and terminology
+
+Use concise, neutral language. Prefer familiar Android terminology in your language, and use the same term for the same action across screens. Keep Voyager, SFTP, FTP, SMB, and WebDAV unchanged.
+
+| English term | Meaning in Voyager |
+| --- | --- |
+| Local storage | Files accessed directly on the device or a mounted volume. |
+| Document tree | A folder the user grants access to through Android's folder picker. |
+| Remote connection | A saved connection to a file server. |
+| Bookmark | A saved local folder location. |
+| Session | An open browsing location that the user can switch back to. |
+| Trash | Recoverable deleted files; permanent deletion cannot be undone in Voyager. |
+| Replace | Write the incoming item in place of the existing destination item. |
+| Skip | Leave this destination unchanged and continue with other items. |
+| Completed | Items successfully finished, excluding failed or skipped items. |
+| Host key | The SSH server identity used to recognize an SFTP server. |
+
+### Machine translation and review
+
+Machine translation may help draft a suggestion. Read and edit it before submitting, check the meaning in context, and preserve placeholders and plurals. A successful build verifies resource structure; it does not establish that the wording is correct. Fluent contributors can help by reviewing terminology, ambiguous actions, and long text in the app.
+
+Maintainers should limit any automatic pre-translation to untranslated strings, preserve existing human translations, and keep generated drafts subject to language review. Avoid filling every language merely to show a completed progress bar. Review translations before merging the synchronization pull request, especially destructive actions, access permissions, and security messages. [Crowdin's auto-translation settings](https://support.crowdin.com/auto-translation/) describe the available scope and preservation controls.
+
+### How translations reach the app
+
 The repository's `crowdin.yml` maps Android resources to `values-%android_code%/strings.xml`, with explicit mappings for French (`values-fr`) and Simplified Chinese (`values-zh-rCN`). Resources marked `translatable="false"` remain in the English source file. Untranslated strings are exported with English source text so incomplete locales can pass Android's missing-translation checks. Crowdin retains their untranslated status. New locales containing only English fallback text are omitted until they include a translation; existing locales and partially translated locales are preserved.
 
 The Crowdin translations workflow uploads English resource changes from `master`. It downloads translations daily, runs unit tests, lint, and debug and release builds, and opens or updates a translation pull request. Translation pull requests require review and are not merged automatically. These checks run in the synchronization workflow itself because pull requests created with `GITHUB_TOKEN` do not trigger the regular pull request workflow.
