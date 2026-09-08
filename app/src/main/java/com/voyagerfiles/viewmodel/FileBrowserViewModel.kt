@@ -867,8 +867,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
         require(state.source == FileSource.WEBDAV && file.source == FileSource.WEBDAV) {
             "Direct playback requires the active WebDAV session"
         }
-        require(!file.isDirectory && (file.isAudio || file.isVideo)) {
-            "Direct playback requires an audio or video file"
+        require(!file.isDirectory) {
+            "Direct opening requires a file"
         }
         require(state.files.any { it.path == file.path && it.source == file.source }) {
             "The WebDAV file is no longer active"

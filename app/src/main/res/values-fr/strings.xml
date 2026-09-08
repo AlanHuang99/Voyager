@@ -371,8 +371,8 @@
     <string name="browser_extract_archive_title">Extraire l\'archive ?</string>
     <string name="browser_extract_archive_message">Extraire %1$s dans un nouveau dossier à cet emplacement ?</string>
     <string name="browser_extract">Extraire</string>
-    <string name="playback_direct_unavailable_title">Lecture directe indisponible</string>
-    <string name="playback_direct_unavailable_message">Ce serveur ne fournit pas les plages d\'octets requises pour la recherche rapide. Télécharger le fichier à la place ?</string>
+    <string name="playback_direct_unavailable_title">Ouverture directe indisponible</string>
+    <string name="playback_direct_unavailable_message">Impossible d\'ouvrir ce fichier à distance. Télécharger le fichier à la place ?</string>
     <string name="browser_search_placeholder">Rechercher dans ce dossier</string>
     <string name="browser_sessions">Sessions</string>
     <string name="browser_no_active_sessions">Aucune session active</string>

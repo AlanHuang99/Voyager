@@ -60,7 +60,7 @@ class WebDavPlaybackProviderTest {
     }
 
     @Test
-    fun proxyDescriptorSupportsSeekedReadsAndReleasesTokenOnClose() {
+    fun proxyDescriptorSupportsSeekedReadsAndCanBeReopenedAfterInspection() {
         val source = ByteArraySource(ByteArray(10) { it.toByte() }, "remote")
         val uri = WebDavPlaybackProvider.register(
             context,
@@ -74,10 +74,35 @@ class WebDavPlaybackProviderTest {
             }
         }
 
-        waitUntil { source.closeCount == 1 }
+        context.contentResolver.openFileDescriptor(uri, "r")!!.use { descriptor ->
+            FileInputStream(descriptor.fileDescriptor).use { input ->
+                input.channel.position(7)
+                assertArrayEquals(byteArrayOf(7, 8, 9), input.readNBytes(3))
+            }
+        }
+        assertEquals(0, source.closeCount)
+        WebDavPlaybackProvider.revoke(uri)
         assertThrows(FileNotFoundException::class.java) {
             context.contentResolver.openFileDescriptor(uri, "r")
         }
+        assertEquals(1, source.closeCount)
+    }
+
+    @Test
+    fun closingOneDescriptorKeepsAnotherDocumentDescriptorReadable() {
+        val source = ByteArraySource(ByteArray(10) { it.toByte() }, "remote")
+        val uri = WebDavPlaybackProvider.register(
+            context, PlaybackEntry("report.pdf", "application/pdf", 10, source),
+        )
+        val first = context.contentResolver.openFileDescriptor(uri, "r")!!
+        context.contentResolver.openFileDescriptor(uri, "r")!!.use { second ->
+            first.close()
+            FileInputStream(second.fileDescriptor).use { input ->
+                input.channel.position(5)
+                assertArrayEquals(byteArrayOf(5, 6), input.readNBytes(2))
+            }
+        }
+        assertEquals(0, source.closeCount)
     }
 
     @Test

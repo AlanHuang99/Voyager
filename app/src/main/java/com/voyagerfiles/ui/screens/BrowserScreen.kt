@@ -165,8 +165,6 @@ fun BrowserScreen(
     val noFileHandlerMessage = stringResource(R.string.browser_no_file_handler)
     val fileOpenFailedMessage = stringResource(R.string.browser_file_open_failed)
     val archiveUnsupportedMessage = stringResource(R.string.browser_archive_unsupported)
-    val noMediaPlayerMessage = stringResource(R.string.browser_no_media_player)
-    val mediaOpenFailedMessage = stringResource(R.string.browser_media_open_failed)
     val bookmarkToggledMessage = stringResource(R.string.browser_bookmark_toggled)
     val rootLabel = stringResource(R.string.browser_root)
     val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
@@ -210,7 +208,7 @@ fun BrowserScreen(
     val canOpenWith = remember(selectedItems) {
         selectedItems.singleOrNull()?.let { item ->
             !item.isDirectory &&
-                (item.source == FileSource.LOCAL || item.source == FileSource.SAF)
+                (item.source == FileSource.LOCAL || item.source == FileSource.SAF || item.source == FileSource.WEBDAV)
         } == true
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
@@ -274,8 +272,36 @@ fun BrowserScreen(
         )
     }
 
+    fun openWebDavFile(file: FileItem, chooser: Boolean = false) {
+        scope.launch {
+            viewModel.prepareWebDavPlayback(file).fold(
+                onSuccess = { uri ->
+                    try {
+                        val target = FileUtils.createRemotePlaybackIntent(uri, file)
+                        playbackIntentLauncher(
+                            if (chooser) Intent.createChooser(target, context.getString(R.string.action_open_with))
+                            else target,
+                        )
+                        if (chooser) viewModel.clearSelection()
+                    } catch (_: ActivityNotFoundException) {
+                        WebDavPlaybackProvider.revoke(uri)
+                        snackbarHostState.showSnackbar(noFileHandlerMessage)
+                    } catch (_: Throwable) {
+                        WebDavPlaybackProvider.revoke(uri)
+                        snackbarHostState.showSnackbar(fileOpenFailedMessage)
+                    }
+                },
+                onFailure = { playbackFallbackFor = file },
+            )
+        }
+    }
+
     fun openSelectedWith() {
         val file = selectedItems.singleOrNull() ?: return
+        if (file.source == FileSource.WEBDAV) {
+            openWebDavFile(file, chooser = true)
+            return
+        }
         FileUtils.openFileWith(context, file).fold(
             onSuccess = { viewModel.clearSelection() },
             onFailure = { error ->
@@ -324,22 +350,7 @@ fun BrowserScreen(
         when (remoteFileTapAction(file)) {
             RemoteFileTapAction.NAVIGATE -> navigateTo(file.path)
             RemoteFileTapAction.DOWNLOAD -> viewModel.downloadFile(file.path)
-            RemoteFileTapAction.STREAM_WEBDAV -> scope.launch {
-                viewModel.prepareWebDavPlayback(file).fold(
-                    onSuccess = { uri ->
-                        try {
-                            playbackIntentLauncher(FileUtils.createRemotePlaybackIntent(uri, file))
-                        } catch (_: ActivityNotFoundException) {
-                            WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar(noMediaPlayerMessage)
-                        } catch (_: Throwable) {
-                            WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar(mediaOpenFailedMessage)
-                        }
-                    },
-                    onFailure = { playbackFallbackFor = file },
-                )
-            }
+            RemoteFileTapAction.STREAM_WEBDAV -> openWebDavFile(file)
         }
     }
 

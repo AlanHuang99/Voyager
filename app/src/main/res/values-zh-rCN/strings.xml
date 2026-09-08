@@ -367,8 +367,8 @@
     <string name="browser_extract_archive_title">解压压缩包？</string>
     <string name="browser_extract_archive_message">把 %1$s 解压到此位置的新文件夹中？</string>
     <string name="browser_extract">解压</string>
-    <string name="playback_direct_unavailable_title">无法直接播放</string>
-    <string name="playback_direct_unavailable_message">此服务器不提供拖动进度所需的字节区间。改为下载该文件？</string>
+    <string name="playback_direct_unavailable_title">无法直接打开</string>
+    <string name="playback_direct_unavailable_message">无法远程打开此文件。改为下载该文件？</string>
     <string name="browser_search_placeholder">搜索此文件夹</string>
     <string name="browser_sessions">会话</string>
     <string name="browser_no_active_sessions">没有活动会话</string>

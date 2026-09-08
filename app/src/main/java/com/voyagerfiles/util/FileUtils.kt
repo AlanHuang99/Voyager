@@ -152,8 +152,8 @@ object FileUtils {
         }
 
     fun createRemotePlaybackIntent(uri: Uri, file: FileItem): Intent {
-        require(file.source == FileSource.WEBDAV && !file.isDirectory && (file.isAudio || file.isVideo)) {
-            "Direct playback requires a WebDAV audio or video file"
+        require(file.source == FileSource.WEBDAV && !file.isDirectory) {
+            "Direct opening requires a WebDAV file"
         }
         return Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, file.mimeType)

@@ -3,6 +3,7 @@ package com.voyagerfiles.playback
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class PlaybackEntry(
     val displayName: String,
@@ -20,6 +21,7 @@ internal class PlaybackTokenStore(
         val entry: PlaybackEntry,
         var lastAccessMillis: Long,
         var closed: Boolean = false,
+        var readers: Int = 0,
     )
 
     private val entries = ConcurrentHashMap<String, StoredEntry>()
@@ -45,7 +47,7 @@ internal class PlaybackTokenStore(
             if (stored.closed) return null
             val now = clock()
             val elapsed = now - stored.lastAccessMillis
-            if (elapsed >= inactivityMillis && elapsed >= 0) {
+            if (stored.readers == 0 && elapsed >= inactivityMillis && elapsed >= 0) {
                 stored.closed = true
                 expiredSource = stored.entry.source
             } else {
@@ -56,6 +58,60 @@ internal class PlaybackTokenStore(
         entries.remove(token, stored)
         runCatching { expiredSource?.close() }
         return null
+    }
+
+    fun acquire(token: String): Lease? {
+        val stored = entries[token] ?: return null
+        synchronized(stored) {
+            if (lookup(token) == null) return null
+            stored.readers++
+        }
+        return Lease(
+            entry = stored.entry,
+            onTouch = {
+                synchronized(stored) {
+                    if (stored.closed) false else {
+                        stored.lastAccessMillis = clock()
+                        true
+                    }
+                }
+            },
+            onClose = {
+                synchronized(stored) {
+                    stored.readers--
+                    stored.lastAccessMillis = clock()
+                }
+            },
+        )
+    }
+
+    fun sweepExpired() {
+        val now = clock()
+        entries.entries.toList().forEach { (token, stored) ->
+            val expired = synchronized(stored) {
+                val elapsed = now - stored.lastAccessMillis
+                if (!stored.closed && stored.readers == 0 && elapsed >= inactivityMillis) {
+                    stored.closed = true
+                    true
+                } else false
+            }
+            if (expired) {
+                entries.remove(token, stored)
+                runCatching { stored.entry.source.close() }
+            }
+        }
+    }
+
+    class Lease internal constructor(
+        val entry: PlaybackEntry,
+        private val onTouch: () -> Boolean,
+        private val onClose: () -> Unit,
+    ) : AutoCloseable {
+        private val released = AtomicBoolean(false)
+        fun touch(): Boolean = !released.get() && onTouch()
+        override fun close() {
+            if (released.compareAndSet(false, true)) onClose()
+        }
     }
 
     fun remove(token: String) {

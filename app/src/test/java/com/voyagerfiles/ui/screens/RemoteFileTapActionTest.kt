@@ -7,10 +7,11 @@ import org.junit.Test
 
 class RemoteFileTapActionTest {
     @Test
-    fun onlyWebDavMediaStreams() {
+    fun webDavFilesStreamAndOtherProtocolsDownload() {
         assertEquals(RemoteFileTapAction.STREAM_WEBDAV, remoteFileTapAction(file("song.mp3", FileSource.WEBDAV)))
         assertEquals(RemoteFileTapAction.STREAM_WEBDAV, remoteFileTapAction(file("movie.mp4", FileSource.WEBDAV)))
-        assertEquals(RemoteFileTapAction.DOWNLOAD, remoteFileTapAction(file("notes.txt", FileSource.WEBDAV)))
+        assertEquals(RemoteFileTapAction.STREAM_WEBDAV, remoteFileTapAction(file("notes.txt", FileSource.WEBDAV)))
+        assertEquals(RemoteFileTapAction.STREAM_WEBDAV, remoteFileTapAction(file("report.pdf", FileSource.WEBDAV)))
         assertEquals(RemoteFileTapAction.DOWNLOAD, remoteFileTapAction(file("song.mp3", FileSource.SFTP)))
         assertEquals(
             RemoteFileTapAction.NAVIGATE,
