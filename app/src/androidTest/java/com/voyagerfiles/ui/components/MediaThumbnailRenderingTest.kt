@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -16,13 +17,16 @@ import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.ui.screens.TrashEntryRow
 import java.io.File
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalTestApi::class)
 class MediaThumbnailRenderingTest {
-    @get:Rule val compose = createComposeRule()
+    // Queue recomposition onto the test clock instead of preview IO callbacks.
+    @get:Rule val compose = createComposeRule(effectContext = StandardTestDispatcher())
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val directory = File(context.cacheDir, "preview-rendering-${System.nanoTime()}").apply { mkdirs() }
 
