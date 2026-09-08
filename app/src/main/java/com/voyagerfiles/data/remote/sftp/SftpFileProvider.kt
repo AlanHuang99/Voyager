@@ -10,13 +10,13 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FilterInputStream
-import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
@@ -376,7 +376,7 @@ class SftpFileProvider(
     private class SftpChannelOutputStream(
         private val channel: ChannelSftp,
         output: OutputStream,
-    ) : FilterOutputStream(output) {
+    ) : ForwardingOutputStream(output) {
         override fun close() {
             try {
                 super.close()

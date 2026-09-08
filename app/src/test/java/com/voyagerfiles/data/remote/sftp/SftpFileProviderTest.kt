@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.runBlocking
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory
 import org.apache.sshd.common.keyprovider.KeyPairProvider
@@ -94,6 +95,7 @@ class SftpFileProviderTest {
         val provider = createProvider(server.port)
 
         provider.getOutputStream("/uploaded.txt").getOrThrow().use { stream ->
+            assertTrue(stream is ForwardingOutputStream)
             stream.write("uploaded".toByteArray())
         }
 

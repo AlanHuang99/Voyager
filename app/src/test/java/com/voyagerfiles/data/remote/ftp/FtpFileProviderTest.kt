@@ -3,6 +3,7 @@ package com.voyagerfiles.data.remote.ftp
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileDownloader
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.runBlocking
 import org.apache.ftpserver.FtpServer
 import org.apache.ftpserver.FtpServerFactory
@@ -122,6 +123,7 @@ class FtpFileProviderTest {
 
         val output = provider.getOutputStream("/large.bin").getOrThrow()
         assertFalse(output is ByteArrayOutputStream)
+        assertTrue(output is ForwardingOutputStream)
         output.use { it.write(payload) }
 
         val input = provider.getInputStream("/large.bin").getOrThrow()

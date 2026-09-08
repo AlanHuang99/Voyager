@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.net.ftp.FTP
@@ -14,7 +15,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.FilterInputStream
-import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
@@ -39,6 +39,7 @@ class FtpFileProvider(
         val ftp = FTPClient().apply {
             connectTimeout = 30000
             defaultTimeout = 30000
+            bufferSize = TRANSFER_BUFFER_SIZE
         }
         try {
             ftp.connect(connection.host, connection.port)
@@ -321,7 +322,7 @@ class FtpFileProvider(
         private val ftp: FTPClient,
         output: OutputStream,
         private val path: String,
-    ) : FilterOutputStream(output) {
+    ) : ForwardingOutputStream(output) {
         private var closed = false
 
         override fun close() {
@@ -335,5 +336,11 @@ class FtpFileProvider(
                 }
             }
         }
+    }
+
+    private companion object {
+        // Matches the StreamTransfer chunk size. Commons Net otherwise buffers data connections
+        // in 8 KiB and copies whole files, as used by provider-local copy, in 1 KiB steps.
+        const val TRANSFER_BUFFER_SIZE = 64 * 1024
     }
 }
