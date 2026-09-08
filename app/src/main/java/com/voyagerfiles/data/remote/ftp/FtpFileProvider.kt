@@ -4,6 +4,9 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.TransferCancellation
+import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,6 +42,7 @@ class FtpFileProvider(
         val ftp = FTPClient().apply {
             connectTimeout = 30000
             defaultTimeout = 30000
+            setDataTimeout(java.time.Duration.ofSeconds(30))
             bufferSize = TRANSFER_BUFFER_SIZE
         }
         try {
@@ -154,26 +158,37 @@ class FtpFileProvider(
                 val ftp = ftpClient!!
                 val name = sourcePath.substringAfterLast("/")
                 val targetPath = joinPath(destPath, name)
-                if (ftp.isDirectory(sourcePath)) {
-                    copyDirectoryRecursive(ftp, sourcePath, targetPath)
-                    return@runCatching
+                TransferCancellation.check()
+                check(ftp.listFiles(destPath).none { it.name == name }) {
+                    "An item named $name already exists in this folder"
                 }
-
-                copyFileThroughTemporaryStorage(ftp, sourcePath, targetPath)
+                var ownsTarget = false
+                try {
+                    if (ftp.isDirectory(sourcePath)) {
+                        check(ftp.makeDirectory(targetPath)) { "Failed to create directory: $targetPath" }
+                        ownsTarget = true
+                        copyDirectoryRecursive(ftp, sourcePath, targetPath)
+                    } else {
+                        copyFileThroughTemporaryStorage(ftp, sourcePath, targetPath) { ownsTarget = true }
+                    }
+                    TransferCancellation.check()
+                } catch (error: Throwable) {
+                    if (ownsTarget) runCatching { delete(targetPath).getOrThrow() }.onFailure(error::addSuppressed)
+                    throw error
+                }
                 Unit
             }
         }
 
     private fun copyDirectoryRecursive(ftp: FTPClient, sourcePath: String, targetPath: String) {
-        if (!ftp.makeDirectory(targetPath) && !ftp.isDirectory(targetPath)) {
-            throw IllegalStateException("Failed to create directory: $targetPath")
-        }
-
+        TransferCancellation.check()
         for (file in ftp.listFiles(sourcePath)) {
             if (file.name == "." || file.name == "..") continue
             val sourceChild = joinPath(sourcePath, file.name)
             val targetChild = joinPath(targetPath, file.name)
             if (file.isDirectory) {
+                TransferCancellation.check()
+                check(ftp.makeDirectory(targetChild)) { "Failed to create directory: $targetChild" }
                 copyDirectoryRecursive(ftp, sourceChild, targetChild)
             } else {
                 copyFileThroughTemporaryStorage(ftp, sourceChild, targetChild)
@@ -185,20 +200,28 @@ class FtpFileProvider(
         ftp: FTPClient,
         sourcePath: String,
         targetPath: String,
+        onTargetCreated: () -> Unit = {},
     ) {
+        TransferCancellation.check()
         check(temporaryDirectory.isDirectory || temporaryDirectory.mkdirs()) {
             "Could not prepare temporary storage for the copy"
         }
         val temporaryFile = File.createTempFile("voyager-ftp-", ".copy", temporaryDirectory)
         try {
-            FileOutputStream(temporaryFile).use { output ->
-                if (!ftp.retrieveFile(sourcePath, output)) {
-                    throw IllegalStateException("Failed to read: $sourcePath")
+            val source = ftp.retrieveFileStream(sourcePath)
+                ?: throw IllegalStateException("Failed to read: $sourcePath")
+            PendingCommandInputStream(ftp, source, sourcePath).use { input ->
+                FileOutputStream(temporaryFile).use { output ->
+                    StreamTransfer.copy(input, output, sourcePath, null)
                 }
             }
-            FileInputStream(temporaryFile).use { input ->
-                if (!ftp.storeFile(targetPath, input)) {
-                    throw IllegalStateException("Failed to write: $targetPath")
+            TransferCancellation.check()
+            onTargetCreated()
+            val target = ftp.storeFileStream(targetPath)
+                ?: throw IllegalStateException("Failed to write: $targetPath")
+            PendingCommandOutputStream(ftp, target, targetPath).use { output ->
+                FileInputStream(temporaryFile).use { input ->
+                    StreamTransfer.copy(input, output, sourcePath, temporaryFile.length())
                 }
             }
         } finally {
@@ -302,7 +325,11 @@ class FtpFileProvider(
         private val ftp: FTPClient,
         input: InputStream,
         private val path: String,
-    ) : FilterInputStream(input) {
+    ) : FilterInputStream(input), TransferAbortable {
+        override fun abortTransfer() {
+            runCatching { `in`.close() }
+            runCatching { ftp.disconnect() }
+        }
         private var closed = false
 
         override fun close() {
@@ -320,9 +347,13 @@ class FtpFileProvider(
 
     private class PendingCommandOutputStream(
         private val ftp: FTPClient,
-        output: OutputStream,
+        private val output: OutputStream,
         private val path: String,
-    ) : ForwardingOutputStream(output) {
+    ) : ForwardingOutputStream(output), TransferAbortable {
+        override fun abortTransfer() {
+            runCatching { output.close() }
+            runCatching { ftp.disconnect() }
+        }
         private var closed = false
 
         override fun close() {

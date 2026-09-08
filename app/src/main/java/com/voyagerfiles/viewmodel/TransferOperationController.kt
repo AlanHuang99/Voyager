@@ -24,12 +24,13 @@ class TransferOperationController(
         label: UiText,
         onFailure: (Throwable) -> Unit,
         onFinished: () -> Unit,
+        cancellable: Boolean = true,
         block: suspend () -> Unit,
     ): Boolean {
         if (mutableState.value is OperationState.Running) return false
         val token = TransferCancellation()
         cancellation = token
-        mutableState.value = OperationState.Running(TransferProgress(label), id = ++nextId, cancellable = true)
+        mutableState.value = OperationState.Running(TransferProgress(label), id = ++nextId, cancellable = cancellable)
         try {
             startForeground()
         } catch (error: Throwable) {
@@ -61,6 +62,7 @@ class TransferOperationController(
 
     fun cancel(expectedId: Long? = null) {
         val running = mutableState.value as? OperationState.Running ?: return
+        if (!running.cancellable) return
         if (expectedId != null && expectedId != running.id) return
         cancellation?.cancel()
         mutableState.value = running.copy(cancelling = true)

@@ -5,6 +5,9 @@ import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeout
 import org.apache.ftpserver.FtpServer
 import org.apache.ftpserver.FtpServerFactory
 import org.apache.ftpserver.listener.ListenerFactory
@@ -142,6 +145,86 @@ class FtpFileProviderTest {
         provider.copy("/source.bin", "/target").getOrThrow()
 
         assertTrue(Files.readAllBytes(server.root.resolve("target/source.bin")).contentEquals(payload))
+    }
+
+    @Test
+    fun stalledFtpReadCancellationRollsBackMoveWithoutChangingSource() = runBlocking {
+        val controlServer = ServerSocket(0)
+        val dataServer = ServerSocket(0)
+        val sent = java.util.concurrent.CountDownLatch(1)
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val serverTask = executor.submit {
+            controlServer.accept().use { control ->
+                val writer = control.getOutputStream().bufferedWriter()
+                fun reply(message: String) { writer.write("$message\r\n"); writer.flush() }
+                reply("220 ready")
+                val reader = control.getInputStream().bufferedReader()
+                while (true) {
+                    val command = reader.readLine() ?: break
+                    when (command.substringBefore(' ')) {
+                        "USER" -> reply("331 password")
+                        "PASS" -> reply("230 logged in")
+                        "TYPE", "NOOP" -> reply("200 OK")
+                        "PASV" -> reply("227 Entering Passive Mode (127,0,0,1,${dataServer.localPort / 256},${dataServer.localPort % 256})")
+                        "RETR" -> {
+                            reply("150 opening data")
+                            dataServer.accept().use { data ->
+                                data.getOutputStream().write(ByteArray(64 * 1024) { 19 })
+                                data.getOutputStream().flush()
+                                sent.countDown()
+                                // Keep the connection open but send no more bytes until the client aborts.
+                                while (data.getInputStream().read() != -1) { }
+                            }
+                            break
+                        }
+                        else -> reply("200 OK")
+                    }
+                }
+            }
+        }
+        val provider = createProvider(controlServer.localPort)
+        val local = com.voyagerfiles.data.repository.LocalFileProvider()
+        val source = temp.newFile("source.bin").apply { writeBytes(ByteArray(2 * 1024 * 1024) { 19 }) }
+        val original = source.readBytes()
+        val destination = temp.newFolder("stalled-target")
+        val networkSource = object : com.voyagerfiles.data.repository.FileProvider by local {
+            override suspend fun getInputStream(path: String) = provider.getInputStream("/source.bin")
+        }
+        val token = com.voyagerfiles.data.repository.TransferCancellation()
+        try {
+            val transfer = async(Dispatchers.IO + token.contextElement()) {
+                com.voyagerfiles.viewmodel.FileOperationCoordinator.movePath(networkSource, local, source.path, destination.path)
+            }
+            assertTrue(sent.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            val partial = java.io.File(destination, source.name)
+            val deadline = System.nanoTime() + 3_000_000_000L
+            while (partial.length() == 0L && System.nanoTime() < deadline) Thread.sleep(10)
+            assertTrue(partial.length() > 0L)
+            val before = System.nanoTime()
+            token.cancel()
+            assertTrue(System.nanoTime() - before < 500_000_000L)
+            assertTrue(withTimeout(3_000) { transfer.await() }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+            assertFalse(partial.exists())
+            assertTrue(original.contentEquals(source.readBytes()))
+            serverTask.get(3, java.util.concurrent.TimeUnit.SECONDS)
+            Unit
+        } finally {
+            token.cancel()
+            controlServer.close()
+            dataServer.close()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun sameProviderCopyKeepsExistingDestination() = runBlocking {
+        val server = startServer()
+        Files.write(server.root.resolve("source.txt"), "source".toByteArray())
+        Files.createDirectory(server.root.resolve("target"))
+        Files.write(server.root.resolve("target/source.txt"), "existing".toByteArray())
+        val provider = createProvider(server.port)
+        assertTrue(provider.copy("/source.txt", "/target").isFailure)
+        assertEquals("existing", String(Files.readAllBytes(server.root.resolve("target/source.txt"))))
     }
 
     private fun createProvider(port: Int): FtpFileProvider {

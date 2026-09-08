@@ -37,6 +37,7 @@ object FileOperationCoordinator {
                         onProgress = onProgress,
                     ).getOrThrow()
                 }
+                TransferCancellation.check()
             } catch (error: Throwable) {
                 if (createdTargetPath != null) {
                     runCatching {
@@ -59,13 +60,8 @@ object FileOperationCoordinator {
         onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            copyPathInternal(
-                sourceProvider,
-                destinationProvider,
-                sourcePath,
-                destinationDirectoryPath,
-                onProgress,
-            )
+            copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, onProgress)
+            Unit
         }
     }
 
@@ -77,14 +73,13 @@ object FileOperationCoordinator {
         onProgress: (StreamTransferProgress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            copyPathInternal(
-                sourceProvider,
-                destinationProvider,
-                sourcePath,
-                destinationDirectoryPath,
-                onProgress,
-            )
-            TransferCancellation.check()
+            val target = copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, onProgress)
+            try {
+                TransferCancellation.check()
+            } catch (error: Throwable) {
+                runCatching { destinationProvider.delete(target).getOrThrow() }.onFailure(error::addSuppressed)
+                throw error
+            }
             sourceProvider.delete(sourcePath).getOrThrow()
         }
     }
@@ -95,7 +90,7 @@ object FileOperationCoordinator {
         sourcePath: String,
         destinationDirectoryPath: String,
         onProgress: (StreamTransferProgress) -> Unit,
-    ) {
+    ): String {
         TransferCancellation.check()
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
         requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
@@ -116,7 +111,8 @@ object FileOperationCoordinator {
                         onProgress,
                     )
                 }
-                return
+                TransferCancellation.check()
+                return createdTargetPath
             }
 
             createdTargetPath = destinationProvider
@@ -132,6 +128,8 @@ object FileOperationCoordinator {
                     onProgress = onProgress,
                 ).getOrThrow()
             }
+            TransferCancellation.check()
+            return createdTargetPath
         } catch (error: Throwable) {
             if (createdTargetPath != null) {
                 runCatching {

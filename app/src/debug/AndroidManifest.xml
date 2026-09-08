@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="com.voyagerfiles.app.TransferDocumentsProvider"
+            android:authorities="com.voyagerfiles.test.transferdocs"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

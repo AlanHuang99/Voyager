@@ -10,6 +10,9 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.TransferCancellation
+import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -275,29 +278,44 @@ class SftpFileProvider(
     }
 
     private fun copyPath(sftp: ChannelSftp, sourcePath: String, targetPath: String) {
+        TransferCancellation.check()
         val attrs = sftp.lstat(sourcePath)
-        if (attrs.isDir) {
-            sftp.mkdir(targetPath)
-            for (entry in listEntries(sftp, sourcePath)) {
-                if (entry.filename == "." || entry.filename == "..") continue
-                copyPath(
-                    sftp,
-                    joinPath(sourcePath, entry.filename),
-                    joinPath(targetPath, entry.filename),
-                )
-            }
-            return
+        val parent = getParentPath(targetPath) ?: "/"
+        check(listEntries(sftp, parent).none { it.filename == targetPath.substringAfterLast('/') }) {
+            "An item named ${targetPath.substringAfterLast('/')} already exists in this folder"
         }
-
-        val outputChannel = openSftpChannelLocked()
+        var ownsTarget = false
         try {
-            sftp.get(sourcePath).use { input ->
-                outputChannel.put(targetPath, ChannelSftp.OVERWRITE).use { output ->
-                    input.copyTo(output, BUFFER_SIZE)
+            if (attrs.isDir) {
+                sftp.mkdir(targetPath)
+                ownsTarget = true
+                for (entry in listEntries(sftp, sourcePath)) {
+                    if (entry.filename == "." || entry.filename == "..") continue
+                    copyPath(sftp, joinPath(sourcePath, entry.filename), joinPath(targetPath, entry.filename))
+                }
+            } else {
+                val inputChannel = openSftpChannelLocked()
+                var outputChannel: ChannelSftp? = null
+                try {
+                    outputChannel = openSftpChannelLocked()
+                    SftpChannelInputStream(inputChannel, inputChannel.get(sourcePath)).use { input ->
+                        TransferCancellation.check()
+                        ownsTarget = true
+                        SftpChannelOutputStream(outputChannel, outputChannel.put(targetPath, ChannelSftp.OVERWRITE)).use { output ->
+                            StreamTransfer.copy(input, output, sourcePath, attrs.size)
+                        }
+                    }
+                } finally {
+                    inputChannel.disconnect()
+                    outputChannel?.disconnect()
                 }
             }
-        } finally {
-            outputChannel.disconnect()
+            TransferCancellation.check()
+        } catch (error: Throwable) {
+            if (ownsTarget) runCatching {
+                if (attrs.isDir) deleteDirectoryRecursive(sftp, targetPath) else sftp.rm(targetPath)
+            }.onFailure(error::addSuppressed)
+            throw error
         }
     }
 
@@ -352,7 +370,8 @@ class SftpFileProvider(
     private class SftpChannelInputStream(
         private val channel: ChannelSftp,
         input: InputStream,
-    ) : FilterInputStream(input) {
+    ) : FilterInputStream(input), TransferAbortable {
+        override fun abortTransfer() { channel.disconnect() }
         override fun close() {
             try {
                 super.close()
@@ -365,7 +384,8 @@ class SftpFileProvider(
     private class SftpChannelOutputStream(
         private val channel: ChannelSftp,
         output: OutputStream,
-    ) : ForwardingOutputStream(output) {
+    ) : ForwardingOutputStream(output), TransferAbortable {
+        override fun abortTransfer() { channel.disconnect() }
         override fun close() {
             try {
                 super.close()

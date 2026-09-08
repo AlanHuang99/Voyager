@@ -10,6 +10,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -93,7 +94,7 @@ class TransferService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val cancel = PendingIntent.getService(
-            this, 1, Intent(this, TransferService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_OPERATION_ID, operation?.id ?: -1),
+            this, 1, Intent(this, TransferService::class.java).setAction(ACTION_CANCEL).setData(Uri.parse("voyager://transfer/${operation?.id ?: -1}/cancel")).putExtra(EXTRA_OPERATION_ID, operation?.id ?: -1),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val progress = operation?.progress
@@ -110,7 +111,7 @@ class TransferService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setProgress(1000, ((progress?.fraction ?: 0f) * 1000).toInt(), progress?.fraction == null)
             .apply {
-                if (operation?.cancelling != true) addAction(0, getString(R.string.action_cancel), cancel)
+                if (operation?.cancellable == true && !operation.cancelling) addAction(0, getString(R.string.action_cancel), cancel)
             }
             .build()
     }

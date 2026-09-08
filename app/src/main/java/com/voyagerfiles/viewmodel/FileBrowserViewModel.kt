@@ -1146,6 +1146,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     ) {
         val started = operationController.launch(
             label = UiText.Resource(progressLabel),
+            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download),
             onFailure = { error ->
                 showSnackbar(
                     if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)

@@ -84,6 +84,34 @@ class TransferServiceTest {
         }
     }
 
+    @Test
+    fun retainedNotificationActionCannotCancelLaterOperation() {
+        val root = File(app.cacheDir, "stale-${UUID.randomUUID()}").apply { mkdirs() }
+        val source = root.resolve("source.bin").apply { writeBytes(ByteArray(4 * 1024 * 1024) { 7 }) }
+        val first = root.resolve("first").apply { mkdir() }
+        val second = root.resolve("second").apply { mkdir() }
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { launchCopy(source, first, move = false) }
+                waitUntil { notifications().firstOrNull()?.notification?.actions?.isNotEmpty() == true }
+                val oldAction = notifications().single().notification.actions.single().actionIntent
+                waitUntil { app.transfers.state.value == OperationState.Idle }
+                waitUntil { notifications().isEmpty() }
+                scenario.onActivity { launchCopy(source, second, move = false) }
+                waitUntil { notifications().firstOrNull()?.notification?.actions?.isNotEmpty() == true }
+                oldAction.send()
+                Thread.sleep(300)
+                assertFalse((app.transfers.state.value as OperationState.Running).cancelling)
+                waitUntil { app.transfers.state.value == OperationState.Idle }
+                assertArrayEquals(source.readBytes(), second.resolve(source.name).readBytes())
+            }
+        } finally {
+            app.transfers.cancel()
+            waitUntil { app.transfers.state.value == OperationState.Idle }
+            root.deleteRecursively()
+        }
+    }
+
     private fun launchCopy(source: File, destination: File, move: Boolean) {
         val label = UiText.Dynamic("Test transfer")
         app.transfers.launch(label, {}, {}) {

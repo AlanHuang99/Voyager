@@ -11,6 +11,21 @@ import org.junit.Test
 
 class TransferOperationControllerTest {
     @Test
+    fun unsupportedOperationIgnoresCancelAndFinishesNormally() = runBlocking {
+        val finish = CompletableDeferred<Unit>()
+        val controller = TransferOperationController({}, this)
+        var failure: Throwable? = null
+        controller.launch(UiText.Dynamic("Deleting"), { failure = it }, {}, cancellable = false) { finish.await() }
+        assertFalse((controller.state.value as OperationState.Running).cancellable)
+        controller.cancel()
+        assertFalse((controller.state.value as OperationState.Running).cancelling)
+        finish.complete(Unit)
+        yield()
+        assertNull(failure)
+        assertEquals(OperationState.Idle, controller.state.value)
+    }
+
+    @Test
     fun cancellationKeepsOperationRunningUntilCleanupFinishes() = runBlocking {
         val start = CompletableDeferred<Unit>()
         val proceed = CompletableDeferred<Unit>()

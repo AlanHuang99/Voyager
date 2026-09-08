@@ -8,6 +8,8 @@ import android.provider.DocumentsContract.Document
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.TransferCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -73,13 +75,20 @@ class SafFileProvider(
         withContext(Dispatchers.IO) {
             runCatching {
                 copyPath(sourcePath, destPath)
+                Unit
             }
         }
 
     override suspend fun move(sourcePath: String, destPath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                copyPath(sourcePath, destPath)
+                val target = copyPath(sourcePath, destPath)
+                try {
+                    TransferCancellation.check()
+                } catch (error: Throwable) {
+                    runCatching { DocumentsContract.deleteDocument(contentResolver, documentUri(target)) }.onFailure(error::addSuppressed)
+                    throw error
+                }
                 check(DocumentsContract.deleteDocument(contentResolver, documentUri(sourcePath))) {
                     "Unable to delete document"
                 }
@@ -132,27 +141,34 @@ class SafFileProvider(
             item
         }
 
-    private fun copyPath(sourcePath: String, destPath: String) {
+    private fun copyPath(sourcePath: String, destPath: String): String {
+        TransferCancellation.check()
         val source = queryDocument(documentUri(sourcePath))
-        if (source.isDirectory) {
-            val destinationDirectory = createDocument(destPath, source.name, Document.MIME_TYPE_DIR).getOrThrow()
-            listFilesInternal(sourcePath).forEach { child ->
-                copyPath(child.path, destinationDirectory.path)
-            }
-            return
+        check(listFilesInternal(destPath).none { it.name == source.name }) {
+            "An item named ${source.name} already exists in this folder"
         }
-
-        val destinationFile = createDocument(
-            path = destPath,
-            name = source.name,
-            mimeType = FileItem(name = source.name, path = "", isDirectory = false).mimeType,
+        val destination = createDocument(
+            destPath, source.name,
+            if (source.isDirectory) Document.MIME_TYPE_DIR else source.mimeType,
         ).getOrThrow()
-        contentResolver.openInputStream(documentUri(sourcePath)).use { input ->
-            requireNotNull(input) { "Unable to open input stream" }
-            contentResolver.openOutputStream(documentUri(destinationFile.path), "wt").use { output ->
-                requireNotNull(output) { "Unable to open output stream" }
-                input.copyTo(output)
+        try {
+            if (source.isDirectory) {
+                listFilesInternal(sourcePath).forEach { child -> copyPath(child.path, destination.path) }
+            } else {
+                contentResolver.openInputStream(documentUri(sourcePath)).use { input ->
+                    requireNotNull(input) { "Unable to open input stream" }
+                    contentResolver.openOutputStream(documentUri(destination.path), "wt").use { output ->
+                        requireNotNull(output) { "Unable to open output stream" }
+                        StreamTransfer.copy(input, output, sourcePath, source.size)
+                    }
+                }
             }
+            TransferCancellation.check()
+            return destination.path
+        } catch (error: Throwable) {
+            runCatching { DocumentsContract.deleteDocument(contentResolver, documentUri(destination.path)) }
+                .onFailure(error::addSuppressed)
+            throw error
         }
     }
 

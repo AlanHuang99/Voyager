@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
@@ -252,9 +253,12 @@ class WebDavFileProvider(
                 }
                 .put(requestBody)
                 .build()
-            httpClient!!.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("WebDAV upload failed: HTTP ${response.code}")
+            val call = httpClient!!.newCall(request)
+            TransferCancellation.registerAbort(call::cancel).use {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("WebDAV upload failed: HTTP ${response.code}")
+                    }
                 }
             }
         }
