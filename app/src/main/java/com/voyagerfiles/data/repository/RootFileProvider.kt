@@ -124,37 +124,38 @@ class RootFileProvider(private val shell: RootShell = RootShell()) : FileProvide
         val parent = canonical(checkNotNull(getParentPath(path)))
         val parentId = shell.execute("stat -Lc '%d:%i' -- ${q(parent)}", 128).toString(Charsets.UTF_8).trim()
         val stageName = ".voyager-root-${UUID.randomUUID()}"
-        val source = "/proc/self/fd/4/${File(path).name}"
-        val stage = "/proc/self/fd/4/$stageName"
-        val pinnedParent = "cd ${q(parent)} || exit 1; exec 4<.; " +
-            "[ \"\$(stat -Lc '%d:%i' /proc/self/fd/4)\" = ${q(parentId)} ] || { echo 'Parent folder changed' >&2; exit 1; }; "
+        // Android mksh closes extra descriptors in children; address the live owning shell.
+        val source = "\"\$rootfd/4/\"${q(File(path).name)}"
+        val stage = "\"\$rootfd/4/$stageName\""
+        val pinnedParent = "rootfd=/proc/\$\$/fd; cd ${q(parent)} || exit 1; exec 4<.; " +
+            "[ \"\$(stat -Lc '%d:%i' \$rootfd/4)\" = ${q(parentId)} ] || { echo 'Parent folder changed' >&2; exit 1; }; "
         val prepare = pinnedParent + "umask 077; mkdir -- ${q(stageName)} || exit 1; cd ${q(stageName)} || exit 1; " +
             "[ \"\$(pwd -P)\" = ${q("${parent.trimEnd('/')}/$stageName")} ] && " +
             "[ \"\$(stat -c %u .)\" = \"\$(id -u)\" ] || { echo 'Staging folder changed' >&2; exit 1; }; " +
             "case \"\$(stat -c %a .)\" in 700|2700) ;; *) echo 'Unsafe staging permissions' >&2; exit 1;; esac; stat -c '%d:%i' ."
         val stageId = shell.execute(prepare, 128).toString(Charsets.UTF_8).trim()
-        val pinStage = "[ ! -L ${q(stage)} ] || exit 1; exec 5<${q(stage)}; " +
-            "[ \"\$(stat -Lc '%d:%i' /proc/self/fd/5)\" = ${q(stageId)} ] || { echo 'Staging folder changed' >&2; exit 1; }; "
+        val pinStage = "[ ! -L $stage ] || exit 1; exec 5<$stage; " +
+            "[ \"\$(stat -Lc '%d:%i' \$rootfd/5)\" = ${q(stageId)} ] || { echo 'Staging folder changed' >&2; exit 1; }; "
         // Cleanup uses the recorded directory inode and never recursively follows a replaced path.
-        val cleanup = pinnedParent + pinStage + "rm -f -- /proc/self/fd/5/payload; " +
-            "if [ ! -L ${q(stage)} ] && [ \"\$(stat -c '%d:%i' -- ${q(stage)} 2>/dev/null)\" = ${q(stageId)} ]; then rmdir -- ${q(stage)}; fi"
-        val validateOriginal = "actual=\$(${fingerprintCommand(source)}); [ \"\$actual\" = ${q(original)} ] || " +
+        val cleanup = pinnedParent + pinStage + "rm -f -- \$rootfd/5/payload; " +
+            "if [ ! -L $stage ] && [ \"\$(stat -c '%d:%i' -- $stage 2>/dev/null)\" = ${q(stageId)} ]; then rmdir -- $stage; fi; exit \$?"
+        val validateOriginal = "actual=\$(${fingerprintOperand(source)}); [ \"\$actual\" = ${q(original)} ] || " +
             "{ echo 'File changed since opening. Original preserved; reopen before saving.' >&2; exit 1; }; " +
-            "[ \"\$(stat -c %h -- ${q(source)})\" = 1 ] || { echo 'Cannot replace a hard-linked file' >&2; exit 1; }; "
-        val script = pinnedParent + pinStage + "cd /proc/self/fd/5 || exit 1; " + validateOriginal +
-            "set -C; exec 3>payload; set +C; stagefile=\$(stat -Lc '%d:%i' /proc/self/fd/3); " +
+            "[ \"\$(stat -c %h -- $source)\" = 1 ] || { echo 'Cannot replace a hard-linked file' >&2; exit 1; }; "
+        val script = pinnedParent + pinStage + "cd \$rootfd/5 || exit 1; " + validateOriginal +
+            "set -C; exec 3>payload; set +C; stagefile=\$(stat -Lc '%d:%i' \$rootfd/3); " +
             // All data and metadata changes stay bound to the exclusively opened staging inode.
-            "owner=\$(stat -c '%u:%g' -- ${q(source)}); mode=\$(stat -c '%a' -- ${q(source)}); " +
-            "chown \"\$owner\" /proc/self/fd/3 && chmod \"\$mode\" /proc/self/fd/3 || exit 1; " +
-            "context=\$(ls -Zd -- ${q(source)} 2>/dev/null); context=\${context%% *}; " +
-            "targetcontext=\$(ls -ZLd /proc/self/fd/3 2>/dev/null); targetcontext=\${targetcontext%% *}; " +
-            "case \"\$context\" in *:*) if [ \"\$context\" != \"\$targetcontext\" ]; then chcon \"\$context\" /proc/self/fd/3 || exit 1; fi;; esac; " +
+            "owner=\$(stat -c '%u:%g' -- $source); mode=\$(stat -c '%a' -- $source); " +
+            "chown \"\$owner\" \$rootfd/3 && chmod \"\$mode\" \$rootfd/3 || exit 1; " +
+            "context=\$(ls -Zd -- $source 2>/dev/null); context=\${context%% *}; " +
+            "targetcontext=\$(ls -ZLd \$rootfd/3 2>/dev/null); targetcontext=\${targetcontext%% *}; " +
+            "case \"\$context\" in *:*) if [ \"\$context\" != \"\$targetcontext\" ]; then chcon \"\$context\" \$rootfd/3 || exit 1; fi;; esac; " +
             "cat >&3 || exit 1; " + validateOriginal +
             "[ -f payload ] && [ ! -L payload ] && [ \"\$(stat -c '%d:%i' payload)\" = \"\$stagefile\" ] && " +
-            "[ \"\$(stat -Lc %h /proc/self/fd/3)\" = 1 ] || { echo 'Staging file changed; original retained' >&2; exit 1; }; " +
-            "[ \"\$(stat -c '%f:%u:%g' -- ${q(source)})\" = \"\$(stat -Lc '%f:%u:%g' /proc/self/fd/3)\" ] || " +
+            "[ \"\$(stat -Lc %h \$rootfd/3)\" = 1 ] || { echo 'Staging file changed; original retained' >&2; exit 1; }; " +
+            "[ \"\$(stat -c '%f:%u:%g' -- $source)\" = \"\$(stat -Lc '%f:%u:%g' \$rootfd/3)\" ] || " +
             "{ echo 'Cannot preserve file ownership or permissions; original retained' >&2; exit 1; }; " +
-            "mv -fT -- payload ${q(source)}"
+            "mv -fT -- payload $source; exit \$?"
         try {
             return StagedOutput(shell.output(script), cleanup)
         } catch (error: Throwable) {
@@ -187,8 +188,8 @@ class RootFileProvider(private val shell: RootShell = RootShell()) : FileProvide
     }
 
     private fun fingerprint(path: String) = shell.execute(fingerprintCommand(path), 1024).toString(Charsets.UTF_8).trimEnd('\n')
-    private fun fingerprintCommand(path: String): String {
-        val p = q(path)
+    private fun fingerprintCommand(path: String): String = fingerprintOperand(q(path))
+    private fun fingerprintOperand(p: String): String {
         // Hash stdin so GNU sha256sum never escapes a newline-bearing filename in its output.
         return regular(p) + "stat -c '%d:%i:%f:%u:%g:%h:%s:%Y:%Z' -- $p || exit 1; " +
             "context=\$(ls -Zd -- $p 2>/dev/null); printf '%s\\n' \"\${context%% *}\"; sha256sum < $p | cut -d ' ' -f 1"
