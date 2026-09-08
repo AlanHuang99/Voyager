@@ -106,6 +106,8 @@ Use Android's document-tree picker to create or select a disposable `VoyagerSafT
 
 Use disposable files and keep device orientation unlocked unless a case calls for a fixed orientation.
 
+For external editing, open a writable local text file with an editor through Open with, save changes, and verify the source bytes. A read-only local file must not receive write permission, and Share must remain read-only. The remote-key instrumentation fixture explicitly leaves touch mode before requesting focus so its result does not depend on whether earlier tests used touch input.
+
 | Area | Cases |
 | --- | --- |
 | Permission | Deny full access, continue in limited mode, open a SAF tree, open a remote screen, return to Settings, then grant full access. |
