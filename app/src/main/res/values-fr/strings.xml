@@ -60,7 +60,7 @@
     <string name="file_created">Fichier créé</string>
     <string name="trash_direct_local_only">La corbeille est disponible uniquement pour le stockage local direct</string>
     <string name="renamed_to">Renommé en %1$s</string>
-    <string name="name_no_backslashes">Les noms ne peuvent pas contenir d\'antislash'</string>
+    <string name="name_no_backslashes">Les noms ne peuvent pas contenir d\'antislash</string>
     <string name="name_must_end_zip">Le nom doit se terminer par .zip</string>
     <string name="validation_name_required">Saisissez un nom</string>
     <string name="validation_name_different">Choisissez un nom différent</string>
