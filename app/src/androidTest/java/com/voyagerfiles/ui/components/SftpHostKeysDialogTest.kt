@@ -2,6 +2,8 @@ package com.voyagerfiles.ui.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.ExperimentalTestApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -13,8 +15,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+@OptIn(ExperimentalTestApi::class)
 class SftpHostKeysDialogTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createComposeRule(effectContext = StandardTestDispatcher())
     @get:Rule val temp = TemporaryFolder()
 
     @Test fun cancelKeepsPinsAndConfirmForgetsOnlyDisplayedEndpoint() {

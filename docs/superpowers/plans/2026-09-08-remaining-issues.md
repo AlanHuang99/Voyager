@@ -89,7 +89,7 @@
 
 ### Task 18: #67
 
-- [ ] Implement opt-in root provider, robust quoted commands, bounded streaming, and permission/error handling. Verify disposable privileged files on the K60 where root is available; ordinary local browsing must remain unprivileged.
+- [x] Implement opt-in root provider, robust quoted commands, bounded streaming, and permission/error handling. Verify disposable privileged files on the K60 where root is available; ordinary local browsing must remain unprivileged.
 
 ### Task 19: #82
 
@@ -104,5 +104,5 @@
 
 - [ ] Run `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease` and complete K60 instrumentation after each shared-behavior batch.
 - [ ] Exercise the minified release build on the K60 using a separate test package or the correct signing configuration; preserve the user's production installation and data.
-- [ ] Update architecture, testing, translation, and README documentation to match implemented behavior.
+- [x] Update architecture, testing, translation, and README documentation to match implemented behavior.
 - [ ] Open reviewable PRs, wait for CI, merge verified changes, update/close corresponding issues, and keep local master synchronized.

@@ -15,8 +15,11 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.ExperimentalTestApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,16 +46,19 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalTestApi::class)
 class BrowserSelectionActionsTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createComposeRule(effectContext = StandardTestDispatcher())
 
     private lateinit var root: File
 
     @Before
     fun setUp() {
         val application = ApplicationProvider.getApplicationContext<Application>()
+        // Start from a stable layout before collecting preferences or injecting a long press.
+        runBlocking { PreferencesManager(application).setViewMode(ViewMode.LIST) }
         root = File(application.cacheDir, "browser-selection-actions-test").apply {
             deleteRecursively()
             mkdirs()
@@ -298,8 +304,11 @@ class BrowserSelectionActionsTest {
 
         composeTestRule.onNode(hasText("legacy.rar") and hasClickAction()).performClick()
 
-        composeTestRule.onNodeWithText("RAR extraction is not available in this build")
-            .assertIsDisplayed()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeTestRule.onNodeWithText("RAR extraction is not available in this build").assertIsDisplayed()
+            }.isSuccess
+        }
         composeTestRule.onNodeWithText("Extract archive?").assertDoesNotExist()
     }
 
@@ -354,7 +363,8 @@ class BrowserSelectionActionsTest {
     private fun waitForRoot(viewModel: FileBrowserViewModel) {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             viewModel.browseState.value.currentPath == root.absolutePath &&
-                !viewModel.browseState.value.isLoading
+                !viewModel.browseState.value.isLoading &&
+                composeTestRule.onAllNodesWithText("notes.txt").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("notes.txt").assertExists()
     }
