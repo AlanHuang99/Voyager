@@ -14,6 +14,8 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 
 </div>
 
+**Help translate Voyager:** [Join the translation project on Crowdin](https://crowdin.com/project/voyagerandroid). You can translate a few strings or review existing wording without building the app.
+
 ## Screenshots
 
 <p align="center">
@@ -102,6 +104,12 @@ See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TR
 | Concurrency | Kotlin Coroutines |
 
 All runtime dependencies are open source and license-compatible with GPLv3; the app ships with no proprietary libraries.
+
+## Translations
+
+[Translate Voyager on Crowdin](https://crowdin.com/project/voyagerandroid) in your browser. Choose a language, translate a few untranslated strings, or improve existing translations. Coding experience is not required; contributions of any size are welcome.
+
+See the [translation guide](docs/TRANSLATING.md) for the meaning of file-manager terms, formatting rules, and how translations reach the app. To request a language or ask about an unclear phrase, use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions). Screenshots of Voyager can help explain where a string appears.
 
 ## Contributing
 
