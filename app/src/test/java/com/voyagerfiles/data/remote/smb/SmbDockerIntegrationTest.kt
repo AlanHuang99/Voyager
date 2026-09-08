@@ -1,10 +1,13 @@
 package com.voyagerfiles.data.remote.smb
 
+import com.hierynomus.mserref.NtStatus
+import com.hierynomus.mssmb2.SMBApiException
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -19,14 +22,124 @@ class SmbDockerIntegrationTest {
     @Test
     fun discoversAndUsesAuthenticatedSharesAcrossReconnects() = runBlocking {
         assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba("smb encrypt = desired") { port ->
+            var provider: SmbFileProvider? = null
+            var directProvider: SmbFileProvider? = null
+            try {
+                provider = waitUntilReady(port)
+
+                val rootNames = provider.listFiles("/").getOrThrow().map { it.name }
+                assertTrue(rootNames.containsAll(listOf("documents", "media")))
+
+                val mediaPayload = "SMB discovery media probe".toByteArray()
+                writeAndReadExact(provider, "/media/probe.txt", mediaPayload)
+                assertTrue(provider.listFiles("/").getOrThrow().map { it.name }.contains("documents"))
+
+                val documentPayload = "independent documents share".toByteArray()
+                writeAndReadExact(provider, "/documents/document.txt", documentPayload)
+                provider.disconnect()
+                provider = null
+
+                repeat(3) {
+                    val reconnect = SmbFileProvider(connection(port, shareName = null))
+                    try {
+                        assertTrue(reconnect.listFiles("/").getOrThrow().map { it.name }.contains("media"))
+                    } finally {
+                        reconnect.disconnect()
+                    }
+                }
+
+                directProvider = SmbFileProvider(connection(port, shareName = "media"))
+                assertTrue(directProvider.listFiles("/").getOrThrow().any { it.name == "probe.txt" })
+            } finally {
+                provider?.disconnect()
+                directProvider?.disconnect()
+            }
+        }
+    }
+
+    @Test
+    fun discoversAndUsesSharesWhenSmb3EncryptionIsRequired() = runBlocking {
+        assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba(
+            "server min protocol = SMB3_00",
+            "smb encrypt = required",
+        ) { port ->
+            var provider: SmbFileProvider? = null
+            var directProvider: SmbFileProvider? = null
+            var wrongPasswordProvider: SmbFileProvider? = null
+            try {
+                provider = waitUntilReady(port)
+                assertTrue(provider.listFiles("/").getOrThrow().map { it.name }.containsAll(listOf("documents", "media")))
+                writeAndReadExact(
+                    provider,
+                    "/media/encrypted.bin",
+                    byteArrayOf(0, 1, 2, 3, 0x7f, 0x80.toByte(), 0xff.toByte()),
+                )
+
+                directProvider = SmbFileProvider(connection(port, shareName = "documents"))
+                writeAndReadExact(
+                    directProvider,
+                    "/direct-encrypted.bin",
+                    byteArrayOf(0xff.toByte(), 0, 0x45, 0x4e, 0x43, 0x00),
+                )
+
+                wrongPasswordProvider = SmbFileProvider(
+                    connection(port, shareName = null, password = "incorrect-password"),
+                )
+                val wrongPasswordFailure = wrongPasswordProvider.listFiles("/").exceptionOrNull()
+                assertTrue(wrongPasswordFailure is SMBApiException)
+                assertEquals(NtStatus.STATUS_LOGON_FAILURE, (wrongPasswordFailure as SMBApiException).status)
+            } finally {
+                provider?.disconnect()
+                directProvider?.disconnect()
+                wrongPasswordProvider?.disconnect()
+            }
+        }
+    }
+
+    @Test
+    fun preservesDiscoveryAndDirectShareAccessWithSmb2OnlyServer() = runBlocking {
+        assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba(
+            "server min protocol = SMB2_02",
+            "server max protocol = SMB2_10",
+            "smb encrypt = off",
+        ) { port ->
+            var provider: SmbFileProvider? = null
+            var directProvider: SmbFileProvider? = null
+            try {
+                provider = waitUntilReady(port)
+                assertTrue(provider.listFiles("/").getOrThrow().map { it.name }.containsAll(listOf("documents", "media")))
+                writeAndReadExact(
+                    provider,
+                    "/media/smb2-discovery.bin",
+                    byteArrayOf(0x53, 0x4d, 0x42, 0x32, 0, 0xff.toByte()),
+                )
+
+                directProvider = SmbFileProvider(connection(port, shareName = "documents"))
+                writeAndReadExact(
+                    directProvider,
+                    "/smb2-direct.bin",
+                    byteArrayOf(0, 2, 1, 0, 2, 1, 0),
+                )
+            } finally {
+                provider?.disconnect()
+                directProvider?.disconnect()
+            }
+        }
+    }
+
+    private suspend fun withSamba(
+        vararg globalOptions: String,
+        block: suspend (port: Int) -> Unit,
+    ) {
         val media = temp.newFolder("media")
         val documents = temp.newFolder("documents")
         val containerName = "voyager-smb-test-${System.nanoTime()}"
-        var provider: SmbFileProvider? = null
-        var directProvider: SmbFileProvider? = null
 
         try {
-            docker(
+            val arguments = mutableListOf(
                 "run",
                 "--detach",
                 "--name",
@@ -39,6 +152,11 @@ class SmbDockerIntegrationTest {
                 "type=bind,src=${documents.absolutePath},dst=/documents",
                 SAMBA_IMAGE,
                 "-p",
+            )
+            globalOptions.forEach { option ->
+                arguments += listOf("-g", option)
+            }
+            arguments += listOf(
                 "-u",
                 "$USERNAME;$PASSWORD",
                 "-s",
@@ -46,50 +164,26 @@ class SmbDockerIntegrationTest {
                 "-s",
                 "documents;/documents;yes;no;no;$USERNAME;;;;Documents",
             )
+            docker(*arguments.toTypedArray())
             val port = docker("port", containerName, "445/tcp")
                 .lineSequence()
                 .first { it.isNotBlank() }
                 .substringAfterLast(':')
                 .trim()
                 .toInt()
-            provider = waitUntilReady(port)
-
-            val rootNames = provider.listFiles("/").getOrThrow().map { it.name }
-            assertTrue(rootNames.containsAll(listOf("documents", "media")))
-
-            val mediaPayload = "SMB discovery media probe".toByteArray()
-            provider.getOutputStream("/media/probe.txt").getOrThrow().use { it.write(mediaPayload) }
-            assertEquals(
-                mediaPayload.toList(),
-                provider.getInputStream("/media/probe.txt").getOrThrow().use { it.readBytes() }.toList(),
-            )
-            assertTrue(provider.listFiles("/").getOrThrow().map { it.name }.contains("documents"))
-
-            val documentPayload = "independent documents share".toByteArray()
-            provider.getOutputStream("/documents/document.txt").getOrThrow().use { it.write(documentPayload) }
-            assertEquals(
-                documentPayload.toList(),
-                provider.getInputStream("/documents/document.txt").getOrThrow().use { it.readBytes() }.toList(),
-            )
-            provider.disconnect()
-            provider = null
-
-            repeat(3) {
-                val reconnect = SmbFileProvider(connection(port, shareName = null))
-                try {
-                    assertTrue(reconnect.listFiles("/").getOrThrow().map { it.name }.contains("media"))
-                } finally {
-                    reconnect.disconnect()
-                }
-            }
-
-            directProvider = SmbFileProvider(connection(port, shareName = "media"))
-            assertTrue(directProvider.listFiles("/").getOrThrow().any { it.name == "probe.txt" })
+            block(port)
         } finally {
-            provider?.disconnect()
-            directProvider?.disconnect()
             docker("rm", "--force", containerName, allowFailure = true)
         }
+    }
+
+    private suspend fun writeAndReadExact(
+        provider: SmbFileProvider,
+        path: String,
+        payload: ByteArray,
+    ) {
+        provider.getOutputStream(path).getOrThrow().use { it.write(payload) }
+        assertArrayEquals(payload, provider.getInputStream(path).getOrThrow().use { it.readBytes() })
     }
 
     private suspend fun waitUntilReady(port: Int): SmbFileProvider {
@@ -105,13 +199,17 @@ class SmbDockerIntegrationTest {
         throw AssertionError("The containerized Samba server did not become ready", lastFailure)
     }
 
-    private fun connection(port: Int, shareName: String?) = RemoteConnection(
+    private fun connection(
+        port: Int,
+        shareName: String?,
+        password: String = PASSWORD,
+    ) = RemoteConnection(
         name = "Docker SMB test",
         protocol = ConnectionProtocol.SMB,
         host = "127.0.0.1",
         port = port,
         username = USERNAME,
-        password = PASSWORD,
+        password = password,
         shareName = shareName,
     )
 

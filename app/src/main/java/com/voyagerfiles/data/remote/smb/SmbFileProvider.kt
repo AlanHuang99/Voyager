@@ -5,6 +5,7 @@ import com.hierynomus.msfscc.FileAttributes
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.SMBClient
+import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
@@ -43,7 +44,11 @@ private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
         var smbConnection: Connection? = null
         var session: Session? = null
         try {
-            client = SMBClient()
+            client = SMBClient(
+                SmbConfig.builder()
+                    .withEncryptData(true)
+                    .build(),
+            )
             smbConnection = client.connect(connection.host, connection.port)
             session = smbConnection.authenticate(
                 AuthenticationContext(
