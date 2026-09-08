@@ -28,14 +28,41 @@ object StreamTransfer {
         nanoTime: () -> Long = System::nanoTime,
         onProgress: (StreamTransferProgress) -> Unit = {},
     ) {
+        val inputAbort = TransferCancellation.registerAbort {
+            if (input is TransferAbortable) input.abortTransfer() else input.close()
+        }
+        val outputAbort = TransferCancellation.registerAbort {
+            if (output is TransferAbortable) output.abortTransfer()
+        }
+        try {
+            copyChunks(input, output, path, totalBytes, nanoTime, onProgress)
+        } catch (error: Throwable) {
+            TransferCancellation.check()
+            throw error
+        } finally {
+            inputAbort.close()
+            outputAbort.close()
+        }
+    }
+
+    private fun copyChunks(
+        input: InputStream,
+        output: OutputStream,
+        path: String,
+        totalBytes: Long?,
+        nanoTime: () -> Long,
+        onProgress: (StreamTransferProgress) -> Unit,
+    ) {
         val startedAt = nanoTime()
         val buffer = ByteArray(BUFFER_SIZE)
         var bytesTransferred = 0L
         var reported = false
         while (true) {
+            TransferCancellation.check()
             val read = input.read(buffer)
             if (read < 0) break
             if (read == 0) continue
+            TransferCancellation.check()
             output.write(buffer, 0, read)
             bytesTransferred += read
             reported = true
@@ -48,6 +75,7 @@ object StreamTransfer {
                 ),
             )
         }
+        TransferCancellation.check()
         if (!reported) {
             onProgress(
                 StreamTransferProgress(

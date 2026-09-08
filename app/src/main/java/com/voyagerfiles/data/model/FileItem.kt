@@ -46,6 +46,9 @@ data class FileItem(
     val isPdf: Boolean
         get() = !isDirectory && extension.equals("pdf", ignoreCase = true)
 
+    val isOfficeDocument: Boolean
+        get() = !isDirectory && extension.lowercase() in setOf("docx", "pptx", "xlsx")
+
     val usesLocalImageThumbnail: Boolean
         get() = source == FileSource.LOCAL && isImage
 

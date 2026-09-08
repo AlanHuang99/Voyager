@@ -11,6 +11,6 @@ internal enum class RemoteFileTapAction {
 
 internal fun remoteFileTapAction(file: FileItem): RemoteFileTapAction = when {
     file.isDirectory -> RemoteFileTapAction.NAVIGATE
-    file.source == FileSource.WEBDAV && (file.isAudio || file.isVideo) -> RemoteFileTapAction.STREAM_WEBDAV
+    file.source == FileSource.WEBDAV -> RemoteFileTapAction.STREAM_WEBDAV
     else -> RemoteFileTapAction.DOWNLOAD
 }

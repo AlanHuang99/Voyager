@@ -8,6 +8,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -76,7 +79,7 @@ class WebDavPlaybackFlowTest {
         waitForFiles(viewModel, listOf(file.name))
 
         composeTestRule.onNode(hasText(file.name) and hasClickAction()).performClick()
-        composeTestRule.onNodeWithText("Direct playback unavailable").assertExists()
+        composeTestRule.onNodeWithText("Direct opening unavailable").assertExists()
         assertEquals(0, provider.readCount)
 
         composeTestRule.onNodeWithText("Download").performClick()
@@ -95,14 +98,46 @@ class WebDavPlaybackFlowTest {
     }
 
     @Test
-    fun webDavNonMediaDownloadsImmediately() {
-        val webDavText = remoteFile("webdav-${System.nanoTime()}.txt", FileSource.WEBDAV)
-        downloadedNames += webDavText.name
+    fun webDavDocumentOpensWithoutDownloading() {
+        val webDavText = remoteFile("webdav-${System.nanoTime()}.pdf", FileSource.WEBDAV)
         val webDavProvider = FakeProvider(listOf(webDavText))
-        val webDavViewModel = launch(ConnectionProtocol.WEBDAV, webDavProvider, Result.failure(AssertionError("unused")))
+        val launched = mutableListOf<Intent>()
+        val uri = Uri.parse("content://com.voyagerfiles.debug.webdavplayback/document")
+        val webDavViewModel = launch(ConnectionProtocol.WEBDAV, webDavProvider, Result.success(uri), launched)
         waitForFiles(webDavViewModel, listOf(webDavText.name))
         composeTestRule.onNode(hasText(webDavText.name) and hasClickAction()).performClick()
-        composeTestRule.waitUntil(5_000) { webDavProvider.readCount == 1 }
+        composeTestRule.waitUntil(5_000) { launched.size == 1 }
+        assertEquals("application/pdf", launched.single().type)
+        assertEquals(uri, launched.single().data)
+        assertEquals(0, webDavProvider.readCount)
+        assertEquals(0, launched.single().flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        assertTrue(!downloads.resolve(webDavText.name).exists())
+    }
+
+    @Test
+    fun webDavDocumentOpenWithLaunchesAReadOnlyChooser() {
+        val file = remoteFile("choose-${System.nanoTime()}.pdf", FileSource.WEBDAV)
+        val provider = FakeProvider(listOf(file))
+        val launched = mutableListOf<Intent>()
+        val uri = Uri.parse("content://com.voyagerfiles.debug.webdavplayback/chooser")
+        val viewModel = launch(ConnectionProtocol.WEBDAV, provider, Result.success(uri), launched)
+        waitForFiles(viewModel, listOf(file.name))
+        composeTestRule.onNode(hasText(file.name) and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.onNodeWithContentDescription("More selection actions").performClick()
+        composeTestRule.onNodeWithText("Open with").performClick()
+        composeTestRule.waitUntil(5_000) { launched.size == 1 }
+        val chooser = launched.single()
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        @Suppress("DEPRECATION")
+        val target = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertEquals(Intent.ACTION_VIEW, target.action)
+        assertEquals("application/pdf", target.type)
+        assertEquals(uri, target.data)
+        assertTrue(target.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals(0, target.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        assertEquals(0, provider.readCount)
     }
 
     private fun launch(

@@ -1,5 +1,7 @@
 package com.voyagerfiles.util
 
+import com.voyagerfiles.R
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -19,7 +21,7 @@ class StorageVolumeInfoTest {
 
         assertTrue(volume.isAvailable)
         assertTrue(volume.isReadOnly)
-        assertEquals("Read only", volume.statusLabel)
+        assertEquals(R.string.storage_read_only, volume.statusLabelRes)
     }
 
     @Test
@@ -33,7 +35,7 @@ class StorageVolumeInfoTest {
         )
 
         assertFalse(volume.isAvailable)
-        assertEquals("Unavailable", volume.statusLabel)
+        assertEquals(R.string.storage_unavailable, volume.statusLabelRes)
     }
 
     @Test

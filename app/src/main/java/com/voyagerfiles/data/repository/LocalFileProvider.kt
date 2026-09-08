@@ -13,6 +13,9 @@ import java.io.OutputStream
 import java.util.Date
 
 class LocalFileProvider : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is LocalFileProvider
+    override fun isSamePath(first: String, second: String): Boolean = File(first).canonicalFile == File(second).canonicalFile
+
 
     override suspend fun listFiles(path: String): Result<List<FileItem>> =
         withContext(Dispatchers.IO) {
@@ -80,9 +83,11 @@ class LocalFileProvider : FileProvider {
             runCatching {
                 val source = File(sourcePath)
                 val target = requireSafeTarget(source, File(destPath))
+                TransferCancellation.check()
                 if (source.renameTo(target)) return@runCatching
 
                 copyToNewTarget(source, target)
+                TransferCancellation.check()
                 val deleted = if (source.isDirectory) source.deleteRecursively() else source.delete()
                 if (!deleted) {
                     throw IOException(
@@ -136,16 +141,24 @@ class LocalFileProvider : FileProvider {
     }
 
     private fun copyToNewTarget(source: File, target: File) {
+        TransferCancellation.check()
+        var created = false
         try {
             if (source.isDirectory) {
-                if (!source.copyRecursively(target, overwrite = false)) {
-                    throw IOException("Failed to copy ${source.name}")
-                }
+                if (!target.mkdir()) throw IOException("Could not create ${target.name}")
+                created = true
+                val children = source.listFiles() ?: throw IOException("Could not list ${source.name}")
+                children.forEach { child -> copyToNewTarget(child, File(target, child.name)) }
             } else {
-                source.copyTo(target, overwrite = false)
+                java.nio.file.Files.newOutputStream(target.toPath(), java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE).use { output ->
+                    created = true
+                    source.inputStream().use { input ->
+                        StreamTransfer.copy(input, output, source.path, source.length())
+                    }
+                }
             }
         } catch (error: Throwable) {
-            if (target.exists()) target.deleteRecursively()
+            if (created && target.exists()) target.deleteRecursively()
             throw error
         }
     }

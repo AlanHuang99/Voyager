@@ -8,8 +8,39 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.async
 
 class StreamTransferTest {
+
+    @Test
+    fun cancellationUnblocksSocketReadWithoutWaitingForServer() = kotlinx.coroutines.runBlocking {
+        val server = java.net.ServerSocket(0)
+        val source = java.net.Socket("127.0.0.1", server.localPort)
+        val peer = server.accept()
+        val token = TransferCancellation()
+        val started = java.util.concurrent.CountDownLatch(1)
+        try {
+            val task = async(kotlinx.coroutines.Dispatchers.IO + token.contextElement()) {
+                runCatching {
+                    StreamTransfer.copy(source.getInputStream(), ByteArrayOutputStream(), "stalled", null) {
+                        started.countDown()
+                    }
+                }
+            }
+            peer.getOutputStream().write(byteArrayOf(1))
+            peer.getOutputStream().flush()
+            assertTrue(started.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            val before = System.nanoTime()
+            token.cancel()
+            assertTrue("Cancel must not wait on socket I/O", System.nanoTime() - before < 500_000_000L)
+            val result = kotlinx.coroutines.withTimeout(3_000) { task.await() }
+            assertTrue(result.isFailure)
+        } finally {
+            source.close()
+            peer.close()
+            server.close()
+        }
+    }
 
     @Test
     fun reportsMonotonicProgressAfterSuccessfulWrites() {

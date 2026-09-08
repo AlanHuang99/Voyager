@@ -15,6 +15,8 @@ import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.OsConstants
 import java.io.FileNotFoundException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class WebDavPlaybackProvider : ContentProvider() {
     private val threadLock = Any()
@@ -53,13 +55,18 @@ class WebDavPlaybackProvider : ContentProvider() {
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         if (mode != "r") throw FileNotFoundException("WebDAV playback is read-only")
         val token = token(uri) ?: throw FileNotFoundException("Unknown WebDAV playback URI")
-        val entry = currentStore().lookup(token) ?: throw FileNotFoundException("Expired WebDAV playback URI")
+        val lease = currentStore().acquire(token) ?: throw FileNotFoundException("Expired WebDAV playback URI")
         val storageManager = requireNotNull(context).getSystemService(StorageManager::class.java)
-        return storageManager.openProxyFileDescriptor(
-            ParcelFileDescriptor.MODE_READ_ONLY,
-            PlaybackProxyCallback(token, entry),
-            ensureCallbackThread(),
-        )
+        return try {
+            storageManager.openProxyFileDescriptor(
+                ParcelFileDescriptor.MODE_READ_ONLY,
+                PlaybackProxyCallback(lease),
+                ensureCallbackThread(),
+            )
+        } catch (error: Throwable) {
+            lease.close()
+            throw error
+        }
     }
 
     override fun insert(uri: Uri, values: ContentValues?): Uri =
@@ -101,13 +108,14 @@ class WebDavPlaybackProvider : ContentProvider() {
     }
 
     private class PlaybackProxyCallback(
-        private val token: String,
-        private val entry: PlaybackEntry,
+        private val lease: PlaybackTokenStore.Lease,
     ) : ProxyFileDescriptorCallback() {
+        private val entry get() = lease.entry
         override fun onGetSize(): Long = entry.size
 
         override fun onRead(offset: Long, size: Int, data: ByteArray): Int {
             if (offset < 0 || size < 0) throw ErrnoException("onRead", OsConstants.EINVAL)
+            if (!lease.touch()) throw ErrnoException("onRead", OsConstants.EBADF)
             if (size == 0 || data.isEmpty() || offset >= entry.size) return 0
             val byteCount = minOf(size.toLong(), data.size.toLong(), entry.size - offset).toInt()
             val bytes = entry.source.read(offset, byteCount).getOrElse {
@@ -119,13 +127,18 @@ class WebDavPlaybackProvider : ContentProvider() {
         }
 
         override fun onRelease() {
-            currentStore().remove(token)
+            lease.close()
         }
     }
 
     companion object {
         private val storeLock = Any()
         private var tokenStore = PlaybackTokenStore()
+        private val expiryExecutor = Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "webdav-expiry").apply { isDaemon = true }
+        }.apply {
+            scheduleWithFixedDelay({ currentStore().sweepExpired() }, 1, 1, TimeUnit.MINUTES)
+        }
 
         @Volatile
         private var activeProvider: WebDavPlaybackProvider? = null

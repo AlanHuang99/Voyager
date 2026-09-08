@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
@@ -30,6 +31,9 @@ class WebDavFileProvider(
     private val connection: RemoteConnection,
     private val temporaryDirectory: File,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is WebDavFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
 
     private var sardine: OkHttpSardine? = null
     private var httpClient: OkHttpClient? = null
@@ -252,9 +256,12 @@ class WebDavFileProvider(
                 }
                 .put(requestBody)
                 .build()
-            httpClient!!.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("WebDAV upload failed: HTTP ${response.code}")
+            val call = httpClient!!.newCall(request)
+            TransferCancellation.registerAbort(call::cancel).use {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("WebDAV upload failed: HTTP ${response.code}")
+                    }
                 }
             }
         }

@@ -1,11 +1,16 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.app.VoyagerApp
+import kotlinx.coroutines.CancellationException
+
 import android.app.Application
 import android.net.Uri
 import android.os.Environment
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voyagerfiles.audio.AudioTone
+import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
 import com.voyagerfiles.data.archive.ArchiveProgress
@@ -130,8 +135,12 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val _snackbarMessage = MutableStateFlow<UiText?>(null)
     val snackbarMessage: StateFlow<UiText?> = _snackbarMessage.asStateFlow()
 
-    private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
-    val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
+    private val operationController = (application as VoyagerApp).transfers
+    val operationState: StateFlow<OperationState> = operationController.state
+    val lastOperationResult = operationController.lastResult
+    val transferConflict = operationController.conflicts.pending
+    fun resolveTransferConflict(request: TransferConflictDecisions.Request, response: ConflictResponse) =
+        operationController.conflicts.respond(request, response)
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -357,6 +366,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setDragSelection(paths: Set<String>) {
+        _browseState.update { state -> state.copy(selectedFiles = paths.intersect(state.visibleFiles.mapTo(mutableSetOf()) { it.path })) }
+    }
+
     fun selectAll() {
         _browseState.update { state ->
             state.copy(selectedFiles = state.visibleFiles.map { it.path }.toSet())
@@ -401,7 +414,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.folder_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_folder, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_create_folder, it))
+                },
             )
         }
     }
@@ -416,7 +432,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.file_created))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_create_file, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_create_file, it))
+                },
             )
         }
     }
@@ -442,11 +461,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
             var failed = 0
             var firstError: Throwable? = null
             var completed = 0
+            var skipped = 0
             for (source in validatedSources) {
                 updateOperationProgress(
                     TransferProgress(
                         label = progressLabel,
                         completedItems = completed,
+                        skippedItems = skipped,
                         totalItems = validatedSources.size,
                         currentItemName = source.name,
                         totalBytes = source.size,
@@ -461,6 +482,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
+                                skippedItems = skipped,
                                 totalItems = validatedSources.size,
                                 currentItemName = source.name,
                                 copiedBytes = streamProgress.bytesTransferred,
@@ -474,14 +496,16 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     source = source,
                     destinationProvider = destinationProvider,
                     destinationDirectoryPath = destinationPath,
+                    resolveConflict = operationController.conflicts::resolve,
                     onProgress = publishStreamProgress,
-                ).onSuccess {
-                    completed++
+                ).onSuccess { disposition ->
+                    if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
                     val streamProgress = latestStreamProgress
                     updateOperationProgress(
                         TransferProgress(
                             label = progressLabel,
                             completedItems = completed,
+                            skippedItems = skipped,
                             totalItems = validatedSources.size,
                             currentItemName = source.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
@@ -490,7 +514,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
                         ),
                     )
                 }.onFailure { error ->
+                    if (error is CancellationException) throw error
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
@@ -505,8 +531,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 )
             } else {
-                val count = validatedSources.size
-                showSnackbar(UiText.Plural(R.plurals.files_uploaded, count, listOf(count)))
+                showSnackbar(if (skipped > 0) UiText.Resource(R.string.upload_completed_skipped, listOf(completed, skipped))
+                    else UiText.Plural(R.plurals.files_uploaded, completed, listOf(completed)))
             }
         }
     }
@@ -537,6 +563,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 val result = if (moveToTrash) trashManager.moveToTrash(path).map { Unit } else provider.delete(path)
                 result.onFailure { error ->
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
@@ -572,7 +599,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     showSnackbar(UiText.Resource(R.string.renamed_to, listOf(UiText.Dynamic(validatedName))))
                     refreshFiles()
                 },
-                onFailure = { showSnackbar(OperationMessages.failure(R.string.operation_rename, it)) },
+                onFailure = {
+                    operationController.recordFailure(it)
+                    showSnackbar(OperationMessages.failure(R.string.operation_rename, it))
+                },
             )
         }
     }
@@ -610,6 +640,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_compress, error))
                 },
             )
@@ -674,6 +705,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
                 },
             )
@@ -714,7 +746,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
             nowMillis = nowMillis,
             enabled = autoCloseSessions.value,
             timeoutMillis = sessionAutoCloseTimeout.value.durationMillis,
-            operationRunning = _operationState.value is OperationState.Running,
+            operationRunning = operationState.value is OperationState.Running,
         )
         when (decision) {
             SessionAutoCloseDecision.KEEP_OPEN -> Unit
@@ -742,6 +774,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
             var failed = 0
             var firstError: Throwable? = null
             var completed = 0
+            var skipped = 0
             val itemResults = buildMap {
                 for (sourcePath in paths) {
                     val visibleItem = _browseState.value.files.firstOrNull { it.path == sourcePath }
@@ -759,12 +792,14 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     TransferProgress(
                         label = progressLabel,
                         completedItems = completed,
+                        skippedItems = skipped,
                         totalItems = paths.size,
                         currentItemName = item?.name ?: sourcePath.substringAfterLast('/'),
                     )
                 )
                 if (item == null) {
                     failed++
+                    operationController.recordFailure(itemResult.exceptionOrNull() ?: IllegalStateException("The source item is unavailable"))
                     if (firstError == null) {
                         firstError = itemResult.exceptionOrNull()
                             ?: IllegalStateException("The source item is unavailable")
@@ -781,6 +816,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
+                                skippedItems = skipped,
                                 totalItems = paths.size,
                                 currentItemName = streamProgress.path.substringAfterLast('/'),
                                 copiedBytes = streamProgress.bytesTransferred,
@@ -791,41 +827,24 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     }
                 }
                 val result = when (operation) {
-                    ClipboardOperation.COPY -> {
-                        if (sourceProvider === destinationProvider) {
-                            destinationProvider.copy(sourcePath, destPath)
-                        } else {
-                            FileOperationCoordinator.copyPath(
-                                sourceProvider,
-                                destinationProvider,
-                                sourcePath,
-                                destPath,
-                                publishStreamProgress,
-                            )
-                        }
-                    }
-                    ClipboardOperation.CUT -> {
-                        if (sourceProvider === destinationProvider) {
-                            destinationProvider.move(sourcePath, destPath)
-                        } else {
-                            FileOperationCoordinator.movePath(
-                                sourceProvider,
-                                destinationProvider,
-                                sourcePath,
-                                destPath,
-                                publishStreamProgress,
-                            )
-                        }
-                    }
-                    ClipboardOperation.NONE -> Result.success(Unit)
+                    ClipboardOperation.COPY -> FileOperationCoordinator.copyPath(
+                        sourceProvider, destinationProvider, sourcePath, destPath,
+                        operationController.conflicts::resolve, publishStreamProgress,
+                    )
+                    ClipboardOperation.CUT -> FileOperationCoordinator.movePath(
+                        sourceProvider, destinationProvider, sourcePath, destPath,
+                        operationController.conflicts::resolve, publishStreamProgress,
+                    )
+                    ClipboardOperation.NONE -> Result.success(TransferDisposition.SKIPPED)
                 }
-                result.onSuccess {
-                    completed++
+                result.onSuccess { disposition ->
+                    if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
                     val streamProgress = latestStreamProgress
                     updateOperationProgress(
                         TransferProgress(
                             label = progressLabel,
                             completedItems = completed,
+                            skippedItems = skipped,
                             totalItems = paths.size,
                             currentItemName = item.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
@@ -835,11 +854,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 }
                 result.onFailure { error ->
+                    if (error is CancellationException) throw error
                     failed++
+                    operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
-            if (operation == ClipboardOperation.CUT && failed == 0) {
+            if (operation == ClipboardOperation.CUT && failed == 0 && skipped == 0) {
                 clearClipboard()
             }
             refreshFiles()
@@ -858,6 +879,22 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setAudioTone(file: FileItem, tone: AudioTone) {
+        val label = UiText.Resource(R.string.audio_setting_tone)
+        launchOperation(R.string.audio_setting_tone, R.string.audio_setting_tone) {
+            updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = file.name))
+            val throttle = StreamProgressThrottle()
+            AudioToneInstaller(getApplication()).install(file, tone, operationController::beginCommit) { stream ->
+                if (throttle.shouldPublish(stream)) {
+                    updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = file.name,
+                        copiedBytes = stream.bytesTransferred, totalBytes = stream.totalBytes, elapsedNanos = stream.elapsedNanos))
+                }
+            }
+            updateOperationProgress(TransferProgress(label, completedItems = 1, totalItems = 1))
+            showSnackbar(UiText.Resource(if (tone == AudioTone.RINGTONE) R.string.audio_ringtone_set else R.string.audio_notification_set))
+        }
+    }
+
     fun downloadFile(path: String) {
         downloadPaths(listOf(path), clearSelection = false)
     }
@@ -867,8 +904,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
         require(state.source == FileSource.WEBDAV && file.source == FileSource.WEBDAV) {
             "Direct playback requires the active WebDAV session"
         }
-        require(!file.isDirectory && (file.isAudio || file.isVideo)) {
-            "Direct playback requires an audio or video file"
+        require(!file.isDirectory) {
+            "Direct opening requires a file"
         }
         require(state.files.any { it.path == file.path && it.source == file.source }) {
             "The WebDAV file is no longer active"
@@ -897,6 +934,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                         ?: provider.getFileInfo(path).getOrThrow()
                 }
             }.getOrElse { error ->
+                operationController.recordFailure(error)
                 showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 return@launchOperation
             }
@@ -962,6 +1000,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 },
                 onFailure = { error ->
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_download, error))
                 },
             )
@@ -1108,29 +1147,27 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 },
                 onFailure = { error ->
                     loadTrashEntries()
+                    operationController.recordFailure(error)
                     showSnackbar(OperationMessages.failure(R.string.operation_empty_trash, error))
                 },
             )
         }
     }
 
-    fun toggleBookmark(path: String, name: String) {
-        if (_browseState.value.source != FileSource.LOCAL) {
+    fun addBookmark(path: String, name: String) {
+        val source = _browseState.value.source
+        if (source != FileSource.LOCAL) {
             showSnackbar(UiText.Resource(R.string.bookmarks_local_only))
             return
         }
         viewModelScope.launch {
-            if (bookmarkDao.isBookmarked(path)) {
-                bookmarkDao.deleteByPath(path)
-            } else {
-                bookmarkDao.insert(
-                    Bookmark(
-                        name = name,
-                        path = path,
-                        source = _browseState.value.source,
-                    )
-                )
-            }
+            bookmarkDao.insertIfAbsent(Bookmark(name = name, path = path, source = source))
+        }
+    }
+
+    fun removeBookmark(path: String, source: FileSource) {
+        viewModelScope.launch {
+            bookmarkDao.deleteByPath(path, source)
         }
     }
 
@@ -1144,36 +1181,34 @@ class FileBrowserViewModel @JvmOverloads constructor(
         @StringRes operationName: Int,
         block: suspend () -> Unit,
     ) {
-        val active = _operationState.value as? OperationState.Running
-        if (active != null) {
-            showSnackbar(
-                UiText.Resource(R.string.operation_already_running, listOf(active.label)),
-            )
-            return
-        }
-        val label = UiText.Resource(progressLabel)
-        _operationState.value = OperationState.Running(TransferProgress(label))
-        viewModelScope.launch {
-            try {
-                block()
-            } catch (error: Throwable) {
-                showSnackbar(OperationMessages.failure(operationName, error))
-            } finally {
-                _operationState.value = OperationState.Idle
+        val started = operationController.launch(
+            label = UiText.Resource(progressLabel),
+            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone),
+            onFailure = { error ->
+                showSnackbar(
+                    if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)
+                    else OperationMessages.failure(operationName, error),
+                )
+            },
+            onFinished = {
                 if (autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
                     val sessionIds = deferredAutoCloseSessionIds
                     deferredAutoCloseSessionIds = emptySet()
                     closeSessionsAfterInactivity(sessionIds)
                 }
-            }
+            },
+            block = block,
+        )
+        if (!started) {
+            val active = operationState.value as? OperationState.Running ?: return
+            showSnackbar(UiText.Resource(R.string.operation_already_running, listOf(active.label)))
         }
     }
 
-    private fun updateOperationProgress(progress: TransferProgress) {
-        if (_operationState.value is OperationState.Running) {
-            _operationState.value = OperationState.Running(progress)
-        }
-    }
+    fun cancelOperation() = operationController.cancel()
+    fun dismissOperationResult() = operationController.dismissResult()
+
+    private fun updateOperationProgress(progress: TransferProgress) = operationController.update(progress)
 
     private fun cancelInitialNavigation() {
         initialNavigationJob?.cancel()
@@ -1261,6 +1296,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         successMessage: (Int) -> UiText,
         @StringRes failureAction: Int,
     ) {
+        failures.firstOrNull()?.let(operationController::recordFailure)
         val succeeded = entries.size - failures.size
         when {
             failures.isEmpty() -> showSnackbar(successMessage(succeeded))

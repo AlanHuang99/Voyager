@@ -1,10 +1,10 @@
 package com.voyagerfiles.viewmodel
 
 import android.app.Application
+import com.voyagerfiles.ui.text.resolve
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
-import com.voyagerfiles.ui.text.resolve
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -61,7 +61,7 @@ class DocumentUploadTest {
     }
 
     @Test
-    fun conflictingDocumentDoesNotOverwriteOrBlockOtherUploads() {
+    fun conflictingDocumentWaitsForSkipThenContinuesWithTruthfulCounts() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val conflictingSource = fixtureRoot.resolve("report.txt").apply { writeText("replacement") }
         val newSource = fixtureRoot.resolve("notes.txt").apply { writeText("new upload") }
@@ -87,15 +87,21 @@ class DocumentUploadTest {
             )
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 10_000) { viewModel.transferConflict.value != null }
+        assertEquals("existing", destination.resolve("report.txt").readText())
+        org.junit.Assert.assertFalse(destination.resolve("notes.txt").exists())
+        composeTestRule.runOnIdle {
+            viewModel.resolveTransferConflict(viewModel.transferConflict.value!!, ConflictResponse(ConflictDecision.SKIP))
+        }
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             viewModel.operationState.value == OperationState.Idle &&
                 destination.resolve("notes.txt").exists()
         }
         assertEquals("existing", destination.resolve("report.txt").readText())
         assertEquals("new upload", destination.resolve("notes.txt").readText())
-        assertEquals(
-            "1 of 2 items could not be uploaded. An item named report.txt already exists in this folder. Rename or remove it, then try again.",
-            viewModel.snackbarMessage.value?.resolve(application.resources),
-        )
+        assertEquals("1 uploaded, 1 skipped", viewModel.snackbarMessage.value!!.resolve(application.resources))
+        assertEquals(1, viewModel.lastOperationResult.value!!.progress.completedItems)
+        assertEquals(1, viewModel.lastOperationResult.value!!.progress.skippedItems)
+        assertEquals(OperationOutcome.COMPLETED, viewModel.lastOperationResult.value!!.outcome)
     }
 }

@@ -16,12 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -177,7 +173,6 @@ fun ConnectionDialog(
     var remotePath by remember { mutableStateOf(existingConnection?.remotePath ?: "/") }
     var shareName by remember { mutableStateOf(existingConnection?.shareName ?: "") }
     var domain by remember { mutableStateOf(existingConnection?.domain ?: "") }
-    var protocolExpanded by remember { mutableStateOf(false) }
     var useTls by remember { mutableStateOf(existingConnection?.useTls ?: true) }
     var showCleartextConfirmation by remember { mutableStateOf(false) }
     val validation = ConnectionFormValidator.validate(protocol, host, port, shareName)
@@ -253,36 +248,10 @@ fun ConnectionDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                ExposedDropdownMenuBox(
-                    expanded = protocolExpanded,
-                    onExpandedChange = { protocolExpanded = !protocolExpanded },
-                ) {
-                    OutlinedTextField(
-                        value = stringResource(protocol.displayNameRes),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.connection_protocol)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = protocolExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                    )
-                    ExposedDropdownMenu(
-                        expanded = protocolExpanded,
-                        onDismissRequest = { protocolExpanded = false },
-                    ) {
-                        ConnectionProtocol.entries.forEach { proto ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(proto.displayNameRes)) },
-                                onClick = {
-                                    protocol = proto
-                                    port = proto.defaultPort.toString()
-                                    if (proto == ConnectionProtocol.WEBDAV) useTls = true
-                                    protocolExpanded = false
-                                },
-                            )
-                        }
-                    }
+                ProtocolSelector(protocol = protocol) { selected ->
+                    protocol = selected
+                    port = selected.defaultPort.toString()
+                    if (selected == ConnectionProtocol.WEBDAV) useTls = true
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -344,6 +313,11 @@ fun ConnectionDialog(
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                if (protocol == ConnectionProtocol.SFTP) {
+                    SftpHostKeysButton(host = host, port = port.toIntOrNull())
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 OutlinedTextField(
                     value = username,

@@ -6,6 +6,9 @@ import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import com.voyagerfiles.data.repository.TransferCancellation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -20,6 +23,35 @@ import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicReference
 
 class FileOperationCoordinatorTest {
+
+    @Test
+    fun cancelledMovePreservesSourceAndRemovesPartialTarget() = runBlocking {
+        val payload = "x".repeat(3 * 64 * 1024)
+        val source = MemoryProvider().apply { putFile("/source/large.bin", payload) }
+        val destination = MemoryProvider().apply { putDirectory("/destination") }
+        val cancellation = TransferCancellation()
+        val result = withContext(cancellation.contextElement()) {
+            FileOperationCoordinator.movePath(source, destination, "/source/large.bin", "/destination") {
+                cancellation.cancel()
+            }
+        }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertEquals(payload, source.readFile("/source/large.bin"))
+        assertFalse(destination.exists("/destination/large.bin"))
+    }
+
+    @Test
+    fun cancellationBeforeCopyCreatesNoDestination() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/source/report.txt", "report") }
+        val destination = MemoryProvider().apply { putDirectory("/destination") }
+        val cancellation = TransferCancellation().apply { cancel() }
+        val result = withContext(cancellation.contextElement()) {
+            FileOperationCoordinator.copyPath(source, destination, "/source/report.txt", "/destination")
+        }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertFalse(destination.exists("/destination/report.txt"))
+        assertEquals("report", source.readFile("/source/report.txt"))
+    }
 
     @Test
     fun uploadStreamsSelectedDocumentOffTheCallingThread() = runBlocking {
@@ -394,6 +426,131 @@ class FileOperationCoordinatorTest {
         assertTrue(events.all { it.totalBytes == null })
     }
 
+    @Test
+    fun replacementPreservesOldFileUntilFullCopyAndCommitsMove() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new contents") }
+        val destination = MemoryProvider().apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        val result = FileOperationCoordinator.movePath(source, destination, "/local/report.txt", "/remote", { ConflictDecision.REPLACE }) {
+            assertEquals("old", destination.readFile("/remote/report.txt"))
+        }
+        assertEquals(TransferDisposition.COMPLETED, result.getOrThrow())
+        assertEquals("new contents", destination.readFile("/remote/report.txt"))
+        assertFalse(source.exists("/local/report.txt"))
+        assertEquals(listOf("report.txt"), destination.listFiles("/remote").getOrThrow().map { it.name })
+    }
+
+    @Test
+    fun replacementWriteFailurePreservesOriginalAndMoveSource() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = FailingWriteProvider().apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        assertTrue(FileOperationCoordinator.movePath(source, destination, "/local/report.txt", "/remote", { ConflictDecision.REPLACE }).isFailure)
+        assertEquals("old", destination.readFile("/remote/report.txt"))
+        assertEquals("new", source.readFile("/local/report.txt"))
+        assertEquals(1, destination.listFiles("/remote").getOrThrow().size)
+    }
+
+    @Test
+    fun failedPromotionRollsBackAndKeepsMoveSource() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = object : MemoryProvider() {
+            override suspend fun rename(oldPath: String, newName: String): Result<FileItem> =
+                if (oldPath.substringAfterLast('/').startsWith(".voyager-stage-")) Result.failure(IOException("promotion failed"))
+                else super.rename(oldPath, newName)
+        }.apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        assertTrue(FileOperationCoordinator.movePath(source, destination, "/local/report.txt", "/remote", { ConflictDecision.REPLACE }).isFailure)
+        assertEquals("old", destination.readFile("/remote/report.txt"))
+        assertEquals("new", source.readFile("/local/report.txt"))
+        assertEquals(1, destination.listFiles("/remote").getOrThrow().size)
+    }
+
+    @Test
+    fun failedRollbackRetainsBackupWithOriginalData() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = object : MemoryProvider() {
+            override suspend fun rename(oldPath: String, newName: String): Result<FileItem> =
+                if (newName == "report.txt") Result.failure(IOException("rename unavailable"))
+                else super.rename(oldPath, newName)
+        }.apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        val error = FileOperationCoordinator.movePath(source, destination, "/local/report.txt", "/remote", { ConflictDecision.REPLACE }).exceptionOrNull()!!
+        val backup = destination.listFiles("/remote").getOrThrow().single()
+        assertTrue(backup.name.startsWith(".voyager-backup-"))
+        assertEquals("old", destination.readFile(backup.path))
+        assertEquals("new", source.readFile("/local/report.txt"))
+        assertTrue(error.message!!.contains(backup.path))
+    }
+
+    @Test
+    fun skipAndCancelNeverOpenSourceOrMutateDestination() = runBlocking {
+        val destination = MemoryProvider().apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        val source = UploadSource("report.txt") { error("must not open source") }
+        assertEquals(TransferDisposition.SKIPPED, FileOperationCoordinator.uploadFile(source, destination, "/remote", { ConflictDecision.SKIP }).getOrThrow())
+        assertTrue(FileOperationCoordinator.uploadFile(source, destination, "/remote", { ConflictDecision.CANCEL }).exceptionOrNull() is CancellationException)
+        assertEquals("old", destination.readFile("/remote/report.txt"))
+        assertEquals(1, destination.listFiles("/remote").getOrThrow().size)
+    }
+
+    @Test
+    fun typeConflictAndSelfReplacementRejectBeforeDecision() = runBlocking {
+        val provider = MemoryProvider().apply { putDirectory("/remote"); putFile("/remote/report.txt", "old") }
+        val neverAsk: ConflictResolver = { error("unsafe operation must not ask") }
+        assertTrue(FileOperationCoordinator.movePath(provider, provider, "/remote/report.txt", "/remote", neverAsk).exceptionOrNull() is IllegalArgumentException)
+        val source = MemoryProvider().apply { putDirectory("/source/report.txt") }
+        assertTrue(FileOperationCoordinator.copyPath(source, provider, "/source/report.txt", "/remote", neverAsk).exceptionOrNull() is IllegalArgumentException)
+        assertEquals("old", provider.readFile("/remote/report.txt"))
+    }
+
+    @Test
+    fun directoryReplacementCopiesWholeNewTreeWithoutMergingOldTree() = runBlocking {
+        val source = MemoryProvider().apply { putDirectory("/local/folder"); putFile("/local/folder/new.txt", "new") }
+        val destination = MemoryProvider().apply { putDirectory("/remote"); putDirectory("/remote/folder"); putFile("/remote/folder/old.txt", "old") }
+        FileOperationCoordinator.copyPath(source, destination, "/local/folder", "/remote", { ConflictDecision.REPLACE }).getOrThrow()
+        assertEquals("new", destination.readFile("/remote/folder/new.txt"))
+        assertFalse(destination.exists("/remote/folder/old.txt"))
+    }
+
+    @Test
+    fun opaqueReplacementUsesIdentifiersReturnedByBothRenames() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = OpaquePathProvider()
+        val original = destination.createFile(destination.rootPath, "report.txt").getOrThrow()
+        destination.putFile(original.path, "old")
+        FileOperationCoordinator.movePath(source, destination, "/local/report.txt", destination.rootPath, { ConflictDecision.REPLACE }).getOrThrow()
+        assertEquals("new", destination.readFile(destination.createdPath(destination.rootPath, "report.txt")))
+        assertEquals(1, destination.listFiles(destination.rootPath).getOrThrow().size)
+        assertFalse(source.exists("/local/report.txt"))
+    }
+
+    @Test
+    fun opaqueFailedPromotionRestoresOriginalWithNewIdentifier() = runBlocking {
+        val source = MemoryProvider().apply { putFile("/local/report.txt", "new") }
+        val destination = OpaquePathProvider(failPromotion = true)
+        val original = destination.createFile(destination.rootPath, "report.txt").getOrThrow()
+        destination.putFile(original.path, "old")
+        assertTrue(FileOperationCoordinator.movePath(source, destination, "/local/report.txt", destination.rootPath, { ConflictDecision.REPLACE }).isFailure)
+        val restored = destination.listFiles(destination.rootPath).getOrThrow().single()
+        assertEquals("report.txt", restored.name)
+        assertNotEquals(original.path, restored.path)
+        assertEquals("old", destination.readFile(restored.path))
+        assertEquals("new", source.readFile("/local/report.txt"))
+    }
+
+    @Test
+    fun localCanonicalSelfAndDescendantChecksPreserveData() = runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("transfer-conflicts").toFile()
+        try {
+            val source = java.io.File(root, "folder").apply { mkdir() }
+            java.io.File(source, "report.txt").writeText("original")
+            val nested = java.io.File(source, "nested").apply { mkdir() }
+            val provider = com.voyagerfiles.data.repository.LocalFileProvider()
+            assertTrue(FileOperationCoordinator.copyPath(provider, provider, source.path, nested.path, { ConflictDecision.REPLACE }).isFailure)
+            assertTrue(FileOperationCoordinator.movePath(provider, provider, java.io.File(source, "report.txt").path, "${source.path}/../folder", { ConflictDecision.REPLACE }).isFailure)
+            val destination = java.io.File(root, "destination").apply { mkdir() }
+            java.io.File(destination, "report.txt").writeText("old")
+            FileOperationCoordinator.movePath(provider, provider, java.io.File(source, "report.txt").path, destination.path, { ConflictDecision.REPLACE }).getOrThrow()
+            assertEquals("original", java.io.File(destination, "report.txt").readText())
+        } finally { root.deleteRecursively() }
+    }
+
     private class FailingWriteProvider : MemoryProvider() {
         override suspend fun getOutputStream(path: String): Result<OutputStream> =
             Result.success(
@@ -465,6 +622,7 @@ class FileOperationCoordinatorTest {
 
     private class OpaquePathProvider(
         private val failWrites: Boolean = false,
+        private val failPromotion: Boolean = false,
     ) : MemoryProvider() {
         val rootPath = "content://tree/root"
         var lastCreatedPath: String? = null
@@ -529,6 +687,18 @@ class FileOperationCoordinatorTest {
             }
         }
 
+        override suspend fun rename(oldPath: String, newName: String): Result<FileItem> = runCatching {
+            val parent = parentByPath.getValue(oldPath)
+            val old = children.getValue(parent).single { it.path == oldPath }
+            if (failPromotion && old.name.startsWith(".voyager-stage-")) throw IOException("promotion failed")
+            check(children[parent].orEmpty().none { it.name == newName })
+            val bytes = readFileBytes(oldPath)
+            val replacement = createEntry(parent, newName, old.isDirectory).getOrThrow()
+            putFile(replacement.path, bytes)
+            delete(oldPath).getOrThrow()
+            replacement
+        }
+
         private fun createEntry(
             parentPath: String,
             name: String,
@@ -590,6 +760,7 @@ class FileOperationCoordinatorTest {
                         isDirectory = entries.getValue(childPath) is Entry.Directory,
                         size = (entries.getValue(childPath) as? Entry.File)?.contents?.size?.toLong() ?: 0,
                         source = FileSource.LOCAL,
+                        lastModified = java.util.Date(1234),
                     )
                 }
         }
@@ -614,8 +785,13 @@ class FileOperationCoordinatorTest {
                 .forEach { entries.remove(it) }
         }
 
-        override suspend fun rename(oldPath: String, newName: String): Result<FileItem> =
-            error("Not needed by tests")
+        override suspend fun rename(oldPath: String, newName: String): Result<FileItem> = runCatching {
+            val target = joinPath(getParentPath(oldPath)!!, newName)
+            check(!entries.containsKey(target))
+            val moving = entries.filterKeys { it == oldPath || it.startsWith("$oldPath/") }
+            moving.forEach { (path, entry) -> entries[target + path.removePrefix(oldPath)] = entry; entries.remove(path) }
+            getFileInfo(target).getOrThrow()
+        }
 
         override suspend fun copy(sourcePath: String, destPath: String): Result<Unit> =
             error("Cross-provider tests must use streams, not provider-local copy")
@@ -647,6 +823,7 @@ class FileOperationCoordinatorTest {
                 isDirectory = entries.getValue(normalizedPath) is Entry.Directory,
                 size = (entries.getValue(normalizedPath) as? Entry.File)?.contents?.size?.toLong() ?: 0,
                 source = FileSource.LOCAL,
+                        lastModified = java.util.Date(1234),
             )
         }
 

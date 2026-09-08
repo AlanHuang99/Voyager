@@ -13,9 +13,11 @@ data class TransferProgress(
     val copiedBytes: Long = 0,
     val totalBytes: Long? = null,
     val elapsedNanos: Long = 0,
+    val skippedItems: Int = 0,
 ) {
     init {
         require(label !is UiText.Dynamic || label.value.isNotBlank()) { "Progress label must not be blank" }
+        require(skippedItems >= 0) { "Skipped item count must not be negative" }
         require(completedItems >= 0) { "Completed item count must not be negative" }
         require(totalItems == null || totalItems >= 0) { "Total item count must not be negative" }
         require(copiedBytes >= 0) { "Copied byte count must not be negative" }
@@ -41,7 +43,7 @@ data class TransferProgress(
         }
 
     val itemProgressText: String?
-        get() = totalItems?.takeIf { it > 0 }?.let { "$completedItems of $it" }
+        get() = totalItems?.takeIf { it > 0 }?.let { "$completedItems of $it completed" }
 
     val percentageText: String?
         get() = fraction?.let { "${(it * 100).roundToInt()}%" }
@@ -69,18 +71,20 @@ data class TransferProgress(
         get() = bytesPerSecond?.let { "${FileItem.formatFileSize(it)}/s" }
 
     val detailText: String?
-        get() = buildList {
+        get() = detailText(itemProgressText)
+
+    fun detailText(completedItemsText: String?): String? = buildList {
             currentItemName?.takeIf { it.isNotBlank() }?.let(::add)
-            itemProgressText?.let(::add)
+            completedItemsText?.let(::add)
             byteProgressText?.let(::add)
             percentageText?.let(::add)
             speedText?.let(::add)
         }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
 
-    fun stateDescription(resolvedLabel: String): String = buildList {
+    fun stateDescription(resolvedLabel: String, completedItemsText: String? = itemProgressText): String = buildList {
             add(resolvedLabel)
             currentItemName?.takeIf { it.isNotBlank() }?.let(::add)
-            itemProgressText?.let(::add)
+            completedItemsText?.let(::add)
             byteProgressText?.let(::add)
             percentageText?.let(::add)
             speedText?.let(::add)

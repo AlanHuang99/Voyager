@@ -5,6 +5,7 @@ import com.hierynomus.msfscc.FileAttributes
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.SMBClient
+import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
@@ -15,6 +16,8 @@ import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.ForwardingOutputStream
+import com.voyagerfiles.data.repository.TransferAbortable
+import javax.net.SocketFactory
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -35,15 +38,25 @@ internal interface SmbSessionHandle {
 
 internal fun interface SmbSessionHandleFactory {
     fun connect(connection: RemoteConnection): SmbSessionHandle
+    fun connectTransfer(connection: RemoteConnection, sockets: SocketFactory): SmbSessionHandle = connect(connection)
 }
 
 private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
-    override fun connect(connection: RemoteConnection): SmbSessionHandle {
+    override fun connect(connection: RemoteConnection): SmbSessionHandle = connect(connection, null)
+
+    override fun connectTransfer(connection: RemoteConnection, sockets: SocketFactory): SmbSessionHandle = connect(connection, sockets)
+
+    private fun connect(connection: RemoteConnection, sockets: SocketFactory?): SmbSessionHandle {
         var client: SMBClient? = null
         var smbConnection: Connection? = null
         var session: Session? = null
         try {
-            client = SMBClient()
+            client = SMBClient(
+                SmbConfig.builder()
+                    .withEncryptData(true)
+                    .apply { if (sockets != null) withSocketFactory(sockets) }
+                    .build(),
+            )
             smbConnection = client.connect(connection.host, connection.port)
             session = smbConnection.authenticate(
                 AuthenticationContext(
@@ -54,6 +67,7 @@ private object DefaultSmbSessionHandleFactory : SmbSessionHandleFactory {
             )
             return RealSmbSessionHandle(client, smbConnection, session)
         } catch (error: Throwable) {
+            if (sockets is SmbTransferSocketFactory) sockets.close()
             runCatching { session?.close() }
             runCatching { smbConnection?.close() }
             runCatching { client?.close() }
@@ -87,9 +101,53 @@ class SmbFileProvider internal constructor(
     private val connection: RemoteConnection,
     private val shareDiscovery: SmbShareDiscovery = DceRpcSmbShareDiscovery,
     private val sessionFactory: SmbSessionHandleFactory = DefaultSmbSessionHandleFactory,
+    private val transferSocketFactory: () -> SmbTransferSocketFactory = { SmbTransferSocketFactory() },
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is SmbFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
+
     private val configuredShare = connection.shareName?.trim().orEmpty()
     private val isDiscoveryMode = configuredShare.isEmpty()
+
+    override fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean {
+        if (other !is SmbFileProvider || !sameServer(other)) return false
+        val first = identityPath(path) ?: return false
+        val second = other.identityPath(otherPath) ?: return false
+        return first == second
+    }
+
+    override suspend fun isDescendantPath(ancestor: String, other: FileProvider, path: String): Boolean {
+        if (other !is SmbFileProvider || !sameServer(other)) return false
+        val parent = identityPath(ancestor) ?: return false
+        val child = other.identityPath(path) ?: return false
+        return child.size >= parent.size && child.take(parent.size) == parent
+    }
+
+    private fun sameServer(other: SmbFileProvider): Boolean =
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port
+
+    private fun identityPath(path: String): List<String>? {
+        val resolved = if (isDiscoveryMode) {
+            when (val parsed = SmbBrowsePath.parse(path)) {
+                SmbBrowsePath.VirtualRoot -> return null
+                is SmbBrowsePath.Share -> ResolvedSharePath(parsed.name, parsed.relativePath)
+            }
+        } else {
+            ResolvedSharePath(configuredShare, toSmbPath(path))
+        }
+        // Conservatively treat matching server/share paths as aliases even when credentials or initial folders differ.
+        val segments = mutableListOf(resolved.shareName.lowercase(java.util.Locale.ROOT))
+        for (segment in resolved.relativePath.replace('/', '\\').split('\\')) {
+            when (segment) {
+                "", "." -> Unit
+                ".." -> if (segments.size > 1) segments.removeAt(segments.lastIndex)
+                else -> segments.add(segment.lowercase(java.util.Locale.ROOT))
+            }
+        }
+        return segments
+    }
+
     private var sessionHandle: SmbSessionHandle? = null
     private var activeShareName: String? = null
     private var share: DiskShare? = null
@@ -341,30 +399,21 @@ class SmbFileProvider internal constructor(
     override suspend fun getInputStream(path: String): Result<InputStream> = withContext(Dispatchers.IO) {
         runCatching {
             val resolved = resolveFile(path)
-            val file = ensureShare(resolved.shareName).openFile(
-                resolved.relativePath,
-                EnumSet.of(AccessMask.GENERIC_READ),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OPEN,
-                null,
-            )
+            val owner = SmbTransferFile(transferSocketFactory())
+            owner.open(sessionFactory, connection, resolved.shareName, resolved.relativePath, writing = false)
             try {
-                object : FilterInputStream(file.inputStream) {
+                object : FilterInputStream(owner.file.inputStream), TransferAbortable {
                     private var closed = false
-
+                    override fun abortTransfer() = owner.abortTransfer()
                     override fun close() {
                         if (closed) return
                         closed = true
-                        try {
-                            super.close()
-                        } finally {
-                            file.close()
-                        }
+                        owner.finishStream { super.close() }
                     }
                 } as InputStream
             } catch (error: Throwable) {
-                file.close()
+                owner.abortTransfer()
+                runCatching { owner.close() }.onFailure(error::addSuppressed)
                 throw error
             }
         }
@@ -373,30 +422,21 @@ class SmbFileProvider internal constructor(
     override suspend fun getOutputStream(path: String): Result<OutputStream> = withContext(Dispatchers.IO) {
         runCatching {
             val resolved = resolveFile(path)
-            val file = ensureShare(resolved.shareName).openFile(
-                resolved.relativePath,
-                EnumSet.of(AccessMask.GENERIC_WRITE),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OVERWRITE_IF,
-                null,
-            )
+            val owner = SmbTransferFile(transferSocketFactory())
+            owner.open(sessionFactory, connection, resolved.shareName, resolved.relativePath, writing = true)
             try {
-                object : ForwardingOutputStream(file.outputStream) {
+                object : ForwardingOutputStream(owner.file.outputStream), TransferAbortable {
                     private var closed = false
-
+                    override fun abortTransfer() = owner.abortTransfer()
                     override fun close() {
                         if (closed) return
                         closed = true
-                        try {
-                            super.close()
-                        } finally {
-                            file.close()
-                        }
+                        owner.finishStream { super.close() }
                     }
                 } as OutputStream
             } catch (error: Throwable) {
-                file.close()
+                owner.abortTransfer()
+                runCatching { owner.close() }.onFailure(error::addSuppressed)
                 throw error
             }
         }

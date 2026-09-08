@@ -245,6 +245,34 @@ class SftpFileProviderTest {
         )
     }
 
+    @Test
+    fun changedHostKeyReconnectsOnlyAfterTargetedReset() = runBlocking {
+        val firstServer = startServer(AuthMode.PASSWORD)
+        val unrelatedServer = startServer(AuthMode.PASSWORD)
+        val knownHostsFile = temp.newFile("reset_known_hosts")
+        val firstProvider = createProvider(firstServer.port, knownHostsFile = knownHostsFile)
+        val unrelatedProvider = createProvider(unrelatedServer.port, knownHostsFile = knownHostsFile)
+        firstProvider.listFiles("/").getOrThrow()
+        unrelatedProvider.listFiles("/").getOrThrow()
+        firstProvider.disconnect()
+        firstServer.server.stop(true)
+        val replacement = startServer(AuthMode.PASSWORD, port = firstServer.port)
+        Files.write(replacement.root.resolve("replacement.txt"), "replacement".toByteArray())
+        val secondProvider = createProvider(firstServer.port, knownHostsFile = knownHostsFile)
+        val store = SftpKnownHosts(knownHostsFile)
+        val oldFingerprint = store.fingerprints("127.0.0.1", firstServer.port)
+        val otherFingerprint = store.fingerprints("127.0.0.1", unrelatedServer.port)
+
+        repeat(2) { assertTrue(secondProvider.listFiles("/").isFailure) }
+        assertEquals(oldFingerprint, store.fingerprints("127.0.0.1", firstServer.port))
+        store.forget("127.0.0.1", firstServer.port)
+        assertEquals(listOf("replacement.txt"), secondProvider.listFiles("/").getOrThrow().map { it.name })
+        assertTrue(oldFingerprint != store.fingerprints("127.0.0.1", firstServer.port))
+        assertEquals(otherFingerprint, store.fingerprints("127.0.0.1", unrelatedServer.port))
+        unrelatedProvider.disconnect()
+        assertTrue(unrelatedProvider.listFiles("/").isSuccess)
+    }
+
     private fun createProvider(
         port: Int,
         password: String = PASSWORD,

@@ -23,12 +23,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -36,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
@@ -82,6 +87,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -99,6 +105,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -109,6 +117,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.audio.AudioToneInstaller
+import com.voyagerfiles.ui.components.AudioToneMenuItems
+import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
@@ -124,6 +135,7 @@ import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
 import com.voyagerfiles.ui.components.FileDetailsSheet
+import com.voyagerfiles.ui.components.dragFileSelection
 import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
@@ -138,6 +150,7 @@ import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.DeleteMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
+import com.voyagerfiles.util.FolderShortcuts
 import kotlinx.coroutines.launch
 
 internal const val BROWSER_SEARCH_TEST_TAG = "browser-search"
@@ -152,23 +165,33 @@ fun BrowserScreen(
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
 ) {
     val state by viewModel.browseState.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
+    val isCurrentFolderBookmarked = bookmarks.any {
+        it.path == state.currentPath && it.source == state.source
+    }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) pullRefreshing = false
+    }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
+    val transferConflict by viewModel.transferConflict.collectAsState()
+    val operationResult by viewModel.lastOperationResult.collectAsState()
     val context = LocalContext.current
     val shareFailedMessage = stringResource(R.string.browser_share_failed)
     val noFileHandlerMessage = stringResource(R.string.browser_no_file_handler)
     val fileOpenFailedMessage = stringResource(R.string.browser_file_open_failed)
     val archiveUnsupportedMessage = stringResource(R.string.browser_archive_unsupported)
-    val noMediaPlayerMessage = stringResource(R.string.browser_no_media_player)
-    val mediaOpenFailedMessage = stringResource(R.string.browser_media_open_failed)
     val bookmarkToggledMessage = stringResource(R.string.browser_bookmark_toggled)
     val rootLabel = stringResource(R.string.browser_root)
+    val shortcutRequestedMessage = stringResource(R.string.shortcut_requested)
+    val shortcutFailedMessage = stringResource(R.string.shortcut_unavailable)
     val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
     val focusManager = LocalFocusManager.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -181,6 +204,11 @@ fun BrowserScreen(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         viewModel.uploadDocuments(uris)
+    }
+
+    val tonePermissionMessage = stringResource(R.string.audio_tone_permission)
+    val setAudioTone = rememberAudioToneAction(viewModel::setAudioTone) {
+        scope.launch { snackbarHostState.showSnackbar(tonePermissionMessage) }
     }
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -210,7 +238,7 @@ fun BrowserScreen(
     val canOpenWith = remember(selectedItems) {
         selectedItems.singleOrNull()?.let { item ->
             !item.isDirectory &&
-                (item.source == FileSource.LOCAL || item.source == FileSource.SAF)
+                (item.source == FileSource.LOCAL || item.source == FileSource.SAF || item.source == FileSource.WEBDAV)
         } == true
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
@@ -274,8 +302,36 @@ fun BrowserScreen(
         )
     }
 
+    fun openWebDavFile(file: FileItem, chooser: Boolean = false) {
+        scope.launch {
+            viewModel.prepareWebDavPlayback(file).fold(
+                onSuccess = { uri ->
+                    try {
+                        val target = FileUtils.createRemotePlaybackIntent(uri, file)
+                        playbackIntentLauncher(
+                            if (chooser) Intent.createChooser(target, context.getString(R.string.action_open_with))
+                            else target,
+                        )
+                        if (chooser) viewModel.clearSelection()
+                    } catch (_: ActivityNotFoundException) {
+                        WebDavPlaybackProvider.revoke(uri)
+                        snackbarHostState.showSnackbar(noFileHandlerMessage)
+                    } catch (_: Throwable) {
+                        WebDavPlaybackProvider.revoke(uri)
+                        snackbarHostState.showSnackbar(fileOpenFailedMessage)
+                    }
+                },
+                onFailure = { playbackFallbackFor = file },
+            )
+        }
+    }
+
     fun openSelectedWith() {
         val file = selectedItems.singleOrNull() ?: return
+        if (file.source == FileSource.WEBDAV) {
+            openWebDavFile(file, chooser = true)
+            return
+        }
         FileUtils.openFileWith(context, file).fold(
             onSuccess = { viewModel.clearSelection() },
             onFailure = { error ->
@@ -324,22 +380,7 @@ fun BrowserScreen(
         when (remoteFileTapAction(file)) {
             RemoteFileTapAction.NAVIGATE -> navigateTo(file.path)
             RemoteFileTapAction.DOWNLOAD -> viewModel.downloadFile(file.path)
-            RemoteFileTapAction.STREAM_WEBDAV -> scope.launch {
-                viewModel.prepareWebDavPlayback(file).fold(
-                    onSuccess = { uri ->
-                        try {
-                            playbackIntentLauncher(FileUtils.createRemotePlaybackIntent(uri, file))
-                        } catch (_: ActivityNotFoundException) {
-                            WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar(noMediaPlayerMessage)
-                        } catch (_: Throwable) {
-                            WebDavPlaybackProvider.revoke(uri)
-                            snackbarHostState.showSnackbar(mediaOpenFailedMessage)
-                        }
-                    },
-                    onFailure = { playbackFallbackFor = file },
-                )
-            }
+            RemoteFileTapAction.STREAM_WEBDAV -> openWebDavFile(file)
         }
     }
 
@@ -433,6 +474,12 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                selectedItems.singleOrNull()?.takeIf(AudioToneInstaller::isSupported)?.let { file ->
+                                    AudioToneMenuItems(file) { selected, tone ->
+                                        showSelectionMoreMenu = false
+                                        setAudioTone(selected, tone)
+                                    }
+                                }
                                 if (BrowserArchiveAction.COMPRESS_TO_ZIP in archiveActions) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.dialog_compress_zip)) },
@@ -731,13 +778,48 @@ fun BrowserScreen(
                                     )
                                     if (state.source == FileSource.LOCAL) {
                                         DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.action_bookmark_folder)) },
-                                            leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                                            text = { Text(stringResource(R.string.shortcut_pin_folder)) },
+                                            leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
                                             onClick = {
-                                                viewModel.toggleBookmark(
-                                                    state.currentPath,
-                                                    state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
+                                                showMoreMenu = false
+                                                val path = state.currentPath
+                                                scope.launch {
+                                                    val requested = runCatching {
+                                                        FolderShortcuts.requestPin(context, path)
+                                                    }.getOrDefault(false)
+                                                    snackbarHostState.showSnackbar(
+                                                        if (requested) shortcutRequestedMessage else shortcutFailedMessage,
+                                                    )
+                                                }
+                                            },
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(stringResource(
+                                                    if (isCurrentFolderBookmarked) R.string.action_remove_bookmark
+                                                    else R.string.action_bookmark_folder,
+                                                ))
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    if (isCurrentFolderBookmarked) Icons.Filled.BookmarkRemove
+                                                    else Icons.Filled.BookmarkAdd,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.testTag(
+                                                        if (isCurrentFolderBookmarked) "bookmark-remove-icon"
+                                                        else "bookmark-add-icon",
+                                                    ),
                                                 )
+                                            },
+                                            onClick = {
+                                                if (isCurrentFolderBookmarked) {
+                                                    viewModel.removeBookmark(state.currentPath, state.source)
+                                                } else {
+                                                    viewModel.addBookmark(
+                                                        state.currentPath,
+                                                        state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
+                                                    )
+                                                }
                                                 showMoreMenu = false
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar(bookmarkToggledMessage)
@@ -838,153 +920,183 @@ fun BrowserScreen(
                 .padding(padding),
         ) {
             runningOperation?.let { operation ->
-                OperationProgressContent(operation)
+                OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
-            when {
-                state.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
+            if (runningOperation == null) {
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult) }
+            }
+            PullToRefreshBox(
+                isRefreshing = pullRefreshing && state.isLoading,
+                onRefresh = {
+                    if (!state.isLoading) {
+                        pullRefreshing = true
+                        viewModel.refresh()
                     }
-                }
-
-                state.error != null -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp),
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                when {
+                    state.isLoading && !pullRefreshing -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                Icons.Filled.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                stringResource(R.string.browser_load_failed),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                state.error?.asString().orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            TextButton(onClick = { viewModel.refresh() }) {
-                                Text(stringResource(R.string.action_retry))
-                            }
+                            CircularProgressIndicator()
                         }
                     }
-                }
 
-                state.visibleFiles.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Filled.FolderOpen,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                stringResource(
-                                    if (state.files.isEmpty()) R.string.browser_empty_folder
-                                    else R.string.browser_no_matching_files,
-                                ),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (state.files.isNotEmpty()) {
+                    state.error != null -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.ErrorOutline,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    stringResource(R.string.browser_load_failed),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(onClick = viewModel::clearFilters) {
-                                    Text(stringResource(R.string.browser_clear_search_filters))
+                                Text(
+                                    state.error?.asString().orEmpty(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                TextButton(onClick = { viewModel.refresh() }) {
+                                    Text(stringResource(R.string.action_retry))
                                 }
                             }
                         }
                     }
-                }
 
-                state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.visibleFiles, key = { it.path }) { file ->
-                            FileListItem(
-                                file = file,
-                                modifier = if (isTelevision && file.path == firstVisiblePath) {
-                                    Modifier.focusRequester(firstItemFocusRequester)
-                                } else {
-                                    Modifier
-                                },
-                                compact = state.viewMode == ViewMode.COMPACT,
-                                isSelected = file.path in state.selectedFiles,
-                                isSelectionMode = isSelectionMode,
-                                enableRemoteSelect = isTelevision,
-                                onClick = {
-                                    if (isSelectionMode) {
-                                        toggleSelection(file.path)
-                                    } else if (isNetwork) {
-                                        handleRemoteFileTap(file)
-                                    } else if (file.isDirectory) {
-                                        navigateTo(file.path)
-                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        handleDeviceFileTap(file)
+                    state.visibleFiles.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Filled.FolderOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    stringResource(
+                                        if (state.files.isEmpty()) R.string.browser_empty_folder
+                                        else R.string.browser_no_matching_files,
+                                    ),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (state.files.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    TextButton(onClick = viewModel::clearFilters) {
+                                        Text(stringResource(R.string.browser_clear_search_filters))
                                     }
-                                },
-                                onLongClick = {
-                                    toggleSelection(file.path)
-                                },
-                            )
+                                }
+                            }
                         }
                     }
-                }
 
-                state.viewMode == ViewMode.GRID -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(100.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.visibleFiles, key = { it.path }) { file ->
-                            FileGridItem(
-                                file = file,
-                                modifier = if (isTelevision && file.path == firstVisiblePath) {
-                                    Modifier.focusRequester(firstItemFocusRequester)
-                                } else {
-                                    Modifier
-                                },
-                                isSelected = file.path in state.selectedFiles,
-                                isSelectionMode = isSelectionMode,
-                                enableRemoteSelect = isTelevision,
-                                onClick = {
-                                    if (isSelectionMode) {
+                    state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
+                        val listState = rememberLazyListState()
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize().testTag("browser-files")
+                                .dragFileSelection(state.visibleFiles.map { it.path }, state.selectedFiles,
+                                    enabled = !isTelevision && runningOperation == null, listState = listState,
+                                    onSelection = viewModel::setDragSelection,
+                                    onStartHaptic = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }),
+                        ) {
+                            items(state.visibleFiles, key = { it.path }) { file ->
+                                FileListItem(
+                                    file = file,
+                                    modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                    compact = state.viewMode == ViewMode.COMPACT,
+                                    isSelected = file.path in state.selectedFiles,
+                                    isSelectionMode = isSelectionMode,
+                                    enableRemoteSelect = isTelevision,
+                                    enableDragSelection = !isTelevision && runningOperation == null,
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            toggleSelection(file.path)
+                                        } else if (isNetwork) {
+                                            handleRemoteFileTap(file)
+                                        } else if (file.isDirectory) {
+                                            navigateTo(file.path)
+                                        } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
+                                            handleDeviceFileTap(file)
+                                        }
+                                    },
+                                    onLongClick = {
                                         toggleSelection(file.path)
-                                    } else if (isNetwork) {
-                                        handleRemoteFileTap(file)
-                                    } else if (file.isDirectory) {
-                                        navigateTo(file.path)
-                                    } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
-                                        handleDeviceFileTap(file)
-                                    }
-                                },
-                                onLongClick = {
-                                    toggleSelection(file.path)
-                                },
-                            )
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    state.viewMode == ViewMode.GRID -> {
+                        val gridState = rememberLazyGridState()
+                        val gridPadding = with(LocalDensity.current) { 8.dp.toPx() }
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Adaptive(100.dp),
+                            contentPadding = PaddingValues(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize().testTag("browser-files")
+                                .dragFileSelection(state.visibleFiles.map { it.path }, state.selectedFiles,
+                                    enabled = !isTelevision && runningOperation == null, gridState = gridState,
+                                    gridContentOffset = Offset(gridPadding, gridPadding),
+                                    onSelection = viewModel::setDragSelection,
+                                    onStartHaptic = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }),
+                        ) {
+                            items(state.visibleFiles, key = { it.path }) { file ->
+                                FileGridItem(
+                                    file = file,
+                                    modifier = if (isTelevision && file.path == firstVisiblePath) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                    isSelected = file.path in state.selectedFiles,
+                                    isSelectionMode = isSelectionMode,
+                                    enableRemoteSelect = isTelevision,
+                                    enableDragSelection = !isTelevision && runningOperation == null,
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            toggleSelection(file.path)
+                                        } else if (isNetwork) {
+                                            handleRemoteFileTap(file)
+                                        } else if (file.isDirectory) {
+                                            navigateTo(file.path)
+                                        } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
+                                            handleDeviceFileTap(file)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        toggleSelection(file.path)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -1010,6 +1122,12 @@ fun BrowserScreen(
             file = file,
             onDismiss = { showDetailsFor = null },
         )
+    }
+
+    transferConflict?.let { request ->
+        com.voyagerfiles.ui.components.TransferConflictDialog(request) { response ->
+            viewModel.resolveTransferConflict(request, response)
+        }
     }
 
     // Dialogs
@@ -1139,14 +1257,24 @@ fun BrowserScreen(
 internal fun OperationProgressContent(
     operation: OperationState.Running,
     modifier: Modifier = Modifier,
+    onCancel: (() -> Unit)? = null,
 ) {
     val progress = operation.progress
     val progressLabel = progress.label.asString()
+    val completedItemsText = progress.totalItems?.takeIf { it > 0 }?.let {
+        stringResource(R.string.transfer_items_completed, progress.completedItems, it) +
+                if (progress.skippedItems > 0) " • " + stringResource(R.string.transfer_items_skipped, progress.skippedItems) else ""
+    }
     Column(
         modifier = modifier.semantics {
-            stateDescription = progress.stateDescription(progressLabel)
+            stateDescription = progress.stateDescription(progressLabel, completedItemsText)
         },
     ) {
+        if (operation.cancellable && onCancel != null) {
+            TextButton(onClick = onCancel, enabled = !operation.cancelling) {
+                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
+            }
+        }
         val fraction = progress.fraction
         if (fraction != null) {
             LinearProgressIndicator(
@@ -1162,7 +1290,7 @@ internal fun OperationProgressContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        progress.detailText?.let { detail ->
+        progress.detailText(completedItemsText)?.let { detail ->
             Text(
                 detail,
                 style = MaterialTheme.typography.bodySmall,

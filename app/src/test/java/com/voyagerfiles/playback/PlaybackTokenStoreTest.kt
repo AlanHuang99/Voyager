@@ -10,6 +10,57 @@ import org.junit.Test
 
 class PlaybackTokenStoreTest {
     @Test
+    fun leasesProtectActiveReadersAndRestartIdleLifetimeOnRelease() {
+        val clock = FakeClock()
+        val store = PlaybackTokenStore(clock::now, SecureRandom(), INACTIVITY_MILLIS)
+        val source = FakeSource("remote")
+        val token = store.register(PlaybackEntry("report.pdf", "application/pdf", 10, source))
+        val first = store.acquire(token)!!
+        val second = store.acquire(token)!!
+        first.close()
+        first.close()
+        clock.advanceBy(INACTIVITY_MILLIS * 2)
+        store.sweepExpired()
+        assertTrue(second.touch())
+        assertEquals(0, source.closeCount)
+        second.close()
+        clock.advanceBy(INACTIVITY_MILLIS - 1)
+        store.sweepExpired()
+        assertEquals(0, source.closeCount)
+        clock.advanceBy(1)
+        store.sweepExpired()
+        assertEquals(1, source.closeCount)
+        assertNull(store.acquire(token))
+    }
+
+    @Test
+    fun revocationInvalidatesLeasesAndClosesTheSourceOnce() {
+        val store = PlaybackTokenStore()
+        val source = FakeSource("remote")
+        val token = store.register(PlaybackEntry("one", "audio/mpeg", 1, source))
+        val lease = store.acquire(token)!!
+        store.remove(token)
+        assertFalse(lease.touch())
+        assertNull(store.acquire(token))
+        lease.close()
+        store.clear()
+        assertEquals(1, source.closeCount)
+    }
+
+    @Test
+    fun idleSweepsDoNotRefreshOtherTokens() {
+        val clock = FakeClock()
+        val store = PlaybackTokenStore(clock::now, SecureRandom(), INACTIVITY_MILLIS)
+        val source = FakeSource("idle")
+        store.register(PlaybackEntry("idle", "text/plain", 1, source))
+        clock.advanceBy(INACTIVITY_MILLIS - 1)
+        store.sweepExpired()
+        clock.advanceBy(1)
+        store.sweepExpired()
+        assertEquals(1, source.closeCount)
+    }
+
+    @Test
     fun tokensAreUniqueOpaqueAndContainAtLeast256RandomBits() {
         val clock = FakeClock()
         val store = PlaybackTokenStore(clock::now, SecureRandom(), INACTIVITY_MILLIS)

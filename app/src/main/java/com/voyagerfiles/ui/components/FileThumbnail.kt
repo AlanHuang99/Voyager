@@ -17,8 +17,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,6 +43,8 @@ import kotlinx.coroutines.withContext
 
 internal const val PDF_THUMBNAIL_TEST_TAG = "pdf-thumbnail"
 internal const val APK_THUMBNAIL_TEST_TAG = "apk-thumbnail"
+internal const val VIDEO_THUMBNAIL_TEST_TAG = "video-thumbnail"
+internal const val OFFICE_THUMBNAIL_TEST_TAG = "office-thumbnail"
 internal const val FILE_ICON_TEST_TAG = "file-icon"
 
 @Composable
@@ -48,6 +54,42 @@ fun FileThumbnailOrIcon(
     modifier: Modifier = Modifier,
 ) {
     val icon = fileIcon(file)
+    if (MediaThumbnailLoader.supports(file)) {
+        val context = LocalContext.current
+        val sizePixels = with(LocalDensity.current) { iconSize.roundToPx().coerceAtLeast(1) }
+        var thumbnail by remember(file, sizePixels) { mutableStateOf<android.graphics.Bitmap?>(null) }
+        LaunchedEffect(file, sizePixels) {
+            thumbnail = MediaThumbnailLoader.load(
+                context = context,
+                file = file,
+                maxWidth = sizePixels,
+                maxHeight = sizePixels,
+            ).getOrNull()
+        }
+        Surface(
+            modifier = modifier.size(iconSize),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            thumbnail?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = if (file.isVideo) ContentScale.Crop else ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().testTag(
+                        if (file.isVideo) VIDEO_THUMBNAIL_TEST_TAG else OFFICE_THUMBNAIL_TEST_TAG,
+                    ),
+                )
+            } ?: Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().padding(4.dp).testTag(FILE_ICON_TEST_TAG),
+                tint = fileIconTint(file),
+            )
+        }
+        return
+    }
+
     if (file.isPdf && (file.source == FileSource.LOCAL || file.source == FileSource.SAF)) {
         val context = LocalContext.current
         val sizePixels = with(LocalDensity.current) { iconSize.roundToPx().coerceAtLeast(1) }
@@ -153,6 +195,7 @@ fun FileThumbnailOrIcon(
             AsyncImage(
                 model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                     .data(File(file.path))
+                    .memoryCacheKey(fileThumbnailCacheKey(file))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -195,3 +238,6 @@ private fun fileIcon(file: FileItem): ImageVector = when {
     file.isApk -> Icons.Filled.Android
     else -> Icons.AutoMirrored.Filled.InsertDriveFile
 }
+
+internal fun fileThumbnailCacheKey(file: FileItem): String =
+    "${file.path}|${file.size}|${file.lastModified.time}"

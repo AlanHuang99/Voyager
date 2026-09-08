@@ -10,6 +10,9 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.TransferCancellation
+import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -26,6 +29,9 @@ class SftpFileProvider(
     private val connection: RemoteConnection,
     private val knownHostsFile: File,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is SftpFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
 
     private val connectionLock = Mutex()
     private var session: Session? = null
@@ -36,8 +42,7 @@ class SftpFileProvider(
         closeConnection()
 
         val jsch = JSch()
-        prepareKnownHostsFile()
-        jsch.setKnownHosts(knownHostsFile.absolutePath)
+        jsch.hostKeyRepository = SftpKnownHosts(knownHostsFile)
         connection.privateKeyPath?.takeIf { it.isNotBlank() }?.let { privateKeyPath ->
             jsch.addIdentity(privateKeyPath)
         }
@@ -73,16 +78,6 @@ class SftpFileProvider(
         } catch (error: Throwable) {
             runCatching { nextSession.disconnect() }
             throw error
-        }
-    }
-
-    private fun prepareKnownHostsFile() {
-        val parent = knownHostsFile.parentFile
-        check(parent == null || parent.isDirectory || parent.mkdirs()) {
-            "Could not create the SFTP security directory"
-        }
-        check(knownHostsFile.isFile || knownHostsFile.createNewFile()) {
-            "Could not create the SFTP known-hosts file"
         }
     }
 
@@ -286,29 +281,44 @@ class SftpFileProvider(
     }
 
     private fun copyPath(sftp: ChannelSftp, sourcePath: String, targetPath: String) {
+        TransferCancellation.check()
         val attrs = sftp.lstat(sourcePath)
-        if (attrs.isDir) {
-            sftp.mkdir(targetPath)
-            for (entry in listEntries(sftp, sourcePath)) {
-                if (entry.filename == "." || entry.filename == "..") continue
-                copyPath(
-                    sftp,
-                    joinPath(sourcePath, entry.filename),
-                    joinPath(targetPath, entry.filename),
-                )
-            }
-            return
+        val parent = getParentPath(targetPath) ?: "/"
+        check(listEntries(sftp, parent).none { it.filename == targetPath.substringAfterLast('/') }) {
+            "An item named ${targetPath.substringAfterLast('/')} already exists in this folder"
         }
-
-        val outputChannel = openSftpChannelLocked()
+        var ownsTarget = false
         try {
-            sftp.get(sourcePath).use { input ->
-                outputChannel.put(targetPath, ChannelSftp.OVERWRITE).use { output ->
-                    input.copyTo(output, BUFFER_SIZE)
+            if (attrs.isDir) {
+                sftp.mkdir(targetPath)
+                ownsTarget = true
+                for (entry in listEntries(sftp, sourcePath)) {
+                    if (entry.filename == "." || entry.filename == "..") continue
+                    copyPath(sftp, joinPath(sourcePath, entry.filename), joinPath(targetPath, entry.filename))
+                }
+            } else {
+                val inputChannel = openSftpChannelLocked()
+                var outputChannel: ChannelSftp? = null
+                try {
+                    outputChannel = openSftpChannelLocked()
+                    SftpChannelInputStream(inputChannel, inputChannel.get(sourcePath)).use { input ->
+                        TransferCancellation.check()
+                        ownsTarget = true
+                        SftpChannelOutputStream(outputChannel, outputChannel.put(targetPath, ChannelSftp.OVERWRITE)).use { output ->
+                            StreamTransfer.copy(input, output, sourcePath, attrs.size)
+                        }
+                    }
+                } finally {
+                    inputChannel.disconnect()
+                    outputChannel?.disconnect()
                 }
             }
-        } finally {
-            outputChannel.disconnect()
+            TransferCancellation.check()
+        } catch (error: Throwable) {
+            if (ownsTarget) runCatching {
+                if (attrs.isDir) deleteDirectoryRecursive(sftp, targetPath) else sftp.rm(targetPath)
+            }.onFailure(error::addSuppressed)
+            throw error
         }
     }
 
@@ -363,7 +373,8 @@ class SftpFileProvider(
     private class SftpChannelInputStream(
         private val channel: ChannelSftp,
         input: InputStream,
-    ) : FilterInputStream(input) {
+    ) : FilterInputStream(input), TransferAbortable {
+        override fun abortTransfer() { channel.disconnect() }
         override fun close() {
             try {
                 super.close()
@@ -376,7 +387,8 @@ class SftpFileProvider(
     private class SftpChannelOutputStream(
         private val channel: ChannelSftp,
         output: OutputStream,
-    ) : ForwardingOutputStream(output) {
+    ) : ForwardingOutputStream(output), TransferAbortable {
+        override fun abortTransfer() { channel.disconnect() }
         override fun close() {
             try {
                 super.close()

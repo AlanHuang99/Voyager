@@ -40,6 +40,7 @@ object PdfThumbnailLoader {
                 file.source.name,
                 file.path,
                 file.lastModified.time,
+                file.size,
                 maxWidth,
                 maxHeight,
             ).joinToString("|")
@@ -74,6 +75,11 @@ object PdfThumbnailLoader {
                 }
             }
         }
+    }
+
+    fun invalidate(path: String) {
+        cache.snapshot().keys.filter { it.startsWith("${FileSource.LOCAL.name}|$path|") }
+            .forEach(cache::remove)
     }
 
     fun clear() {

@@ -4,7 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,12 +42,15 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -56,6 +62,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
+import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.HomeSection
@@ -65,7 +72,7 @@ import com.voyagerfiles.util.StorageVolumeInfo
 import com.voyagerfiles.viewmodel.BrowserSession
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel: FileBrowserViewModel,
@@ -79,6 +86,8 @@ fun HomeScreen(
     onRequestAllFilesAccess: () -> Unit,
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
+    var bookmarkToRemove by remember { mutableStateOf<Bookmark?>(null) }
+    val removeBookmarkLabel = stringResource(R.string.action_remove_bookmark)
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val homeLayout by viewModel.homeLayout.collectAsState()
@@ -255,25 +264,25 @@ fun HomeScreen(
                                         icon = Icons.Filled.Download,
                                         label = stringResource(R.string.home_downloads),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Downloads" }?.path ?: "/storage/emulated/0/Download") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_downloads }?.path ?: "/storage/emulated/0/Download") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.Image,
                                         label = stringResource(R.string.home_pictures),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Pictures" }?.path ?: "/storage/emulated/0/Pictures") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_pictures }?.path ?: "/storage/emulated/0/Pictures") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.MusicNote,
                                         label = stringResource(R.string.home_music),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Music" }?.path ?: "/storage/emulated/0/Music") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_music }?.path ?: "/storage/emulated/0/Music") },
                                     )
                                     QuickAccessCard(
                                         icon = Icons.Filled.VideoLibrary,
                                         label = stringResource(R.string.home_videos),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onNavigateToBrowser(directories.find { it.name == "Movies" }?.path ?: "/storage/emulated/0/Movies") },
+                                        onClick = { onNavigateToBrowser(directories.find { it.labelRes == R.string.home_videos }?.path ?: "/storage/emulated/0/Movies") },
                                     )
                                 }
                             }
@@ -332,7 +341,12 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { onNavigateToBrowser(bookmark.path) }
+                                        .testTag("home-bookmark:${bookmark.id}")
+                                        .combinedClickable(
+                                            onClick = { onNavigateToBrowser(bookmark.path) },
+                                            onLongClickLabel = removeBookmarkLabel,
+                                            onLongClick = { bookmarkToRemove = bookmark },
+                                        )
                                         .padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -374,13 +388,13 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        if (dir.name == "Internal Storage") Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
+                                        if (dir.isPrimary) Icons.Filled.PhoneAndroid else Icons.Filled.Folder,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(24.dp),
                                     )
                                     Spacer(modifier = Modifier.width(16.dp))
-                                    Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(dir.labelRes), style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
@@ -390,6 +404,24 @@ fun HomeScreen(
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
+    }
+    bookmarkToRemove?.let { bookmark ->
+        AlertDialog(
+            onDismissRequest = { bookmarkToRemove = null },
+            title = { Text(removeBookmarkLabel) },
+            text = { Text(bookmark.name) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeBookmark(bookmark.path, bookmark.source)
+                    bookmarkToRemove = null
+                }) { Text(removeBookmarkLabel) }
+            },
+            dismissButton = {
+                TextButton(onClick = { bookmarkToRemove = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -438,6 +470,7 @@ internal fun StorageVolumeCard(
     storageInfo: StorageInfo?,
     onClick: () -> Unit,
 ) {
+    val statusLabel = volume.statusLabelRes?.let { stringResource(it) }
     val isInternal = volume.isPrimary
     val availableLabel = stringResource(R.string.home_storage_available)
     val storageUsage = if (storageInfo != null) {
@@ -453,7 +486,7 @@ internal fun StorageVolumeCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("storage-volume:${volume.description}")
-            .semantics { stateDescription = volume.statusLabel ?: availableLabel }
+            .semantics { stateDescription = statusLabel ?: availableLabel }
             .clickable(enabled = volume.isAvailable, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isInternal)
@@ -481,7 +514,7 @@ internal fun StorageVolumeCard(
                         else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        volume.statusLabel ?: storageUsage ?: volume.path.orEmpty(),
+                        statusLabel ?: storageUsage ?: volume.path.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isInternal)
                             MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -491,7 +524,7 @@ internal fun StorageVolumeCard(
                     )
                 }
             }
-            if (storageInfo != null && volume.statusLabel == null) {
+            if (storageInfo != null && statusLabel == null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { storageInfo.usedPercentage },
