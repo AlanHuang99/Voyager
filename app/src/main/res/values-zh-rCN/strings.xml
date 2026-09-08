@@ -423,4 +423,19 @@
     <string name="audio_ringtone_set">Ringtone set</string>
     <string name="audio_notification_set">Notification tone set</string>
     <string name="upload_completed_skipped">%1$d uploaded, %2$d skipped</string>
+    <string name="duplicates_title">Find duplicates</string>
+    <string name="duplicates_description">Compare file contents in this folder and its subfolders, including hidden files. Links and Trash are excluded. Select files to remove after the scan.</string>
+    <string name="duplicates_scan">Scan folder</string>
+    <string name="duplicates_cancelled">Scan cancelled</string>
+    <string name="duplicates_keep_one">Keep at least one copy in each group. Nothing is selected automatically.</string>
+    <string name="duplicates_remove">Remove selected (%1$d)</string>
+    <string name="duplicates_scanning">Scanning files…</string>
+    <string name="duplicates_removing">Rechecking and removing files…</string>
+    <string name="duplicates_examined">%1$d files found</string>
+    <string name="duplicates_summary">%1$d duplicate groups among %2$d files</string>
+    <string name="duplicates_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d Trash folders.</string>
+    <string name="duplicates_limited">Scan limit reached. These results cover part of the folder. Scan a smaller folder for complete results.</string>
+    <string name="duplicates_group">%1$d copies, %2$s each</string>
+    <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
+    <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
 </resources>

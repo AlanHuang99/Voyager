@@ -42,6 +42,9 @@ sealed class Screen(val route: String) {
         fun createRoute(path: String): String =
             "browser/${URLEncoder.encode(path, "UTF-8")}"
     }
+    data object Duplicates : Screen("duplicates/{path}") {
+        fun createRoute(path: String): String = "duplicates/${Uri.encode(path)}"
+    }
     data object Connections : Screen("connections")
     data object Trash : Screen("trash")
     data object Settings : Screen("settings")
@@ -144,7 +147,15 @@ fun AppNavigation(
             BrowserScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.navigateHome() },
+                onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
             )
+        }
+
+        composable(Screen.Duplicates.route, arguments = listOf(navArgument("path") { type = NavType.StringType })) { entry ->
+            DuplicatesScreen(checkNotNull(entry.arguments?.getString("path")), onNavigateBack = {
+                viewModel.refresh()
+                navController.popBackStack()
+            })
         }
 
         composable(Screen.Connections.route) {
