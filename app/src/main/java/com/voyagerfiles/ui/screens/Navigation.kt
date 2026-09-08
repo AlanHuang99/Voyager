@@ -67,6 +67,7 @@ fun AppNavigation(
     val navController = rememberNavController()
     val context = LocalContext.current
     var shortcutFailed by remember { mutableStateOf(false) }
+    var confirmRoot by remember { mutableStateOf(false) }
     val sessionClosureGeneration by viewModel.sessionClosureGeneration.collectAsState()
 
     LaunchedEffect(sessionClosureGeneration) {
@@ -211,8 +212,26 @@ fun AppNavigation(
                 onNavigateBack = { navController.popBackStack() },
                 hasAllFilesAccess = hasAllFilesAccess,
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
+                onOpenRoot = { confirmRoot = true },
             )
         }
+    }
+    if (confirmRoot) {
+        AlertDialog(
+            onDismissRequest = { confirmRoot = false },
+            title = { Text(stringResource(R.string.root_title)) },
+            text = { Text(stringResource(R.string.root_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRoot = false
+                    viewModel.openRootSession()
+                    navController.navigate(Screen.Browser.createRoute("/"))
+                }) { Text(stringResource(R.string.root_open)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRoot = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
     LaunchedEffect(requestedFolder, folderRequestGeneration, hasAllFilesAccess) {
         if (requestedFolder != null && hasAllFilesAccess) {

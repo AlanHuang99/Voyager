@@ -96,6 +96,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     application: Application,
     private val remoteProviderFactory: RemoteFileProviderFactory = defaultRemoteFileProviderFactory,
     private val playbackPreparer: WebDavPlaybackPreparer = defaultWebDavPlaybackPreparer,
+    private val rootProviderFactory: () -> com.voyagerfiles.data.repository.RootFileProvider = { com.voyagerfiles.data.repository.RootFileProvider() },
 ) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
@@ -118,6 +119,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
+    private val _rootEditor = MutableStateFlow<RootTextEditorState?>(null)
+    val rootEditor: StateFlow<RootTextEditorState?> = _rootEditor.asStateFlow()
 
     private val _sessions = MutableStateFlow<List<BrowserSession>>(emptyList())
     val sessions: StateFlow<List<BrowserSession>> = _sessions.asStateFlow()
@@ -275,6 +278,67 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 }
             }
             activateSessionInternal(sessionId)
+        }
+    }
+
+    /** Called only after the user confirms the root-access dialog. */
+    fun openRootSession() {
+        cancelInitialNavigation()
+        viewModelScope.launch {
+            val sessionId = "root:/"
+            if (_sessions.value.none { it.id == sessionId }) {
+                sessionProviders[sessionId] = rootProviderFactory()
+                _sessions.update { sessions ->
+                    sessions + BrowserSession(
+                        id = sessionId,
+                        title = getApplication<Application>().getString(R.string.root_title),
+                        source = FileSource.ROOT,
+                        rootPath = "/",
+                        currentPath = "/",
+                    )
+                }
+            }
+            activateSessionInternal(sessionId)
+        }
+    }
+
+    fun openRootTextEditor(file: FileItem) {
+        val provider = fileProvider as? com.voyagerfiles.data.repository.RootFileProvider
+            ?: return
+        _rootEditor.value = RootTextEditorState(file.path)
+        viewModelScope.launch {
+            provider.readText(file.path).fold(
+                onSuccess = { document ->
+                    _rootEditor.value = RootTextEditorState(file.path, document, document.text, busy = false)
+                },
+                onFailure = { error ->
+                    _rootEditor.value = RootTextEditorState(file.path, busy = false, error = error.message)
+                },
+            )
+        }
+    }
+
+    fun updateRootText(text: String) {
+        _rootEditor.update { state -> if (state?.busy == false) state.copy(text = text) else state }
+    }
+
+    fun closeRootTextEditor() { if (_rootEditor.value?.busy == false) _rootEditor.value = null }
+
+    fun saveRootText() {
+        val state = _rootEditor.value ?: return
+        val document = state.document ?: return
+        if (state.busy) return
+        val provider = fileProvider as? com.voyagerfiles.data.repository.RootFileProvider
+        if (provider == null) {
+            _rootEditor.value = state.copy(error = getApplication<Application>().getString(R.string.root_session_closed))
+            return
+        }
+        _rootEditor.value = state.copy(busy = true, error = null)
+        viewModelScope.launch {
+            provider.saveText(document, state.text).fold(
+                onSuccess = { _rootEditor.value = null; refreshFiles() },
+                onFailure = { _rootEditor.value = state.copy(busy = false, error = it.message) },
+            )
         }
     }
 
@@ -1377,6 +1441,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
+        // viewModelScope is cancelled at this point, so close privileged pipes synchronously.
+        sessionProviders.values.filterIsInstance<com.voyagerfiles.data.repository.RootFileProvider>().forEach { it.close() }
         super.onCleared()
         viewModelScope.launch {
             sessionProviders.values.forEach { it.disconnect() }

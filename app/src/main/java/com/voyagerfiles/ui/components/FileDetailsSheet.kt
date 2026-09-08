@@ -92,4 +92,5 @@ private val FileSource.displayLabelRes: Int
         FileSource.FTP -> R.string.protocol_ftp
         FileSource.SMB -> R.string.protocol_smb
         FileSource.WEBDAV -> R.string.protocol_webdav
+        FileSource.ROOT -> R.string.root_title
     }

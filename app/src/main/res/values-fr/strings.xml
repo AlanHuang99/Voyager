@@ -468,4 +468,13 @@
     <string name="category_coverage_counts">Fichiers vérifiés : %1$d · Entrées inaccessibles : %2$d · Entrées ignorées : %3$d</string>
     <string name="category_skipped_explanation">Les compteurs décrivent uniquement les entrées visitées. Les entrées ignorées incluent les dossiers cachés exclus, les liens, les racines en double, les fichiers spéciaux et les dossiers au-delà de 128 niveaux. Le contenu des dossiers ignorés ou inaccessibles est inconnu.</string>
     <string name="category_stale_file">Ce fichier a changé ou est devenu inaccessible. Actualisez la catégorie et réessayez.</string>
+    <string name="root_title">Accès root</string>
+    <string name="root_open">Ouvrir une session root</string>
+    <string name="root_warning">Autoriser Voyager à demander les droits de superutilisateur pour cette session ? Les modifications sous / peuvent endommager Android ou d’autres applications. Les opérations root contournent la corbeille. Appuyez sur un fichier ordinaire pour modifier son texte UTF-8, limité à 256 Kio. Fermez la session pour arrêter l’accès root.</string>
+    <string name="root_editor_title">Modifier le fichier root</string>
+    <string name="root_editor_description">L’enregistrement remplace ce fichier après vérification que l’original n’a pas changé.</string>
+    <string name="root_editor_discard">Abandonner les modifications non enregistrées ?</string>
+    <string name="root_editor_save">Enregistrer le fichier</string>
+    <string name="root_session_closed">La session root est fermée. Rouvrez-la avant d’enregistrer.</string>
+    <string name="action_discard">Abandonner</string>
 </resources>

@@ -66,6 +66,18 @@ Duplicate discovery has focused JVM coverage in `DuplicateScannerTest` and `Dupl
 
 Tone instrumentation has separate granted and denied `WRITE_SETTINGS` cases. Configure the debug package appop externally before instrumentation. Tests that set tones must save both original ringtone and notification URIs, restore them in teardown, and independently read them back afterward. Never revoke the storage appop from inside instrumentation. Use disposable audio and preserve the production package and its data.
 
+Root access has JVM coverage for literal quoted and newline-bearing names, bounded output, command timeouts and session closure, error propagation, path aliases, stale saves, mode preservation, symlink and hard-link rejection, and interrupted writes. Its isolated Docker test uses a digest-pinned Alpine container with a root-only disposable directory and a read-only root filesystem. It proves UID 0 can operate where UID 65534 is denied, and that a failed read-only save preserves the original:
+
+```bash
+VOYAGER_RUN_DOCKER_TESTS=true ./gradlew testDebugUnitTest --tests '*Root*Test'
+```
+
+Run `RootFileProviderAndroidTest` and `RootAccessUiTest` for Android toybox compatibility, explicit root confirmation, visible denial, ordinary local browsing, staged editor saves, discard, and permanent-delete confirmation. The command compatibility and editor fixtures deliberately use an unprivileged shell in the debug app cache; they do not claim successful superuser access. Successful privileged Android operation must also be checked on a rooted disposable device, including SELinux labels and owner/mode preservation. On the September 8 K60, `su -c id` returned `Permission denied`; only denial and unprivileged Android command/UI behavior can be verified there.
+
+```bash
+ANDROID_SERIAL=DEVICE ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.data.repository.RootFileProviderAndroidTest,com.voyagerfiles.ui.screens.RootAccessUiTest
+```
+
 Folder-shortcut launch instrumentation has separate granted and denied storage-access cases. Set the debug package’s `MANAGE_EXTERNAL_STORAGE` appop before starting instrumentation; changing it during a test can kill the instrumentation process. Run `FolderShortcutLaunchTest` once with `allow` and once with `ignore`, then restore the prior mode externally. Each run skips the cases requiring the other access mode. The granted cases cover repeated intents, Activity recreation, and a removed destination; the denied case verifies the access prompt. Native pin confirmation and launching the resulting icon also require a launcher check.
 
 The JVM suite starts isolated local FTP, SFTP, and WebDAV servers. It covers authentication, list and metadata operations, recursive copy and delete, exact terminal progress for known and unknown sizes, time and byte publication thresholds, bounded-memory streams, WebDAV HTTP request-body upload progress, WebDAV transport URLs, and SFTP host-key pinning and rotation rejection.

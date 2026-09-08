@@ -166,6 +166,10 @@ fun BrowserScreen(
     onFindDuplicates: (String) -> Unit = {},
 ) {
     val state by viewModel.browseState.collectAsState()
+    val rootEditor by viewModel.rootEditor.collectAsState()
+    rootEditor?.let { editor ->
+        RootTextEditorDialog(editor, viewModel::updateRootText, viewModel::saveRootText, viewModel::closeRootTextEditor)
+    }
     val bookmarks by viewModel.bookmarks.collectAsState()
     val isCurrentFolderBookmarked = bookmarks.any {
         it.path == state.currentPath && it.source == state.source
@@ -1047,6 +1051,8 @@ fun BrowserScreen(
                                             handleRemoteFileTap(file)
                                         } else if (file.isDirectory) {
                                             navigateTo(file.path)
+                                        } else if (state.source == FileSource.ROOT) {
+                                            viewModel.openRootTextEditor(file)
                                         } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                             handleDeviceFileTap(file)
                                         }
@@ -1094,6 +1100,8 @@ fun BrowserScreen(
                                             handleRemoteFileTap(file)
                                         } else if (file.isDirectory) {
                                             navigateTo(file.path)
+                                        } else if (state.source == FileSource.ROOT) {
+                                            viewModel.openRootTextEditor(file)
                                         } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                             handleDeviceFileTap(file)
                                         }
@@ -1549,7 +1557,7 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (session.source == FileSource.LOCAL || session.source == FileSource.SAF) {
+            imageVector = if (!session.source.isNetwork) {
                 Icons.Filled.Folder
             } else {
                 Icons.Filled.Cloud

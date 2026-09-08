@@ -14,6 +14,12 @@ import java.util.Date
 
 class LocalFileProvider : FileProvider {
     override fun isSameStorage(other: FileProvider): Boolean = other is LocalFileProvider
+    override fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean =
+        if (other is RootFileProvider) other.isSamePath(otherPath, path)
+        else super.isSamePath(path, other, otherPath)
+    override suspend fun isDescendantPath(ancestor: String, other: FileProvider, path: String): Boolean =
+        if (other is RootFileProvider) other.isDescendantPath(ancestor, path)
+        else super.isDescendantPath(ancestor, other, path)
     override fun isSamePath(first: String, second: String): Boolean = File(first).canonicalFile == File(second).canonicalFile
 
 
