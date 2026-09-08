@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- app_name、protocol_* 等品牌/协议名保持英文，由默认资源继承 -->
     <string name="unknown_error">未知错误</string>
     <string name="operation_failed">无法%1$s：%2$s</string>
     <string name="operation_download">下载</string>
@@ -32,7 +31,6 @@
     <string name="error_connection_timeout">连接超时。请检查服务器后重试。</string>
     <string name="error_item_unavailable">该项目已不可用。请刷新文件夹后重试。</string>
     <plurals name="partial_operation_failed">
-        <item quantity="one">%1$d/%2$d 个项目无法%3$s：%4$s</item>
         <item quantity="other">%1$d/%2$d 个项目无法%3$s：%4$s</item>
     </plurals>
     <string name="progress_creating_folder">正在创建文件夹</string>
@@ -84,35 +82,27 @@
     <string name="partial_trash_success">%1$d 项成功；%2$d 项无法%3$s</string>
     <string name="trash_action_failed">无法%1$s：%2$s</string>
     <plurals name="files_uploaded">
-        <item quantity="one">已上传 %d 个文件</item>
         <item quantity="other">已上传 %d 个文件</item>
     </plurals>
     <plurals name="items_trashed">
-        <item quantity="one">已将 %d 项移到回收站</item>
         <item quantity="other">已将 %d 项移到回收站</item>
     </plurals>
     <plurals name="items_deleted">
-        <item quantity="one">已彻底删除 %d 项</item>
         <item quantity="other">已彻底删除 %d 项</item>
     </plurals>
     <plurals name="items_copied">
-        <item quantity="one">已复制 %d 项</item>
         <item quantity="other">已复制 %d 项</item>
     </plurals>
     <plurals name="items_cut">
-        <item quantity="one">已剪切 %d 项</item>
         <item quantity="other">已剪切 %d 项</item>
     </plurals>
     <plurals name="items_downloading">
-        <item quantity="one">正在下载 %d 项…</item>
         <item quantity="other">正在下载 %d 项…</item>
     </plurals>
     <plurals name="items_downloaded">
-        <item quantity="one">已将 %1$d 项下载到 %2$s</item>
         <item quantity="other">已将 %1$d 项下载到 %2$s</item>
     </plurals>
     <plurals name="items_restored">
-        <item quantity="one">已恢复 %d 项</item>
         <item quantity="other">已恢复 %d 项</item>
     </plurals>
     <string name="view_mode_list">列表</string>
@@ -164,11 +154,9 @@
     <string name="dialog_move_named_to_trash">把“%1$s”移到回收站吗？以后可以恢复它。</string>
     <string name="dialog_delete_named_permanently">彻底删除“%1$s”吗？此操作无法撤销。</string>
     <plurals name="dialog_move_items_to_trash">
-        <item quantity="one">把 %d 项移到回收站吗？以后可以恢复它。</item>
         <item quantity="other">把 %d 项移到回收站吗？以后可以恢复它们。</item>
     </plurals>
     <plurals name="dialog_delete_items_permanently">
-        <item quantity="one">彻底删除 %d 项吗？此操作无法撤销。</item>
         <item quantity="other">彻底删除 %d 项吗？此操作无法撤销。</item>
     </plurals>
     <string name="action_move">移动</string>
@@ -176,7 +164,6 @@
     <string name="action_cancel">取消</string>
     <string name="dialog_delete_named_title">删除“%1$s”吗？</string>
     <plurals name="dialog_delete_items_title">
-        <item quantity="one">删除 %d 项吗？</item>
         <item quantity="other">删除 %d 项吗？</item>
     </plurals>
     <string name="dialog_delete_choice_message">将所选项目移到回收站以便以后恢复，或将其彻底删除。彻底删除无法撤销。</string>
@@ -192,7 +179,6 @@
     <string name="smb_share_supporting">留空以浏览可用的共享</string>
     <string name="settings_theme_group_base">基础</string>
     <string name="settings_theme_group_color">彩色</string>
-    <!-- settings_theme_group_catppuccin 保持英文 -->
     <string name="settings_theme_group_classics">经典</string>
     <string name="settings_theme_group_night">夜间</string>
     <string name="action_create">创建</string>
@@ -274,7 +260,6 @@
     <string name="details_permissions">权限</string>
     <string name="details_source_local">本地存储</string>
     <string name="details_source_saf">文档树</string>
-    <!-- home_title 保持英文 -->
     <string name="home_storage_section">存储</string>
     <string name="home_limited_storage_title">存储访问受限</string>
     <string name="home_limited_storage_message">文档树和远程服务器仍然可用。授予完整访问权限可直接浏览设备存储。</string>
@@ -287,7 +272,6 @@
     <string name="home_music">音乐</string>
     <string name="home_videos">视频</string>
     <string name="home_remote_connections_title">远程连接</string>
-    <!-- home_remote_protocols 保持英文 -->
     <string name="home_bookmarks_title">书签</string>
     <string name="home_folders_title">文件夹</string>
     <string name="home_document_tree">文档树</string>
@@ -374,7 +358,6 @@
     <string name="browser_no_active_sessions">没有活动会话</string>
     <string name="browser_session_active">活动</string>
     <plurals name="browser_clipboard_summary">
-        <item quantity="one">%1$d 项（%2$s）</item>
         <item quantity="other">%1$d 项（%2$s）</item>
     </plurals>
     <string name="content_desc_sessions">会话</string>
@@ -393,11 +376,9 @@
     <string name="localized_integer">%1$,d</string>
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
-        <item quantity="one">已选 %d 项</item>
         <item quantity="other">已选 %d 项</item>
     </plurals>
     <plurals name="items_count">
-        <item quantity="one">%d 项</item>
         <item quantity="other">%d 项</item>
     </plurals>
     <string name="storage_internal">Internal storage</string>

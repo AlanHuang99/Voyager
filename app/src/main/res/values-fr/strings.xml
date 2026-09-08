@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Voyager</string>
-    <string name="protocol_sftp" translatable="false">SFTP</string>
-    <string name="protocol_ftp" translatable="false">FTP</string>
-    <string name="protocol_smb" translatable="false">SMB</string>
-    <string name="protocol_webdav" translatable="false">WebDAV</string>
     <string name="unknown_error">Erreur inconnue</string>
     <string name="operation_failed">Impossible de %1$s : %2$s</string>
     <string name="operation_download">télécharger</string>
@@ -196,7 +191,6 @@
     <string name="smb_share_supporting">Laisser vide pour parcourir les partages disponibles</string>
     <string name="settings_theme_group_base">Base</string>
     <string name="settings_theme_group_color">Couleur</string>
-    <string name="settings_theme_group_catppuccin" translatable="false">Catppuccin</string>
     <string name="settings_theme_group_classics">Classiques</string>
     <string name="settings_theme_group_night">Nuit</string>
     <string name="action_create">Créer</string>
@@ -278,7 +272,6 @@
     <string name="details_permissions">Permissions</string>
     <string name="details_source_local">Stockage local</string>
     <string name="details_source_saf">Arborescence de documents</string>
-    <string name="home_title" translatable="false">Voyager</string>
     <string name="home_storage_section">Stockage</string>
     <string name="home_limited_storage_title">Accès limité au stockage</string>
     <string name="home_limited_storage_message">L\'arborescence de documents et les serveurs distants restent disponibles. Accordez un accès complet pour parcourir directement le stockage de l\'appareil.</string>
@@ -291,7 +284,6 @@
     <string name="home_music">Musique</string>
     <string name="home_videos">Vidéos</string>
     <string name="home_remote_connections_title">Connexions distantes</string>
-    <string name="home_remote_protocols" translatable="false">SFTP, FTP, SMB, WebDAV</string>
     <string name="home_bookmarks_title">Favoris</string>
     <string name="home_folders_title">Dossiers</string>
     <string name="home_document_tree">Arborescence de documents</string>
