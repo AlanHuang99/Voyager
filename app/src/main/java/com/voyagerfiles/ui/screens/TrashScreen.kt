@@ -17,12 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -42,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,17 +49,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.imageLoader
+import coil.memory.MemoryCache
 import com.voyagerfiles.R
 import com.voyagerfiles.data.model.TrashEntry
+import com.voyagerfiles.ui.components.ApkThumbnailLoader
 import com.voyagerfiles.ui.components.DeleteConfirmDialog
 import com.voyagerfiles.ui.components.DeleteDialogModel
+import com.voyagerfiles.ui.components.FileThumbnailOrIcon
+import com.voyagerfiles.ui.components.MediaThumbnailLoader
+import com.voyagerfiles.ui.components.PdfThumbnailLoader
+import com.voyagerfiles.ui.components.fileThumbnailCacheKey
 import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
@@ -298,6 +305,16 @@ internal fun TrashEntryRow(
     enabled: Boolean,
     onToggle: () -> Unit,
 ) {
+    val preview = remember(entry) { entry.previewFile() }
+    val imageLoader = LocalContext.current.imageLoader
+    DisposableEffect(preview) {
+        onDispose {
+            MediaThumbnailLoader.invalidate(preview.path)
+            PdfThumbnailLoader.invalidate(preview.path)
+            ApkThumbnailLoader.invalidate(preview.path)
+            imageLoader.memoryCache?.remove(MemoryCache.Key(fileThumbnailCacheKey(preview)))
+        }
+    }
     val selectionContentDescription = stringResource(
         if (selected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
         entry.displayName,
@@ -325,12 +342,7 @@ internal fun TrashEntryRow(
                 },
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                if (entry.isDirectory) Icons.Filled.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp),
-            )
+            FileThumbnailOrIcon(file = preview, iconSize = 32.dp)
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

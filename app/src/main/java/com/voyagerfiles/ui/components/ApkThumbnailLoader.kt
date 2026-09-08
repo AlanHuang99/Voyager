@@ -62,6 +62,10 @@ internal object ApkThumbnailLoader {
         bitmap
     }
 
+    fun invalidate(path: String) {
+        synchronized(cache) { cache.keys.removeAll { it.canonicalPath == path } }
+    }
+
     fun clear() {
         synchronized(cache) { cache.clear() }
     }

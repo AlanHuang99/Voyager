@@ -49,6 +49,17 @@ class FileItemTest {
     }
 
     @Test
+    fun officePreviewEligibilityExcludesLegacyFormatsAndDirectories() {
+        val document = FileItem(name = "report.DOCX", path = "/payload", isDirectory = false)
+        assertTrue(document.isOfficeDocument)
+        assertTrue(document.copy(name = "slides.pptx").isOfficeDocument)
+        assertTrue(document.copy(name = "sheet.xlsx").isOfficeDocument)
+        assertFalse(document.copy(name = "report.doc").isOfficeDocument)
+        assertFalse(document.copy(name = "data.zip").isOfficeDocument)
+        assertFalse(document.copy(isDirectory = true).isOfficeDocument)
+    }
+
+    @Test
     fun compressedTarAliasesAreRecognizedAsArchives() {
         val tgz = FileItem(name = "backup.tgz", path = "/backup.tgz", isDirectory = false)
         val tbz2 = FileItem(name = "backup.tbz2", path = "/backup.tbz2", isDirectory = false)
