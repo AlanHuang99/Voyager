@@ -108,8 +108,7 @@ class SafFileProvider(
     override suspend fun getOutputStream(path: String): Result<OutputStream> =
         withContext(Dispatchers.IO) {
             runCatching {
-                contentResolver.openOutputStream(documentUri(path), "wt")
-                    ?: throw IllegalArgumentException("Unable to open output stream")
+                openOutput(path)
             }
         }
 
@@ -157,8 +156,7 @@ class SafFileProvider(
             } else {
                 contentResolver.openInputStream(documentUri(sourcePath)).use { input ->
                     requireNotNull(input) { "Unable to open input stream" }
-                    contentResolver.openOutputStream(documentUri(destination.path), "wt").use { output ->
-                        requireNotNull(output) { "Unable to open output stream" }
+                    openOutput(destination.path).use { output ->
                         StreamTransfer.copy(input, output, sourcePath, source.size)
                     }
                 }
@@ -217,6 +215,17 @@ class SafFileProvider(
             isHidden = name.startsWith("."),
             source = FileSource.SAF,
         )
+    }
+
+    private fun openOutput(path: String): OutputStream {
+        val descriptor = contentResolver.openFileDescriptor(documentUri(path), "wt")
+            ?: throw IllegalArgumentException("Unable to open output stream")
+        return try {
+            SafOutputStream(descriptor)
+        } catch (error: Throwable) {
+            runCatching { descriptor.close() }.onFailure(error::addSuppressed)
+            throw error
+        }
     }
 
     private fun documentUri(path: String): Uri =

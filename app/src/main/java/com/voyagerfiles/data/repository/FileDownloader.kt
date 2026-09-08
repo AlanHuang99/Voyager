@@ -15,6 +15,7 @@ object FileDownloader {
     ): Result<DownloadResult> =
         withContext(Dispatchers.IO) {
             runCatching {
+                TransferCancellation.check()
                 if (!destinationDirectory.exists() && !destinationDirectory.mkdirs()) {
                     throw IllegalStateException("Could not create Downloads folder")
                 }
@@ -24,6 +25,7 @@ object FileDownloader {
 
                 val counts = DownloadCounts()
                 items.forEachIndexed { index, item ->
+                    TransferCancellation.check()
                     var latestStreamProgress: StreamTransferProgress? = null
                     onProgress(
                         DownloadProgress(
@@ -72,6 +74,7 @@ object FileDownloader {
         counts: DownloadCounts,
         onStreamProgress: (StreamTransferProgress) -> Unit,
     ) {
+        TransferCancellation.check()
         if (item.isDirectory) {
             val targetDirectory = uniqueChild(destinationDirectory, item.safeName(), isDirectory = true)
             if (!targetDirectory.mkdirs()) {
@@ -83,6 +86,7 @@ object FileDownloader {
                 children.forEach { child ->
                     downloadItem(provider, child, targetDirectory, counts, onStreamProgress)
                 }
+                TransferCancellation.check()
             } catch (error: Throwable) {
                 runCatching {
                     check(targetDirectory.deleteRecursively() || !targetDirectory.exists()) {
@@ -107,6 +111,7 @@ object FileDownloader {
                     )
                 }
             }
+            TransferCancellation.check()
         } catch (error: Throwable) {
             runCatching {
                 check(targetFile.delete() || !targetFile.exists()) {

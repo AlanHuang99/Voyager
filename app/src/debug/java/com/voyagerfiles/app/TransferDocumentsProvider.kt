@@ -13,10 +13,25 @@ import java.io.File
 class TransferDocumentsProvider : DocumentsProvider() {
     private val root get() = File(requireNotNull(context).cacheDir, "transfer-documents")
 
+    @Volatile private var stallOutput = false
+    @Volatile private var socketOutput = false
+    @Volatile private var stalledInput: java.io.InputStream? = null
+    private var releaseOutput = java.util.concurrent.CountDownLatch(1)
+
     override fun onCreate() = true
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == "release") {
+            releaseOutput.countDown()
+            stalledInput?.close()
+            return Bundle.EMPTY
+        }
         if (method == "reset") {
+            releaseOutput.countDown()
+            stalledInput?.close()
+            releaseOutput = java.util.concurrent.CountDownLatch(1)
+            stallOutput = arg?.startsWith("stalled-") == true
+            socketOutput = arg == "stalled-socket"
             root.deleteRecursively()
             root.mkdirs()
             File(root, "destination").mkdir()
@@ -54,7 +69,25 @@ class TransferDocumentsProvider : DocumentsProvider() {
     override fun deleteDocument(documentId: String) { check(file(documentId).deleteRecursively()) }
 
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
-        if (documentId == "source.bin" && mode == "r") {
+        if (stallOutput && documentId.startsWith("destination/") && mode.contains('w')) {
+            val pipe = if (socketOutput) ParcelFileDescriptor.createSocketPair() else ParcelFileDescriptor.createPipe()
+            val release = releaseOutput
+            val input = ParcelFileDescriptor.AutoCloseInputStream(pipe[0])
+            stalledInput = input
+            Thread {
+                runCatching {
+                    input.use {
+                        val buffer = ByteArray(4096)
+                        val size = it.read(buffer)
+                        if (size > 0) file(documentId).writeBytes(buffer.copyOf(size))
+                        // Retain the read end without draining any more bytes until test cleanup.
+                        release.await()
+                    }
+                }
+            }.start()
+            return pipe[1]
+        }
+        if (!stallOutput && documentId == "source.bin" && mode == "r") {
             val pipe = ParcelFileDescriptor.createPipe()
             Thread {
                 runCatching {
