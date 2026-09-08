@@ -93,6 +93,10 @@ class SmbFileProvider internal constructor(
     private val shareDiscovery: SmbShareDiscovery = DceRpcSmbShareDiscovery,
     private val sessionFactory: SmbSessionHandleFactory = DefaultSmbSessionHandleFactory,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is SmbFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
+
     private val configuredShare = connection.shareName?.trim().orEmpty()
     private val isDiscoveryMode = configuredShare.isEmpty()
     private var sessionHandle: SmbSessionHandle? = null

@@ -19,6 +19,7 @@ class TransferOperationController(
     val state = mutableState.asStateFlow()
     private val mutableResult = MutableStateFlow<OperationResult?>(null)
     val lastResult = mutableResult.asStateFlow()
+    val conflicts = TransferConflictDecisions()
     private var reportedFailure: Throwable? = null
     private var nextId = 0L
     private var cancellation: TransferCancellation? = null
@@ -32,6 +33,7 @@ class TransferOperationController(
     ): Boolean {
         if (mutableState.value is OperationState.Running) return false
         mutableResult.value = null
+        conflicts.reset()
         reportedFailure = null
         val token = TransferCancellation()
         cancellation = token
@@ -54,11 +56,12 @@ class TransferOperationController(
                 onFailure(if (token.isRequested) CancellationException("Transfer cancelled") else error)
             } finally {
                 finish(when {
-                    token.isRequested -> OperationOutcome.CANCELLED
+                    token.isRequested || reportedFailure is CancellationException -> OperationOutcome.CANCELLED
                     reportedFailure != null -> OperationOutcome.FAILED
                     else -> OperationOutcome.COMPLETED
                 })
                 cancellation = null
+                conflicts.reset()
                 mutableState.value = OperationState.Idle
                 onFinished()
             }

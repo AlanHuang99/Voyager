@@ -36,6 +36,9 @@ internal fun OperationResultContent(result: OperationResult, onDismiss: () -> Un
         Column(Modifier.weight(1f)) {
             Text(result.progress.label.asString(), style = MaterialTheme.typography.labelMedium)
             Text(status, style = MaterialTheme.typography.bodyMedium)
+            if (result.progress.skippedItems > 0) {
+                Text(stringResource(R.string.transfer_items_skipped, result.progress.skippedItems), style = MaterialTheme.typography.bodySmall)
+            }
             result.progress.totalItems?.let {
                 Text(
                     stringResource(R.string.transfer_items_completed, result.progress.completedItems, it),

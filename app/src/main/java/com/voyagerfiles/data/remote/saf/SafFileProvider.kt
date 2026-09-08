@@ -21,6 +21,26 @@ class SafFileProvider(
     private val treeUri: Uri,
 ) : FileProvider {
 
+    override fun isSameStorage(other: FileProvider): Boolean = other is SafFileProvider && treeUri.authority == other.treeUri.authority
+    override fun isSamePath(first: String, second: String): Boolean = runCatching {
+        val a = Uri.parse(first)
+        val b = Uri.parse(second)
+        a.authority == b.authority && DocumentsContract.getDocumentId(a) == DocumentsContract.getDocumentId(b)
+    }.getOrDefault(first == second)
+
+    override suspend fun isDescendantPath(ancestor: String, path: String): Boolean {
+        val pending = java.util.ArrayDeque<String>().apply { add(ancestor) }
+        val visited = mutableSetOf<String>()
+        while (pending.isNotEmpty()) {
+            TransferCancellation.check()
+            val current = pending.removeFirst()
+            if (isSamePath(current, path)) return true
+            if (!visited.add(current)) continue
+            listFiles(current).getOrThrow().filter { it.isDirectory }.forEach { pending.add(it.path) }
+        }
+        return false
+    }
+
     private val contentResolver = context.contentResolver
     private val parentPaths = mutableMapOf<String, String>()
     val rootPath: String = rootDocumentUri(treeUri).toString()

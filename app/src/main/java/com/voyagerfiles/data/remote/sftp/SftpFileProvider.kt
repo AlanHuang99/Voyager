@@ -29,6 +29,9 @@ class SftpFileProvider(
     private val connection: RemoteConnection,
     private val knownHostsFile: File,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is SftpFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
 
     private val connectionLock = Mutex()
     private var session: Session? = null

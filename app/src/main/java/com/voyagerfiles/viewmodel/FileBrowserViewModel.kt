@@ -136,6 +136,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val operationController = (application as VoyagerApp).transfers
     val operationState: StateFlow<OperationState> = operationController.state
     val lastOperationResult = operationController.lastResult
+    val transferConflict = operationController.conflicts.pending
+    fun resolveTransferConflict(request: TransferConflictDecisions.Request, response: ConflictResponse) =
+        operationController.conflicts.respond(request, response)
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -452,11 +455,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
             var failed = 0
             var firstError: Throwable? = null
             var completed = 0
+            var skipped = 0
             for (source in validatedSources) {
                 updateOperationProgress(
                     TransferProgress(
                         label = progressLabel,
                         completedItems = completed,
+                        skippedItems = skipped,
                         totalItems = validatedSources.size,
                         currentItemName = source.name,
                         totalBytes = source.size,
@@ -471,6 +476,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
+                                skippedItems = skipped,
                                 totalItems = validatedSources.size,
                                 currentItemName = source.name,
                                 copiedBytes = streamProgress.bytesTransferred,
@@ -484,14 +490,16 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     source = source,
                     destinationProvider = destinationProvider,
                     destinationDirectoryPath = destinationPath,
+                    resolveConflict = operationController.conflicts::resolve,
                     onProgress = publishStreamProgress,
-                ).onSuccess {
-                    completed++
+                ).onSuccess { disposition ->
+                    if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
                     val streamProgress = latestStreamProgress
                     updateOperationProgress(
                         TransferProgress(
                             label = progressLabel,
                             completedItems = completed,
+                            skippedItems = skipped,
                             totalItems = validatedSources.size,
                             currentItemName = source.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
@@ -500,6 +508,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                         ),
                     )
                 }.onFailure { error ->
+                    if (error is CancellationException) throw error
                     failed++
                     operationController.recordFailure(error)
                     if (firstError == null) firstError = error
@@ -759,6 +768,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
             var failed = 0
             var firstError: Throwable? = null
             var completed = 0
+            var skipped = 0
             val itemResults = buildMap {
                 for (sourcePath in paths) {
                     val visibleItem = _browseState.value.files.firstOrNull { it.path == sourcePath }
@@ -776,6 +786,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     TransferProgress(
                         label = progressLabel,
                         completedItems = completed,
+                        skippedItems = skipped,
                         totalItems = paths.size,
                         currentItemName = item?.name ?: sourcePath.substringAfterLast('/'),
                     )
@@ -799,6 +810,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                             TransferProgress(
                                 label = progressLabel,
                                 completedItems = completed,
+                                skippedItems = skipped,
                                 totalItems = paths.size,
                                 currentItemName = streamProgress.path.substringAfterLast('/'),
                                 copiedBytes = streamProgress.bytesTransferred,
@@ -809,41 +821,24 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     }
                 }
                 val result = when (operation) {
-                    ClipboardOperation.COPY -> {
-                        if (sourceProvider === destinationProvider) {
-                            destinationProvider.copy(sourcePath, destPath)
-                        } else {
-                            FileOperationCoordinator.copyPath(
-                                sourceProvider,
-                                destinationProvider,
-                                sourcePath,
-                                destPath,
-                                publishStreamProgress,
-                            )
-                        }
-                    }
-                    ClipboardOperation.CUT -> {
-                        if (sourceProvider === destinationProvider) {
-                            destinationProvider.move(sourcePath, destPath)
-                        } else {
-                            FileOperationCoordinator.movePath(
-                                sourceProvider,
-                                destinationProvider,
-                                sourcePath,
-                                destPath,
-                                publishStreamProgress,
-                            )
-                        }
-                    }
-                    ClipboardOperation.NONE -> Result.success(Unit)
+                    ClipboardOperation.COPY -> FileOperationCoordinator.copyPath(
+                        sourceProvider, destinationProvider, sourcePath, destPath,
+                        operationController.conflicts::resolve, publishStreamProgress,
+                    )
+                    ClipboardOperation.CUT -> FileOperationCoordinator.movePath(
+                        sourceProvider, destinationProvider, sourcePath, destPath,
+                        operationController.conflicts::resolve, publishStreamProgress,
+                    )
+                    ClipboardOperation.NONE -> Result.success(TransferDisposition.SKIPPED)
                 }
-                result.onSuccess {
-                    completed++
+                result.onSuccess { disposition ->
+                    if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
                     val streamProgress = latestStreamProgress
                     updateOperationProgress(
                         TransferProgress(
                             label = progressLabel,
                             completedItems = completed,
+                            skippedItems = skipped,
                             totalItems = paths.size,
                             currentItemName = item.name,
                             copiedBytes = streamProgress?.bytesTransferred ?: 0,
@@ -853,12 +848,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 }
                 result.onFailure { error ->
+                    if (error is CancellationException) throw error
                     failed++
                     operationController.recordFailure(error)
                     if (firstError == null) firstError = error
                 }
             }
-            if (operation == ClipboardOperation.CUT && failed == 0) {
+            if (operation == ClipboardOperation.CUT && failed == 0 && skipped == 0) {
                 clearClipboard()
             }
             refreshFiles()

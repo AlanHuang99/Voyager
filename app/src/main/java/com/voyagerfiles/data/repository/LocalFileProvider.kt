@@ -13,6 +13,9 @@ import java.io.OutputStream
 import java.util.Date
 
 class LocalFileProvider : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is LocalFileProvider
+    override fun isSamePath(first: String, second: String): Boolean = File(first).canonicalFile == File(second).canonicalFile
+
 
     override suspend fun listFiles(path: String): Result<List<FileItem>> =
         withContext(Dispatchers.IO) {

@@ -119,9 +119,9 @@ class TransferServiceTest {
                 app.transfers.update(TransferProgress(label, copiedBytes = it.bytesTransferred, totalBytes = it.totalBytes))
             }
             if (move) {
-                FileOperationCoordinator.movePath(SlowProvider(), LocalFileProvider(), source.path, destination.path, progress).getOrThrow()
+                FileOperationCoordinator.movePath(SlowProvider(), LocalFileProvider(), source.path, destination.path, onProgress = progress).getOrThrow()
             } else {
-                FileOperationCoordinator.copyPath(SlowProvider(), LocalFileProvider(), source.path, destination.path, progress).getOrThrow()
+                FileOperationCoordinator.copyPath(SlowProvider(), LocalFileProvider(), source.path, destination.path, onProgress = progress).getOrThrow()
             }
         }
     }

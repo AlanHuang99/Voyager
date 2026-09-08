@@ -18,6 +18,40 @@ import org.junit.Test
 
 class SafTransferCancellationTest {
     @Test
+    fun coordinatorReplacesSafFileUsingChangedRenameIdentifiers() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<VoyagerApp>()
+        val endpoint = Uri.parse("content://${TransferDocumentsProvider.AUTHORITY}")
+        context.contentResolver.call(endpoint, "reset", null, null)
+        val tree = DocumentsContract.buildTreeDocumentUri(TransferDocumentsProvider.AUTHORITY, "root")
+        val source = DocumentsContract.buildDocumentUriUsingTree(tree, "source.bin").toString()
+        val destination = DocumentsContract.buildDocumentUriUsingTree(tree, "destination").toString()
+        val provider = SafFileProvider(context, tree)
+        val oldTarget = provider.createFile(destination, "source.bin").getOrThrow()
+        provider.getOutputStream(oldTarget.path).getOrThrow().use { it.write("old".toByteArray()) }
+        FileOperationCoordinator.movePath(provider, provider, source, destination, { com.voyagerfiles.viewmodel.ConflictDecision.REPLACE }).getOrThrow()
+        val target = provider.listFiles(destination).getOrThrow().single()
+        assertEquals("source.bin", target.name)
+        assertArrayEquals(TransferDocumentsProvider.payload(), provider.getInputStream(target.path).getOrThrow().use { it.readBytes() })
+        assertFalse(provider.exists(source))
+    }
+
+    @Test
+    fun independentSafTreeProvidersRejectDescendantAndSelfReplacement() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<VoyagerApp>()
+        val endpoint = Uri.parse("content://${TransferDocumentsProvider.AUTHORITY}")
+        context.contentResolver.call(endpoint, "reset", null, null)
+        val tree = DocumentsContract.buildTreeDocumentUri(TransferDocumentsProvider.AUTHORITY, "root")
+        val first = SafFileProvider(context, tree)
+        val second = SafFileProvider(context, tree)
+        val folder = first.createDirectory(first.rootPath, "folder").getOrThrow()
+        val nested = first.createDirectory(folder.path, "nested").getOrThrow()
+        assertTrue(FileOperationCoordinator.copyPath(first, second, folder.path, nested.path).isFailure)
+        val source = DocumentsContract.buildDocumentUriUsingTree(tree, "source.bin").toString()
+        assertTrue(FileOperationCoordinator.movePath(first, second, source, second.rootPath, { com.voyagerfiles.viewmodel.ConflictDecision.REPLACE }).isFailure)
+        assertTrue(first.exists(source))
+    }
+
+    @Test
     fun sameProviderMoveCancelsWhenDestinationStopsDraining() = stalledDestinationMove(sameProvider = true)
 
     @Test

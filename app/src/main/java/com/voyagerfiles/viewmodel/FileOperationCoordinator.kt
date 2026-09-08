@@ -1,54 +1,41 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.StreamTransferProgress
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class DestinationConflictException(identifierOrName: String) :
-    IllegalStateException(
-        "An item named ${identifierOrName.substringAfterLast('/')} already exists in this folder",
-    )
+    IllegalStateException("An item named ${identifierOrName.substringAfterLast('/')} already exists in this folder")
 
 object FileOperationCoordinator {
+    private val rejectConflict: ConflictResolver = { throw DestinationConflictException(it.destination.name) }
+
     suspend fun uploadFile(
         source: UploadSource,
         destinationProvider: FileProvider,
         destinationDirectoryPath: String,
+        resolveConflict: ConflictResolver = rejectConflict,
         onProgress: (StreamTransferProgress) -> Unit = {},
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<TransferDisposition> = withContext(Dispatchers.IO) {
         runCatching {
-            TransferCancellation.check()
-            requireNameAvailable(destinationProvider, destinationDirectoryPath, source.name)
-
-            var createdTargetPath: String? = null
-            try {
-                createdTargetPath = destinationProvider
-                    .createFile(destinationDirectoryPath, source.name)
-                    .getOrThrow()
-                    .path
+            transfer(
+                destinationProvider, destinationDirectoryPath,
+                ConflictSource(source.name, source.size, source.lastModified), false, resolveConflict,
+                validateTarget = { target ->
+                    require(source.identifier == null || !destinationProvider.isSamePath(source.identifier, target.path)) {
+                        "A file cannot replace itself"
+                    }
+                },
+            ) { target ->
                 source.openInputStream().use { input ->
-                    destinationProvider.writeStream(
-                        path = createdTargetPath,
-                        input = input,
-                        sourcePath = source.name,
-                        totalBytes = source.size,
-                        onProgress = onProgress,
-                    ).getOrThrow()
+                    destinationProvider.writeStream(target, input, source.name, source.size, onProgress).getOrThrow()
                 }
-                TransferCancellation.check()
-            } catch (error: Throwable) {
-                if (createdTargetPath != null) {
-                    runCatching {
-                        if (destinationProvider.exists(createdTargetPath)) {
-                            destinationProvider.delete(createdTargetPath).getOrThrow()
-                        }
-                    }.onFailure(error::addSuppressed)
-                }
-                throw error
             }
-            Unit
         }
     }
 
@@ -57,12 +44,10 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        resolveConflict: ConflictResolver = rejectConflict,
         onProgress: (StreamTransferProgress) -> Unit = {},
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, onProgress)
-            Unit
-        }
+    ): Result<TransferDisposition> = withContext(Dispatchers.IO) {
+        runCatching { copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, resolveConflict, onProgress) }
     }
 
     suspend fun movePath(
@@ -70,17 +55,17 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        resolveConflict: ConflictResolver = rejectConflict,
         onProgress: (StreamTransferProgress) -> Unit = {},
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<TransferDisposition> = withContext(Dispatchers.IO) {
         runCatching {
-            val target = copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, onProgress)
-            try {
+            val disposition = copyPathInternal(sourceProvider, destinationProvider, sourcePath, destinationDirectoryPath, resolveConflict, onProgress)
+            if (disposition == TransferDisposition.COMPLETED) {
+                // The destination is committed. Cancellation keeps both copies; never remove a committed replacement.
                 TransferCancellation.check()
-            } catch (error: Throwable) {
-                runCatching { destinationProvider.delete(target).getOrThrow() }.onFailure(error::addSuppressed)
-                throw error
+                sourceProvider.delete(sourcePath).getOrThrow()
             }
-            sourceProvider.delete(sourcePath).getOrThrow()
+            disposition
         }
     }
 
@@ -89,66 +74,120 @@ object FileOperationCoordinator {
         destinationProvider: FileProvider,
         sourcePath: String,
         destinationDirectoryPath: String,
+        resolveConflict: ConflictResolver,
         onProgress: (StreamTransferProgress) -> Unit,
-    ): String {
+    ): TransferDisposition {
         TransferCancellation.check()
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
-        requireNameAvailable(destinationProvider, destinationDirectoryPath, item.name)
-
-        var createdTargetPath: String? = null
-        try {
-            if (item.isDirectory) {
-                createdTargetPath = destinationProvider
-                    .createDirectory(destinationDirectoryPath, item.name)
-                    .getOrThrow()
-                    .path
-                sourceProvider.listFiles(sourcePath).getOrThrow().forEach { child ->
-                    copyPathInternal(
-                        sourceProvider,
-                        destinationProvider,
-                        child.path,
-                        createdTargetPath,
-                        onProgress,
-                    )
+        val sameStorage = sourceProvider.isSameStorage(destinationProvider)
+        if (sameStorage && item.isDirectory) {
+            require(!sourceProvider.isDescendantPath(sourcePath, destinationDirectoryPath)) {
+                "A folder cannot be copied or moved into itself"
+            }
+        }
+        return transfer(
+            destinationProvider, destinationDirectoryPath,
+            ConflictSource(item.name, item.size.takeIf { it >= 0 }, item.lastModified), item.isDirectory, resolveConflict,
+            validateTarget = { target ->
+                require(!sameStorage || !sourceProvider.isSamePath(sourcePath, target.path)) { "An item cannot replace itself" }
+                require(!sameStorage || !target.isDirectory || !destinationProvider.isDescendantPath(target.path, sourcePath)) {
+                    "A folder containing the source cannot be replaced"
                 }
-                TransferCancellation.check()
-                return createdTargetPath
-            }
+            },
+        ) { target ->
+            copyContents(sourceProvider, destinationProvider, item, target, onProgress)
+        }
+    }
 
-            createdTargetPath = destinationProvider
-                .createFile(destinationDirectoryPath, item.name)
-                .getOrThrow()
-                .path
-            sourceProvider.getInputStream(sourcePath).getOrThrow().use { input ->
-                destinationProvider.writeStream(
-                    path = createdTargetPath,
-                    input = input,
-                    sourcePath = sourcePath,
-                    totalBytes = item.size.takeIf { it >= 0 },
-                    onProgress = onProgress,
-                ).getOrThrow()
+    private suspend fun copyContents(
+        sourceProvider: FileProvider,
+        destinationProvider: FileProvider,
+        item: FileItem,
+        target: String,
+        onProgress: (StreamTransferProgress) -> Unit,
+    ) {
+        if (item.isDirectory) {
+            sourceProvider.listFiles(item.path).getOrThrow().forEach { child ->
+                copyPathInternal(sourceProvider, destinationProvider, child.path, target, rejectConflict, onProgress)
             }
+        } else if (sourceProvider === destinationProvider) {
+            sourceProvider.copyFileTo(item.path, target, item.size.takeIf { it >= 0 }, onProgress).getOrThrow()
+        } else {
+            sourceProvider.getInputStream(item.path).getOrThrow().use { input ->
+                destinationProvider.writeStream(target, input, item.path, item.size.takeIf { it >= 0 }, onProgress).getOrThrow()
+            }
+        }
+    }
+
+    private suspend fun transfer(
+        provider: FileProvider,
+        directory: String,
+        source: ConflictSource,
+        isDirectory: Boolean,
+        resolveConflict: ConflictResolver,
+        validateTarget: suspend (FileItem) -> Unit,
+        copy: suspend (String) -> Unit,
+    ): TransferDisposition {
+        TransferCancellation.check()
+        val existing = provider.listFiles(directory).getOrThrow().firstOrNull { it.name == source.name }
+        if (existing != null) {
+            validateTarget(existing)
+            require(existing.isDirectory == isDirectory) { "A file and a folder cannot replace each other" }
+            when (resolveConflict(TransferConflict(source, existing))) {
+                ConflictDecision.SKIP -> return TransferDisposition.SKIPPED
+                ConflictDecision.CANCEL -> throw CancellationException("Transfer cancelled")
+                ConflictDecision.REPLACE -> Unit
+            }
+        }
+        TransferCancellation.check()
+        val name = if (existing == null) source.name else uniqueName(provider, directory, "stage", source.name)
+        var staged: String? = null
+        try {
+            val created = (if (isDirectory) provider.createDirectory(directory, name) else provider.createFile(directory, name)).getOrThrow()
+            staged = created.path
+            check(created.name == name) { "The provider created a different destination name" }
+            copy(staged)
             TransferCancellation.check()
-            return createdTargetPath
-        } catch (error: Throwable) {
-            if (createdTargetPath != null) {
-                runCatching {
-                    if (destinationProvider.exists(createdTargetPath)) {
-                        destinationProvider.delete(createdTargetPath).getOrThrow()
+            if (existing != null) {
+                // Revalidate after the potentially long copy, before moving the user's destination.
+                val current = provider.listFiles(directory).getOrThrow().firstOrNull { it.name == source.name }
+                check(current != null && current.path == existing.path && current.size == existing.size &&
+                    current.lastModified == existing.lastModified && current.isDirectory == existing.isDirectory) {
+                    "The destination changed while copying; try again"
+                }
+                val backup = provider.rename(existing.path, uniqueName(provider, directory, "backup", source.name)).getOrThrow()
+                try {
+                    provider.rename(staged, source.name).getOrThrow()
+                } catch (error: Throwable) {
+                    val rollback = provider.rename(backup.path, source.name)
+                    if (rollback.isFailure) {
+                        throw IllegalStateException("Could not replace ${source.name}. The original remains at ${backup.path}", error).apply {
+                            addSuppressed(rollback.exceptionOrNull()!!)
+                        }
                     }
-                }.onFailure(error::addSuppressed)
+                    throw error
+                }
+                staged = null
+                // Once promoted, cleanup failure leaves the committed target and backup intact.
+                provider.delete(backup.path).getOrElse { error ->
+                    throw IllegalStateException("Replacement saved, but the original backup could not be removed: ${backup.path}", error)
+                }
+            } else {
+                staged = null
+            }
+            return TransferDisposition.COMPLETED
+        } catch (error: Throwable) {
+            staged?.let { path ->
+                runCatching { provider.delete(path).getOrThrow() }.onFailure(error::addSuppressed)
             }
             throw error
         }
     }
 
-    private suspend fun requireNameAvailable(
-        provider: FileProvider,
-        directoryPath: String,
-        name: String,
-    ) {
-        if (provider.listFiles(directoryPath).getOrThrow().any { it.name == name }) {
-            throw DestinationConflictException(name)
-        }
+    private suspend fun uniqueName(provider: FileProvider, directory: String, purpose: String, originalName: String): String {
+        val names = provider.listFiles(directory).getOrThrow().mapTo(mutableSetOf()) { it.name }
+        // SAF chooses the MIME type when creating the stage, so preserve a conventional extension.
+        val extension = originalName.substringAfterLast('.', "").takeIf { it.length in 1..32 }?.let { ".$it" }.orEmpty()
+        return generateSequence { ".voyager-$purpose-${UUID.randomUUID()}$extension" }.first { it !in names }
     }
 }

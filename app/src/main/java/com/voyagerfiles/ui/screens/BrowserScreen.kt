@@ -173,6 +173,7 @@ fun BrowserScreen(
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
+    val transferConflict by viewModel.transferConflict.collectAsState()
     val operationResult by viewModel.lastOperationResult.collectAsState()
     val context = LocalContext.current
     val shareFailedMessage = stringResource(R.string.browser_share_failed)
@@ -1088,6 +1089,12 @@ fun BrowserScreen(
         )
     }
 
+    transferConflict?.let { request ->
+        com.voyagerfiles.ui.components.TransferConflictDialog(request) { response ->
+            viewModel.resolveTransferConflict(request, response)
+        }
+    }
+
     // Dialogs
     if (showCreateFolderDialog) {
         CreateItemDialog(
@@ -1220,7 +1227,8 @@ internal fun OperationProgressContent(
     val progress = operation.progress
     val progressLabel = progress.label.asString()
     val completedItemsText = progress.totalItems?.takeIf { it > 0 }?.let {
-        stringResource(R.string.transfer_items_completed, progress.completedItems, it)
+        stringResource(R.string.transfer_items_completed, progress.completedItems, it) +
+                if (progress.skippedItems > 0) " • " + stringResource(R.string.transfer_items_skipped, progress.skippedItems) else ""
     }
     Column(
         modifier = modifier.semantics {

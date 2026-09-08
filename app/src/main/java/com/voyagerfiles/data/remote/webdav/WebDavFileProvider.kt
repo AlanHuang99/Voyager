@@ -31,6 +31,9 @@ class WebDavFileProvider(
     private val connection: RemoteConnection,
     private val temporaryDirectory: File,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is WebDavFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
 
     private var sardine: OkHttpSardine? = null
     private var httpClient: OkHttpClient? = null

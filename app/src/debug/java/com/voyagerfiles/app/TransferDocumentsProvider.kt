@@ -66,6 +66,13 @@ class TransferDocumentsProvider : DocumentsProvider() {
         return id
     }
 
+    override fun renameDocument(documentId: String, displayName: String): String {
+        val source = file(documentId)
+        val destination = File(source.parentFile, displayName)
+        check(!destination.exists() && source.renameTo(destination))
+        return if ('/' in documentId) documentId.substringBeforeLast('/') + "/" + displayName else displayName
+    }
+
     override fun deleteDocument(documentId: String) { check(file(documentId).deleteRecursively()) }
 
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {

@@ -99,7 +99,8 @@ class TransferService : Service() {
         )
         val progress = operation?.progress
         val completedItemsText = progress?.totalItems?.takeIf { it > 0 }?.let {
-            getString(R.string.transfer_items_completed, progress.completedItems, it)
+            getString(R.string.transfer_items_completed, progress.completedItems, it) +
+                if (progress.skippedItems > 0) " • " + getString(R.string.transfer_items_skipped, progress.skippedItems) else ""
         }
         val title = if (operation?.cancelling == true) getString(R.string.transfer_cancelling)
             else progress?.label?.resolve(resources) ?: getString(R.string.transfer_channel)

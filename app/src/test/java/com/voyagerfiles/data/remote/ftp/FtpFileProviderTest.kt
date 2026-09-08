@@ -41,6 +41,32 @@ class FtpFileProviderTest {
     }
 
     @Test
+    fun coordinatorSameConnectionReplacementStagesAndCommitsMove() = runBlocking {
+        val server = startServer()
+        val payload = ByteArray(150_000) { (it % 251).toByte() }
+        Files.createDirectory(server.root.resolve("source"))
+        Files.createDirectory(server.root.resolve("destination"))
+        Files.write(server.root.resolve("source/report.bin"), payload)
+        Files.write(server.root.resolve("destination/report.bin"), "original".toByteArray())
+        val provider = createProvider(server.port)
+        val events = mutableListOf<com.voyagerfiles.data.repository.StreamTransferProgress>()
+        val result = withTimeout(15_000) {
+            com.voyagerfiles.viewmodel.FileOperationCoordinator.movePath(
+                provider, provider, "/source/report.bin", "/destination",
+                { com.voyagerfiles.viewmodel.ConflictDecision.REPLACE },
+            ) {
+                assertEquals("original", String(Files.readAllBytes(server.root.resolve("destination/report.bin"))))
+                events += it
+            }
+        }
+        assertTrue(result.isSuccess)
+        assertFalse(Files.exists(server.root.resolve("source/report.bin")))
+        assertTrue(payload.contentEquals(Files.readAllBytes(server.root.resolve("destination/report.bin"))))
+        assertEquals(listOf("report.bin"), provider.listFiles("/destination").getOrThrow().map { it.name })
+        assertEquals(payload.size.toLong(), events.last().bytesTransferred)
+    }
+
+    @Test
     fun listFilesWithPasswordAuthentication() = runBlocking {
         val server = startServer()
         Files.write(server.root.resolve("hello.txt"), "hello".toByteArray())

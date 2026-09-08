@@ -15,6 +15,8 @@ object UploadSourceFactory {
         return UploadSource(
             name = displayName,
             size = metadata.size,
+            identifier = uri.toString(),
+            lastModified = queryLastModified(contentResolver, uri),
             openInputStream = {
                 contentResolver.openInputStream(uri)
                     ?: throw IOException("Could not open $displayName")
@@ -44,6 +46,16 @@ object UploadSourceFactory {
                     ?.takeIf { it >= 0 },
             )
         } ?: DocumentMetadata()
+
+    private fun queryLastModified(resolver: ContentResolver, uri: Uri): java.util.Date? = runCatching {
+        val column = android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED
+        resolver.query(uri, arrayOf(column), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(column)
+            if (index >= 0 && cursor.moveToFirst() && !cursor.isNull(index)) {
+                cursor.getLong(index).takeIf { it > 0 }?.let { java.util.Date(it) }
+            } else null
+        }
+    }.getOrNull()
 
     private data class DocumentMetadata(
         val displayName: String? = null,

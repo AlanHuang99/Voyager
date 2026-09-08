@@ -13,9 +13,11 @@ data class TransferProgress(
     val copiedBytes: Long = 0,
     val totalBytes: Long? = null,
     val elapsedNanos: Long = 0,
+    val skippedItems: Int = 0,
 ) {
     init {
         require(label !is UiText.Dynamic || label.value.isNotBlank()) { "Progress label must not be blank" }
+        require(skippedItems >= 0) { "Skipped item count must not be negative" }
         require(completedItems >= 0) { "Completed item count must not be negative" }
         require(totalItems == null || totalItems >= 0) { "Total item count must not be negative" }
         require(copiedBytes >= 0) { "Copied byte count must not be negative" }

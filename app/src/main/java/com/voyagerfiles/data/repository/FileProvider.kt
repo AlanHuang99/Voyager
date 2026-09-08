@@ -31,6 +31,28 @@ interface FileProvider {
             )
         }
     }
+    /** Copies a file into an already-created target. Protocols may serialize reads and writes. */
+    suspend fun copyFileTo(
+        sourcePath: String,
+        targetPath: String,
+        totalBytes: Long?,
+        onProgress: (StreamTransferProgress) -> Unit = {},
+    ): Result<Unit> = runCatching {
+        getInputStream(sourcePath).getOrThrow().use { input ->
+            writeStream(targetPath, input, sourcePath, totalBytes, onProgress).getOrThrow()
+        }
+    }
+    fun isSameStorage(other: FileProvider): Boolean = this === other
+    fun isSamePath(first: String, second: String): Boolean = first.trimEnd('/') == second.trimEnd('/')
+    suspend fun isDescendantPath(ancestor: String, path: String): Boolean {
+        var parent: String? = path
+        val seen = mutableSetOf<String>()
+        while (parent != null && seen.add(parent)) {
+            if (isSamePath(ancestor, parent)) return true
+            parent = getParentPath(parent)
+        }
+        return false
+    }
     suspend fun exists(path: String): Boolean
     suspend fun getFileInfo(path: String): Result<FileItem>
     fun getParentPath(path: String): String?

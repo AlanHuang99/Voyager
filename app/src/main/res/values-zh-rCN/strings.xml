@@ -408,4 +408,12 @@
     <string name="shortcut_unavailable">Could not add a shortcut. Check that the folder is accessible and your launcher supports pinned shortcuts.</string>
     <string name="shortcut_permission_required">Grant full storage access to open this folder shortcut.</string>
     <string name="shortcut_folder_unavailable">This folder is no longer available. Check that the storage is connected and the folder still exists.</string>
+    <string name="transfer_conflict_title">Replace %1$s?</string>
+    <string name="transfer_conflict_source">Source: %1$s</string>
+    <string name="transfer_conflict_destination">Destination: %1$s</string>
+    <string name="transfer_conflict_apply_all">Apply to all conflicts in this transfer</string>
+    <string name="transfer_conflict_replace">Replace</string>
+    <string name="transfer_conflict_skip">Skip</string>
+    <string name="transfer_conflict_unknown">Unknown</string>
+    <string name="transfer_items_skipped">%1$d skipped</string>
 </resources>

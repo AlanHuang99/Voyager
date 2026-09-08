@@ -23,6 +23,20 @@ class BrowserOperationProgressTest {
     val composeTestRule = createComposeRule()
 
     @Test
+    fun skippedResultsRemainSeparateFromCompletedItems() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                OperationResultContent(
+                    OperationResult(TransferProgress(UiText.Resource(R.string.progress_copying), completedItems = 1, totalItems = 3, skippedItems = 2), OperationOutcome.COMPLETED),
+                    onDismiss = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("1 of 3 completed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 skipped").assertIsDisplayed()
+    }
+
+    @Test
     fun completedResultShowsFinalCountAndCanBeDismissed() {
         var dismissed = false
         composeTestRule.setContent {

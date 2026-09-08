@@ -5,6 +5,7 @@ import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
@@ -26,6 +27,9 @@ class FtpFileProvider(
     private val connection: RemoteConnection,
     private val temporaryDirectory: File,
 ) : FileProvider {
+    override fun isSameStorage(other: FileProvider): Boolean = other is FtpFileProvider &&
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port &&
+        connection.username == other.connection.username && connection.shareName == other.connection.shareName
 
     private var ftpClient: FTPClient? = null
 
@@ -196,10 +200,23 @@ class FtpFileProvider(
         }
     }
 
+    override suspend fun copyFileTo(
+        sourcePath: String,
+        targetPath: String,
+        totalBytes: Long?,
+        onProgress: (StreamTransferProgress) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            ensureConnected()
+            copyFileThroughTemporaryStorage(ftpClient!!, sourcePath, targetPath, onProgress = onProgress)
+        }
+    }
+
     private fun copyFileThroughTemporaryStorage(
         ftp: FTPClient,
         sourcePath: String,
         targetPath: String,
+        onProgress: (StreamTransferProgress) -> Unit = {},
         onTargetCreated: () -> Unit = {},
     ) {
         TransferCancellation.check()
@@ -221,7 +238,7 @@ class FtpFileProvider(
                 ?: throw IllegalStateException("Failed to write: $targetPath")
             PendingCommandOutputStream(ftp, target, targetPath).use { output ->
                 FileInputStream(temporaryFile).use { input ->
-                    StreamTransfer.copy(input, output, sourcePath, temporaryFile.length())
+                    StreamTransfer.copy(input, output, sourcePath, temporaryFile.length(), onProgress = onProgress)
                 }
             }
         } finally {
