@@ -9,6 +9,8 @@ import android.os.Environment
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voyagerfiles.audio.AudioTone
+import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
 import com.voyagerfiles.data.archive.ArchiveProgress
@@ -525,8 +527,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     )
                 )
             } else {
-                val count = validatedSources.size
-                showSnackbar(UiText.Plural(R.plurals.files_uploaded, count, listOf(count)))
+                showSnackbar(if (skipped > 0) UiText.Resource(R.string.upload_completed_skipped, listOf(completed, skipped))
+                    else UiText.Plural(R.plurals.files_uploaded, completed, listOf(completed)))
             }
         }
     }
@@ -873,6 +875,22 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setAudioTone(file: FileItem, tone: AudioTone) {
+        val label = UiText.Resource(R.string.audio_setting_tone)
+        launchOperation(R.string.audio_setting_tone, R.string.audio_setting_tone) {
+            updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = file.name))
+            val throttle = StreamProgressThrottle()
+            AudioToneInstaller(getApplication()).install(file, tone, operationController::beginCommit) { stream ->
+                if (throttle.shouldPublish(stream)) {
+                    updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = file.name,
+                        copiedBytes = stream.bytesTransferred, totalBytes = stream.totalBytes, elapsedNanos = stream.elapsedNanos))
+                }
+            }
+            updateOperationProgress(TransferProgress(label, completedItems = 1, totalItems = 1))
+            showSnackbar(UiText.Resource(if (tone == AudioTone.RINGTONE) R.string.audio_ringtone_set else R.string.audio_notification_set))
+        }
+    }
+
     fun downloadFile(path: String) {
         downloadPaths(listOf(path), clearSelection = false)
     }
@@ -1161,7 +1179,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     ) {
         val started = operationController.launch(
             label = UiText.Resource(progressLabel),
-            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download),
+            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone),
             onFailure = { error ->
                 showSnackbar(
                     if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)

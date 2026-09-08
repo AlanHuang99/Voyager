@@ -113,6 +113,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voyagerfiles.audio.AudioToneInstaller
+import com.voyagerfiles.ui.components.AudioToneMenuItems
+import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
@@ -196,6 +199,11 @@ fun BrowserScreen(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         viewModel.uploadDocuments(uris)
+    }
+
+    val tonePermissionMessage = stringResource(R.string.audio_tone_permission)
+    val setAudioTone = rememberAudioToneAction(viewModel::setAudioTone) {
+        scope.launch { snackbarHostState.showSnackbar(tonePermissionMessage) }
     }
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -461,6 +469,12 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                selectedItems.singleOrNull()?.takeIf(AudioToneInstaller::isSupported)?.let { file ->
+                                    AudioToneMenuItems(file) { selected, tone ->
+                                        showSelectionMoreMenu = false
+                                        setAudioTone(selected, tone)
+                                    }
+                                }
                                 if (BrowserArchiveAction.COMPRESS_TO_ZIP in archiveActions) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.dialog_compress_zip)) },

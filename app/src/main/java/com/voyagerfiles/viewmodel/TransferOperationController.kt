@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Owns the active operation independently of an Activity's lifecycle. */
 class TransferOperationController(
@@ -67,6 +68,13 @@ class TransferOperationController(
             }
         }
         return true
+    }
+
+    /** Final settings commits must finish once accepted; all copying remains cancellable. */
+    suspend fun beginCommit() = withContext(Dispatchers.Main.immediate) {
+        TransferCancellation.check()
+        val running = mutableState.value as? OperationState.Running ?: error("No active operation")
+        mutableState.value = running.copy(cancellable = false)
     }
 
     fun recordFailure(error: Throwable) {

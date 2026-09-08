@@ -1,6 +1,7 @@
 package com.voyagerfiles.viewmodel
 
 import android.app.Application
+import com.voyagerfiles.ui.text.resolve
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
@@ -98,6 +99,7 @@ class DocumentUploadTest {
         }
         assertEquals("existing", destination.resolve("report.txt").readText())
         assertEquals("new upload", destination.resolve("notes.txt").readText())
+        assertEquals("1 uploaded, 1 skipped", viewModel.snackbarMessage.value!!.resolve(application.resources))
         assertEquals(1, viewModel.lastOperationResult.value!!.progress.completedItems)
         assertEquals(1, viewModel.lastOperationResult.value!!.progress.skippedItems)
         assertEquals(OperationOutcome.COMPLETED, viewModel.lastOperationResult.value!!.outcome)

@@ -439,4 +439,11 @@
     <string name="transfer_conflict_skip">Skip</string>
     <string name="transfer_conflict_unknown">Unknown</string>
     <string name="transfer_items_skipped">%1$d skipped</string>
+    <string name="audio_set_ringtone">Set as ringtone</string>
+    <string name="audio_set_notification">Set as notification tone</string>
+    <string name="audio_tone_permission">Allow Voyager to modify system settings, then try again.</string>
+    <string name="audio_setting_tone">Setting system tone</string>
+    <string name="audio_ringtone_set">Ringtone set</string>
+    <string name="audio_notification_set">Notification tone set</string>
+    <string name="upload_completed_skipped">%1$d uploaded, %2$d skipped</string>
 </resources>
