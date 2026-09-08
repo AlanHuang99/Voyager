@@ -1,0 +1,79 @@
+name: Crowdin translations
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - app/src/main/res/values/strings.xml
+      - crowdin.yml
+      - .github/workflows/crowdin.yml
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      import_existing:
+        description: Import repository translations into Crowdin (initial setup only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crowdin-translations
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: github.repository == 'AlanHuang99/Voyager' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: master
+
+      - name: Synchronize resources
+        uses: crowdin/github-action@0d5670f539973aea2f01abce61a8989934df0025 # v3
+        with:
+          user: auto
+          upload_sources: true
+          upload_translations: ${{ github.event_name == 'workflow_dispatch' && inputs.import_existing }}
+          import_eq_suggestions: true
+          download_translations: ${{ github.event_name != 'push' }}
+          skip_untranslated_strings: false
+          skip_untranslated_files: false
+          push_translations: false
+          create_pull_request: false
+        env:
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+      - name: Set up JDK 17
+        if: github.event_name != 'push'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle
+        if: github.event_name != 'push'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Validate translations
+        if: github.event_name != 'push'
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace
+
+      - name: Open translation pull request
+        if: github.event_name != 'push'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          branch: codex/crowdin-translations
+          base: master
+          add-paths: app/src/main/res/values-*/strings.xml
+          commit-message: Update translations
+          title: Update translations
+          body: Translation updates from the Voyager Crowdin project. The synchronization workflow runs unit tests, lint, and debug and release builds before opening or updating this pull request.
