@@ -36,6 +36,77 @@ class RootFileProviderAndroidTest {
         } finally { folder.deleteRecursively() }
     }
 
+    @Test fun toyboxSupervisorTerminatesChildTreesOnTimeoutCancelAndSessionClose() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.cacheDir, "root-lifecycle-${UUID.randomUUID()}").apply { mkdir() }
+        try {
+            for (action in listOf("timeout", "cancel", "close")) {
+                val victim = File(directory, "victim").apply { writeText("original") }
+                val runtime = File(directory, "runtime").apply { mkdir() }
+                val shell = RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false,
+                    timeoutMillis = if (action == "timeout") 500 else 30_000, temporaryDirectory = runtime.path)
+                val input = shell.input("printf ready; trap '' TERM; sleep 2; printf late > ${RootShell.quote(victim.path)}")
+                assertEquals('r'.code, input.read())
+                val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+                try {
+                    val reader = executor.submit<ByteArray> { input.readBytes() }
+                    val started = System.nanoTime()
+                    when (action) {
+                        "cancel" -> (input as TransferAbortable).abortTransfer()
+                        "close" -> shell.close()
+                    }
+                    runCatching { reader.get(1500, java.util.concurrent.TimeUnit.MILLISECONDS) }
+                    assertTrue("$action must release the blocked reader", reader.isDone)
+                    assertTrue("$action must return promptly", (System.nanoTime() - started) / 1_000_000 < 1500)
+                    Thread.sleep(2100)
+                    assertEquals("original", victim.readText())
+                    assertTrue("$action must remove supervisor runtime files", runtime.list()!!.isEmpty())
+                } finally { shell.close(); executor.shutdownNow() }
+            }
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun toyboxSupervisorAbortsABlockedWriterWithoutLateMutation() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.cacheDir, "root-writer-${UUID.randomUUID()}").apply { mkdir() }
+        val victim = File(directory, "victim").apply { writeText("original") }
+        val marker = File(directory, "started")
+        val runtime = File(directory, "runtime").apply { mkdir() }
+        val shell = RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false, temporaryDirectory = runtime.path)
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val output = shell.output("trap '' TERM; printf started > ${RootShell.quote(marker.path)}; sleep 2; printf late > ${RootShell.quote(victim.path)}")
+            val writer = executor.submit { output.write(ByteArray(512 * 1024)) }
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(1)
+            while (marker.length() != 7L && System.nanoTime() < deadline) Thread.sleep(5)
+            assertEquals("started", marker.readText())
+            Thread.sleep(100)
+            assertFalse(writer.isDone)
+            val started = System.nanoTime()
+            (output as TransferAbortable).abortTransfer()
+            assertTrue("Abort must return promptly", (System.nanoTime() - started) / 1_000_000 < 1500)
+            runCatching { writer.get(1, java.util.concurrent.TimeUnit.SECONDS) }
+            assertTrue(writer.isDone)
+            Thread.sleep(2100)
+            assertEquals("original", victim.readText())
+            assertTrue(runtime.list()!!.isEmpty())
+        } finally { shell.close(); executor.shutdownNow(); directory.deleteRecursively() }
+    }
+
+    @Test fun toyboxBinaryStreamsPreserveBytesAcrossProtocolFrames() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.cacheDir, "root-stream-${UUID.randomUUID()}").apply { mkdir() }
+        try {
+            RootFileProvider(RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false)).use { root ->
+                val file = root.createFile(directory.path, "binary").getOrThrow()
+                val bytes = ByteArray(35 * 1024 + 17) { (it % 251).toByte() }
+                root.getOutputStream(file.path).getOrThrow().use { it.write(bytes) }
+                assertArrayEquals(bytes, root.getInputStream(file.path).getOrThrow().use { it.readBytes() })
+                assertEquals(listOf("binary"), directory.list()!!.toList())
+            }
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun superuserResultIsExplicitAndLocalBrowsingStillWorks() = runBlocking {
         RootFileProvider().use { root ->
             val result = root.listFiles("/")

@@ -26,11 +26,14 @@ class RootDockerIntegrationTest {
             assertNotEquals(0, denied.exitValue())
             RootFileProvider(RootShell(startProcess = { script ->
                 ProcessBuilder("docker", "exec", "-i", container, "sh", "-c", script).start()
-            })).use { root ->
+            }, temporaryDirectory = "/fixtures")).use { root ->
                 val file = root.createFile("/fixtures/private", "quote'\n\$(id);.txt").getOrThrow()
                 root.getOutputStream(file.path).getOrThrow().use { it.write("privileged".toByteArray()) }
                 assertEquals("privileged", root.readText(file.path).getOrThrow().text)
+                docker("exec", container, "chown", "65534:65534", file.path)
+                docker("exec", container, "chmod", "640", file.path)
                 root.saveText(root.readText(file.path).getOrThrow(), "saved as root").getOrThrow()
+                assertEquals("65534:65534:640", docker("exec", container, "stat", "-c", "%u:%g:%a", file.path))
                 val renamed = root.rename(file.path, "renamed").getOrThrow()
                 val dest = root.createDirectory("/fixtures/private", "dest").getOrThrow()
                 root.copy(renamed.path, dest.path).getOrThrow()
@@ -43,6 +46,22 @@ class RootDockerIntegrationTest {
                 root.delete(dest.path).getOrThrow()
                 root.delete(renamed.path).getOrThrow()
                 assertTrue(root.listFiles("/fixtures/private").getOrThrow().isEmpty())
+            }
+            docker("exec", container, "sh", "-c", "printf original > /fixtures/private/victim")
+            for (cancel in listOf(false, true)) {
+                val supervisor = RootShell(startProcess = { script ->
+                    ProcessBuilder("docker", "exec", "-i", container, "sh", "-c", script).start()
+                }, timeoutMillis = if (cancel) 30_000 else 500, temporaryDirectory = "/fixtures")
+                val input = supervisor.input("printf ready; trap '' TERM; sleep 2; printf late > /fixtures/private/victim")
+                assertEquals('r'.code, input.read())
+                val started = System.nanoTime()
+                if (cancel) (input as TransferAbortable).abortTransfer()
+                runCatching { input.readBytes() }
+                assertTrue("Privileged descendants must release the pipes promptly", (System.nanoTime() - started) / 1_000_000 < 1500)
+                supervisor.close()
+                Thread.sleep(2100)
+                assertEquals("original", docker("exec", container, "cat", "/fixtures/private/victim"))
+                assertEquals("private", docker("exec", container, "ls", "-A", "/fixtures"))
             }
         } finally { runCatching { docker("rm", "-f", container) } }
     }

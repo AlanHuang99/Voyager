@@ -44,6 +44,38 @@ class RootFileProviderTest {
         }
     }
 
+    @Test fun stagingSymlinkSwapNeverWritesAnUnrelatedVictim() = runBlocking {
+        val original = temporary.newFile("original").apply { writeText("original bytes") }
+        val victim = temporary.newFile("victim").apply { writeText("unrelated victim must survive") }
+        val attacked = java.util.concurrent.atomic.AtomicBoolean(false)
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        val shell = RootShell(startProcess = { script ->
+            ProcessBuilder("sh", "-c", script.replace("exec cat >", "sleep 0.2; exec cat >").replace("cat >&3", "sleep 0.2; cat >&3")).start()
+        }, requireRoot = false)
+        RootFileProvider(shell).use { root ->
+            val document = root.readText(original.path).getOrThrow()
+            val attacker = Thread {
+                while (!stop.get()) {
+                    val stage = temporary.root.listFiles().orEmpty().firstOrNull { it.name.startsWith(".voyager-root-") }
+                    val payload = if (stage?.isDirectory == true) stage.listFiles().orEmpty().firstOrNull { it.isFile } else stage
+                    if (payload != null && payload.isFile && !java.nio.file.Files.isSymbolicLink(payload.toPath())) {
+                        if (runCatching {
+                            java.nio.file.Files.delete(payload.toPath())
+                            java.nio.file.Files.createSymbolicLink(payload.toPath(), victim.toPath())
+                        }.isSuccess) { attacked.set(true); break }
+                    }
+                    Thread.sleep(1)
+                }
+            }.apply { start() }
+            try {
+                assertTrue(root.saveText(document, "replacement bytes").isFailure)
+                assertTrue("The adversarial stage replacement must actually happen", attacked.get())
+                assertEquals("original bytes", original.readText())
+                assertEquals("unrelated victim must survive", victim.readText())
+            } finally { stop.set(true); attacker.join(1000) }
+        }
+    }
+
     @Test fun editorRejectsBinaryLargeAndSymlinkFiles() = runBlocking {
         val file = temporary.newFile("content")
         RootFileProvider(shell()).use { provider ->
@@ -122,6 +154,75 @@ class RootFileProviderTest {
     @Test fun commandTimeoutTerminatesBlockedReads() {
         RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false, timeoutMillis = 150).use { shell ->
             assertThrows(IOException::class.java) { shell.execute("exec sleep 10") }
+        }
+    }
+
+    @Test fun timeoutKillsDescendantsBeforeTheyCanMutateFiles() {
+        val victim = temporary.newFile("late").apply { writeText("original") }
+        val marker = File(temporary.root, "started")
+        val started = System.nanoTime()
+        RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false, timeoutMillis = 500).use { shell ->
+            assertThrows(IOException::class.java) {
+                shell.execute("printf started > ${RootShell.quote(marker.path)}; sleep 2; printf late > ${RootShell.quote(victim.path)}")
+            }
+        }
+        assertEquals("started", marker.readText())
+        assertTrue("Timeout must terminate the command tree promptly", (System.nanoTime() - started) / 1_000_000 < 1500)
+        Thread.sleep(2100)
+        assertEquals("original", victim.readText())
+    }
+
+    @Test fun sessionCloseKillsDescendantsWithoutWaitingForTheirPipe() {
+        val victim = temporary.newFile("late").apply { writeText("original") }
+        val shell = shell()
+        val input = shell.input("printf ready; sleep 2; printf late > ${RootShell.quote(victim.path)}")
+        assertEquals('r'.code, input.read())
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val reader = executor.submit<ByteArray> { input.readBytes() }
+            val started = System.nanoTime()
+            shell.close()
+            assertTrue("Closing a session must not wait on the child's pipe", (System.nanoTime() - started) / 1_000_000 < 1000)
+            runCatching { reader.get(1, java.util.concurrent.TimeUnit.SECONDS) }
+            assertTrue(reader.isDone)
+            Thread.sleep(2100)
+            assertEquals("original", victim.readText())
+        } finally { executor.shutdownNow(); input.close() }
+    }
+
+    @Test fun abortedBlockedWriterKillsTermIgnoringDescendantsAndCleansRuntimeDirectory() {
+        val directory = temporary.newFolder("runtime")
+        val victim = temporary.newFile("writer-victim").apply { writeText("original") }
+        val marker = File(temporary.root, "writer-started")
+        val shell = RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false, temporaryDirectory = directory.path)
+        val output = shell.output("trap '' TERM; printf started > ${RootShell.quote(marker.path)}; sleep 2; printf late > ${RootShell.quote(victim.path)}")
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val writer = executor.submit { output.write(ByteArray(512 * 1024)) }
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(1)
+            while (marker.length() != 7L && System.nanoTime() < deadline) Thread.sleep(5)
+            assertEquals("started", marker.readText())
+            Thread.sleep(100)
+            assertFalse("The worker must be blocked while its consumer sleeps", writer.isDone)
+            val started = System.nanoTime()
+            (output as TransferAbortable).abortTransfer()
+            assertTrue("Abort must return promptly", (System.nanoTime() - started) / 1_000_000 < 1000)
+            runCatching { writer.get(1, java.util.concurrent.TimeUnit.SECONDS) }
+            assertTrue(writer.isDone)
+            assertTrue("Supervisor runtime directory must be removed", directory.list()!!.isEmpty())
+            Thread.sleep(2100)
+            assertEquals("original", victim.readText())
+        } finally { shell.close(); executor.shutdownNow() }
+    }
+
+    @Test fun unavailableIsolationToolFailsBeforeExecutingTheRequestedCommand() {
+        val marker = File(temporary.root, "unexpected")
+        RootShell(startProcess = { script ->
+            ProcessBuilder("sh", "-c", script.replace("command -v setsid", "command -v voyager_missing_setsid")).start()
+        }, requireRoot = false).use { shell ->
+            val error = assertThrows(IOException::class.java) { shell.execute("touch ${RootShell.quote(marker.path)}") }
+            assertTrue(error.message!!.contains("requires setsid"))
+            assertFalse(marker.exists())
         }
     }
 
