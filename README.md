@@ -54,6 +54,8 @@ Network connections are user-initiated. The app contains no analytics or trackin
 
 ## Storage and security
 
+Settings offers an explicitly confirmed root session for devices with a compatible, authorized `su` manager. Root sessions can browse `/` and perform file operations; tapping a regular file opens a UTF-8 text editor limited to 256 KiB. Saves recheck the original before replacement, and root deletions require permanent-delete confirmation. Ordinary local browsing never requests root. Successful superuser operations have been tested in an isolated Linux fixture; rooted Android operation remains unverified. See [root verification coverage](docs/TESTING.md#protocol-integration-tests).
+
 Full local browsing uses Android's all-files special access. If that access is denied, Voyager remains usable for document trees and remote servers. The Home and Settings screens explain the active access mode and provide a route back to Android's permission settings.
 
 Saved remote passwords are encrypted with AES-GCM using a device-bound Android Keystore key. The connection database, settings, generated SSH keys, and SFTP known-host data are excluded from Android cloud backup and device transfer. SFTP uses trust on first use and rejects a server whose saved host key changes. The connection editor displays saved fingerprints and lets you forget the key for that exact host and port after confirmation; verify a replacement fingerprint through a trusted channel before reconnecting.

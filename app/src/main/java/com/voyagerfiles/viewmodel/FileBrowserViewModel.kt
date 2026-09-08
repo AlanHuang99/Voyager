@@ -46,6 +46,7 @@ import com.voyagerfiles.playback.PlaybackEntry
 import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.text.UiText
+import com.voyagerfiles.ui.text.resolve
 import com.voyagerfiles.util.FileNameValidationResult
 import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
@@ -96,6 +97,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     application: Application,
     private val remoteProviderFactory: RemoteFileProviderFactory = defaultRemoteFileProviderFactory,
     private val playbackPreparer: WebDavPlaybackPreparer = defaultWebDavPlaybackPreparer,
+    private val rootProviderFactory: () -> com.voyagerfiles.data.repository.RootFileProvider = { com.voyagerfiles.data.repository.RootFileProvider() },
+    private val operationController: TransferOperationController = (application as VoyagerApp).transfers,
 ) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
@@ -118,6 +121,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
+    private val _rootEditor = MutableStateFlow<RootTextEditorState?>(null)
+    val rootEditor: StateFlow<RootTextEditorState?> = _rootEditor.asStateFlow()
 
     private val _sessions = MutableStateFlow<List<BrowserSession>>(emptyList())
     val sessions: StateFlow<List<BrowserSession>> = _sessions.asStateFlow()
@@ -135,7 +140,6 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private val _snackbarMessage = MutableStateFlow<UiText?>(null)
     val snackbarMessage: StateFlow<UiText?> = _snackbarMessage.asStateFlow()
 
-    private val operationController = (application as VoyagerApp).transfers
     val operationState: StateFlow<OperationState> = operationController.state
     val lastOperationResult = operationController.lastResult
     val transferConflict = operationController.conflicts.pending
@@ -275,6 +279,82 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 }
             }
             activateSessionInternal(sessionId)
+        }
+    }
+
+    /** Called only after the user confirms the root-access dialog. */
+    fun openRootSession() {
+        cancelInitialNavigation()
+        viewModelScope.launch {
+            val sessionId = "root:/"
+            if (_sessions.value.none { it.id == sessionId }) {
+                sessionProviders[sessionId] = rootProviderFactory()
+                _sessions.update { sessions ->
+                    sessions + BrowserSession(
+                        id = sessionId,
+                        title = getApplication<Application>().getString(R.string.root_title),
+                        source = FileSource.ROOT,
+                        rootPath = "/",
+                        currentPath = "/",
+                    )
+                }
+            }
+            activateSessionInternal(sessionId)
+        }
+    }
+
+    fun openRootTextEditor(file: FileItem) {
+        val provider = fileProvider as? com.voyagerfiles.data.repository.RootFileProvider
+            ?: return
+        _rootEditor.value = RootTextEditorState(file.path)
+        viewModelScope.launch {
+            provider.readText(file.path).fold(
+                onSuccess = { document ->
+                    _rootEditor.value = RootTextEditorState(file.path, document, document.text, busy = false)
+                },
+                onFailure = { error ->
+                    _rootEditor.value = RootTextEditorState(file.path, busy = false, error = error.message)
+                },
+            )
+        }
+    }
+
+    fun updateRootText(text: String) {
+        _rootEditor.update { state -> if (state?.busy == false) state.copy(text = text) else state }
+    }
+
+    fun closeRootTextEditor() { if (_rootEditor.value?.busy == false) _rootEditor.value = null }
+
+    fun saveRootText() {
+        val state = _rootEditor.value ?: return
+        val document = state.document ?: return
+        if (state.busy) return
+        val provider = fileProvider as? com.voyagerfiles.data.repository.RootFileProvider
+        if (provider == null) {
+            _rootEditor.value = state.copy(error = getApplication<Application>().getString(R.string.root_session_closed))
+            return
+        }
+        _rootEditor.value = state.copy(busy = true, error = null)
+        val label = UiText.Resource(R.string.root_editor_save)
+        val started = operationController.launch(
+            label = label,
+            cancellable = false,
+            onFailure = { error ->
+                _rootEditor.value = state.copy(busy = false,
+                    error = OperationMessages.failure(R.string.root_editor_save, error).resolve(getApplication<Application>().resources))
+            },
+            onFinished = { _rootEditor.update { it?.copy(busy = false) } },
+        ) {
+            updateOperationProgress(TransferProgress(label, totalItems = 1, currentItemName = File(document.path).name))
+            provider.saveText(document, state.text).getOrThrow()
+            updateOperationProgress(TransferProgress(label, completedItems = 1, totalItems = 1))
+            _rootEditor.value = null
+            refreshFiles()
+        }
+        if (!started) {
+            val active = operationState.value as OperationState.Running
+            _rootEditor.value = state.copy(busy = false,
+                error = UiText.Resource(R.string.operation_already_running, listOf(active.label)).resolve(getApplication<Application>().resources))
         }
     }
 
@@ -1377,6 +1457,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
+        // viewModelScope is cancelled at this point, so close privileged pipes synchronously.
+        sessionProviders.values.filterIsInstance<com.voyagerfiles.data.repository.RootFileProvider>().forEach { it.close() }
         super.onCleared()
         viewModelScope.launch {
             sessionProviders.values.forEach { it.disconnect() }

@@ -34,7 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Run unit tests, lint, and builds
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace
+        run: ./gradlew --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace
 
       - name: Upload debug APKs
         uses: actions/upload-artifact@v7

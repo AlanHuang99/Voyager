@@ -548,7 +548,7 @@ private fun ActiveSessionRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (session.source == FileSource.LOCAL || session.source == FileSource.SAF) {
+                if (session.source == FileSource.LOCAL || session.source == FileSource.SAF || session.source == FileSource.ROOT) {
                     Icons.Filled.Folder
                 } else {
                     Icons.Filled.Cloud

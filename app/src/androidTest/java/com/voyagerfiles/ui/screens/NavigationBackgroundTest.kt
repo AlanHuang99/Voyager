@@ -52,8 +52,11 @@ class NavigationBackgroundTest {
 
     private fun assertDarkHostEdge() {
         val image = composeTestRule.onRoot().captureToImage()
-        val edgePixel = image.toPixelMap()[1, image.height / 2]
-        assertColorNear(DarkColors.background, edgePixel)
+        // Mid-screen edges can intersect sliding cards; the bottom inset exposes the host background.
+        val pixels = image.toPixelMap()
+        for (x in listOf(1, image.width - 2)) {
+            assertColorNear(DarkColors.background, pixels[x, image.height - 2])
+        }
     }
 
     private fun assertColorNear(expected: Color, actual: Color) {

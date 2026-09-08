@@ -102,6 +102,7 @@ data class FileItem(
 
 enum class FileSource {
     LOCAL,
+    ROOT,
     SAF,
     SFTP,
     FTP,

@@ -432,7 +432,7 @@
     <string name="duplicates_scanning">Scanning files…</string>
     <string name="duplicates_removing">Rechecking and removing files…</string>
     <string name="duplicates_examined">%1$d files found</string>
-    <string name="duplicates_summary">%1$d duplicate groups among %2$d files</string>
+    <string name="duplicates_summary">Duplicate groups: %1$d · Files: %2$d</string>
     <string name="duplicates_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d Trash folders.</string>
     <string name="duplicates_limited">Scan limit reached. These results cover part of the folder. Scan a smaller folder for complete results.</string>
     <string name="duplicates_group">%1$d copies, %2$s each</string>
@@ -453,4 +453,13 @@
     <string name="category_coverage_counts">已检查文件：%1$d · 无法访问的条目：%2$d · 已跳过条目：%3$d</string>
     <string name="category_skipped_explanation">计数仅描述已访问的条目。跳过的条目包括已排除的隐藏文件夹、链接、重复根目录、特殊文件和超过 128 层的文件夹。已跳过或无法访问的文件夹内容未知。</string>
     <string name="category_stale_file">此文件已更改或无法访问。请刷新分类后重试。</string>
+    <string name="root_title">Root 访问</string>
+    <string name="root_open">打开 Root 会话</string>
+    <string name="root_warning">允许 Voyager 为此会话请求超级用户权限吗？修改 / 下的文件可能损坏 Android 或其他应用。Root 操作不使用回收站。点按普通文件可编辑最多 256 KiB 的 UTF-8 文本。关闭会话即可停止 Root 访问。</string>
+    <string name="root_editor_title">编辑 Root 文件</string>
+    <string name="root_editor_description">保存前会检查原文件是否发生变化，然后替换此文件。</string>
+    <string name="root_editor_discard">放弃未保存的更改？</string>
+    <string name="root_editor_save">保存文件</string>
+    <string name="root_session_closed">Root 会话已关闭。请重新打开后再保存。</string>
+    <string name="action_discard">放弃</string>
 </resources>

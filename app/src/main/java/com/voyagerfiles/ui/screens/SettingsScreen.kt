@@ -86,6 +86,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit,
+    onOpenRoot: () -> Unit = {},
 ) {
     val currentTheme by viewModel.theme.collectAsState()
     val browseState by viewModel.browseState.collectAsState()
@@ -160,6 +161,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
+            TextButton(onClick = onOpenRoot) { Text(stringResource(R.string.root_open)) }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 stringResource(
