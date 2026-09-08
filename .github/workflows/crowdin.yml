@@ -50,7 +50,18 @@ jobs:
           push_translations: false
           create_pull_request: false
         env:
+          GIT_CONFIG_GLOBAL: /tmp/crowdin-gitconfig
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+      - name: Set up uv
+        if: github.event_name != 'push'
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+
+      - name: Omit untranslated new locales
+        if: github.event_name != 'push'
+        run: |
+          uv run --no-project python -B -m unittest discover -s scripts -p 'test_prepare_translation_export.py'
+          uv run --no-project python -B scripts/prepare_translation_export.py
 
       - name: Set up JDK 17
         if: github.event_name != 'push'
