@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -72,7 +73,7 @@ fun AppNavigation(
         if (
             sessionClosureGeneration > 0L &&
             viewModel.sessions.value.isEmpty() &&
-            navController.currentDestination?.route == Screen.Browser.route
+            navController.currentDestination?.route in setOf(Screen.Browser.route, Screen.Duplicates.route)
         ) {
             navController.navigateHome()
         }
@@ -157,9 +158,14 @@ fun AppNavigation(
         }
 
         composable(Screen.Duplicates.route, arguments = listOf(navArgument("path") { type = NavType.StringType })) { entry ->
+            val sourceSessionId by rememberSaveable { mutableStateOf(viewModel.activeSession.value?.id) }
             DuplicatesScreen(checkNotNull(entry.arguments?.getString("path")), onNavigateBack = {
-                viewModel.refresh()
-                navController.popBackStack()
+                if (viewModel.sessions.value.any { it.id == sourceSessionId }) {
+                    viewModel.refresh()
+                    navController.popBackStack()
+                } else {
+                    navController.navigateHome()
+                }
             })
         }
 

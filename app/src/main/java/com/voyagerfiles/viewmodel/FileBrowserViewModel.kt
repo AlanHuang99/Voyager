@@ -163,6 +163,15 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     init {
         viewModelScope.launch {
+            operationState.collect { state ->
+                if (state == OperationState.Idle && autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
+                    val sessionIds = deferredAutoCloseSessionIds
+                    deferredAutoCloseSessionIds = emptySet()
+                    closeSessionsAfterInactivity(sessionIds)
+                }
+            }
+        }
+        viewModelScope.launch {
             runCatching { connectionRepository.migratePlaintextCredentials() }
                 .onFailure {
                     showSnackbar(UiText.Resource(R.string.credential_migration_failed))
@@ -1190,13 +1199,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     else OperationMessages.failure(operationName, error),
                 )
             },
-            onFinished = {
-                if (autoCloseSessions.value && deferredAutoCloseSessionIds.isNotEmpty()) {
-                    val sessionIds = deferredAutoCloseSessionIds
-                    deferredAutoCloseSessionIds = emptySet()
-                    closeSessionsAfterInactivity(sessionIds)
-                }
-            },
+            onFinished = {},
             block = block,
         )
         if (!started) {
