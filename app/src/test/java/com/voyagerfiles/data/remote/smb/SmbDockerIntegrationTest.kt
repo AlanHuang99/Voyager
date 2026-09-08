@@ -13,6 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.voyagerfiles.data.repository.LocalFileProvider
 import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.viewmodel.FileOperationCoordinator
+import com.voyagerfiles.viewmodel.ConflictDecision
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertFalse
@@ -137,6 +138,75 @@ class SmbDockerIntegrationTest {
             } finally {
                 provider?.disconnect()
                 directProvider?.disconnect()
+            }
+        }
+    }
+
+    @Test
+    fun discoveryAndDirectShareAliasesCannotReplaceTheSameFile() = runBlocking {
+        assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba("smb encrypt = desired") { port ->
+            val discovery = waitUntilReady(port)
+            val direct = SmbFileProvider(connection(port, shareName = "media").copy(remotePath = "/initial-folder"))
+            try {
+                val payload = ByteArray(8192) { (it * 31).toByte() }
+                writeAndReadExact(direct, "/report.txt", payload)
+                for (discoverySource in listOf(true, false)) {
+                    val source = if (discoverySource) discovery else direct
+                    val destination = if (discoverySource) direct else discovery
+                    val sourcePath = if (discoverySource) "/media/report.txt" else "/report.txt"
+                    val destinationPath = if (discoverySource) "/" else "/media"
+                    for (move in listOf(true, false)) {
+                        var conflictRequests = 0
+                        val result = if (move) {
+                            FileOperationCoordinator.movePath(source, destination, sourcePath, destinationPath, {
+                                conflictRequests++
+                                ConflictDecision.REPLACE
+                            })
+                        } else {
+                            FileOperationCoordinator.copyPath(source, destination, sourcePath, destinationPath, {
+                                conflictRequests++
+                                ConflictDecision.REPLACE
+                            })
+                        }
+                        assertTrue("Alias operation must fail before mutation: $result", result.exceptionOrNull() is IllegalArgumentException)
+                        assertEquals(0, conflictRequests)
+                        assertArrayEquals(payload, direct.getInputStream("/report.txt").getOrThrow().use { it.readBytes() })
+                        assertEquals(listOf("report.txt"), direct.listFiles("/").getOrThrow().map { it.name })
+                    }
+                }
+                direct.createDirectory("/", "folder").getOrThrow()
+                direct.createDirectory("/folder", "folder").getOrThrow()
+                writeAndReadExact(direct, "/folder/folder/report.txt", payload)
+                for (discoverySource in listOf(true, false)) {
+                    val source = if (discoverySource) discovery else direct
+                    val destination = if (discoverySource) direct else discovery
+                    val sourceRoot = if (discoverySource) "/media" else ""
+                    val destinationRoot = if (discoverySource) "" else "/media"
+                    val descendant = FileOperationCoordinator.copyPath(
+                        source, destination, "$sourceRoot/folder", "$destinationRoot/folder/folder",
+                    )
+                    assertEquals("A folder cannot be copied or moved into itself", descendant.exceptionOrNull()?.message)
+                    var conflictRequests = 0
+                    val ancestor = FileOperationCoordinator.movePath(
+                        source, destination, "$sourceRoot/folder/folder", destinationRoot.ifEmpty { "/" }, {
+                            conflictRequests++
+                            ConflictDecision.REPLACE
+                        },
+                    )
+                    assertEquals("A folder containing the source cannot be replaced", ancestor.exceptionOrNull()?.message)
+                    assertEquals(0, conflictRequests)
+                    assertArrayEquals(payload, direct.getInputStream("/folder/folder/report.txt").getOrThrow().use { it.readBytes() })
+                    assertEquals(listOf("folder"), direct.listFiles("/folder").getOrThrow().map { it.name })
+                    assertEquals(listOf("report.txt"), direct.listFiles("/folder/folder").getOrThrow().map { it.name })
+                }
+                val differentShare = FileOperationCoordinator.movePath(direct, discovery, "/report.txt", "/documents")
+                assertTrue(differentShare.toString(), differentShare.isSuccess)
+                assertFalse(direct.exists("/report.txt"))
+                assertArrayEquals(payload, discovery.getInputStream("/documents/report.txt").getOrThrow().use { it.readBytes() })
+            } finally {
+                discovery.disconnect()
+                direct.disconnect()
             }
         }
     }

@@ -44,6 +44,11 @@ interface FileProvider {
     }
     fun isSameStorage(other: FileProvider): Boolean = this === other
     fun isSamePath(first: String, second: String): Boolean = first.trimEnd('/') == second.trimEnd('/')
+    /** Compares paths expressed in each provider's own namespace. */
+    fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean =
+        isSameStorage(other) && isSamePath(path, otherPath)
+    suspend fun isDescendantPath(ancestor: String, other: FileProvider, path: String): Boolean =
+        isSameStorage(other) && isDescendantPath(ancestor, path)
     suspend fun isDescendantPath(ancestor: String, path: String): Boolean {
         var parent: String? = path
         val seen = mutableSetOf<String>()

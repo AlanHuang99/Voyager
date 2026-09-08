@@ -109,6 +109,45 @@ class SmbFileProvider internal constructor(
 
     private val configuredShare = connection.shareName?.trim().orEmpty()
     private val isDiscoveryMode = configuredShare.isEmpty()
+
+    override fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean {
+        if (other !is SmbFileProvider || !sameServer(other)) return false
+        val first = identityPath(path) ?: return false
+        val second = other.identityPath(otherPath) ?: return false
+        return first == second
+    }
+
+    override suspend fun isDescendantPath(ancestor: String, other: FileProvider, path: String): Boolean {
+        if (other !is SmbFileProvider || !sameServer(other)) return false
+        val parent = identityPath(ancestor) ?: return false
+        val child = other.identityPath(path) ?: return false
+        return child.size >= parent.size && child.take(parent.size) == parent
+    }
+
+    private fun sameServer(other: SmbFileProvider): Boolean =
+        connection.host.equals(other.connection.host, ignoreCase = true) && connection.port == other.connection.port
+
+    private fun identityPath(path: String): List<String>? {
+        val resolved = if (isDiscoveryMode) {
+            when (val parsed = SmbBrowsePath.parse(path)) {
+                SmbBrowsePath.VirtualRoot -> return null
+                is SmbBrowsePath.Share -> ResolvedSharePath(parsed.name, parsed.relativePath)
+            }
+        } else {
+            ResolvedSharePath(configuredShare, toSmbPath(path))
+        }
+        // Conservatively treat matching server/share paths as aliases even when credentials or initial folders differ.
+        val segments = mutableListOf(resolved.shareName.lowercase(java.util.Locale.ROOT))
+        for (segment in resolved.relativePath.replace('/', '\\').split('\\')) {
+            when (segment) {
+                "", "." -> Unit
+                ".." -> if (segments.size > 1) segments.removeAt(segments.lastIndex)
+                else -> segments.add(segment.lowercase(java.util.Locale.ROOT))
+            }
+        }
+        return segments
+    }
+
     private var sessionHandle: SmbSessionHandle? = null
     private var activeShareName: String? = null
     private var share: DiskShare? = null

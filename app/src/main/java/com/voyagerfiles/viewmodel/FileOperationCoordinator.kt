@@ -79,9 +79,8 @@ object FileOperationCoordinator {
     ): TransferDisposition {
         TransferCancellation.check()
         val item = sourceProvider.getFileInfo(sourcePath).getOrThrow()
-        val sameStorage = sourceProvider.isSameStorage(destinationProvider)
-        if (sameStorage && item.isDirectory) {
-            require(!sourceProvider.isDescendantPath(sourcePath, destinationDirectoryPath)) {
+        if (item.isDirectory) {
+            require(!sourceProvider.isDescendantPath(sourcePath, destinationProvider, destinationDirectoryPath)) {
                 "A folder cannot be copied or moved into itself"
             }
         }
@@ -89,8 +88,8 @@ object FileOperationCoordinator {
             destinationProvider, destinationDirectoryPath,
             ConflictSource(item.name, item.size.takeIf { it >= 0 }, item.lastModified), item.isDirectory, resolveConflict,
             validateTarget = { target ->
-                require(!sameStorage || !sourceProvider.isSamePath(sourcePath, target.path)) { "An item cannot replace itself" }
-                require(!sameStorage || !target.isDirectory || !destinationProvider.isDescendantPath(target.path, sourcePath)) {
+                require(!sourceProvider.isSamePath(sourcePath, destinationProvider, target.path)) { "An item cannot replace itself" }
+                require(!target.isDirectory || !destinationProvider.isDescendantPath(target.path, sourceProvider, sourcePath)) {
                     "A folder containing the source cannot be replaced"
                 }
             },
