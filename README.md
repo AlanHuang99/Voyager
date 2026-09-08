@@ -84,7 +84,7 @@ Run the complete local gate before submitting a change:
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TRANSLATING.md](docs/TRANSLATING.md) for the translation workflow, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
+See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TRANSLATING.md](docs/TRANSLATING.md) for the translation workflow and [Crowdin](https://crowdin.com/project/voyagerandroid) to contribute translations, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
 
 ## Tech stack
 
