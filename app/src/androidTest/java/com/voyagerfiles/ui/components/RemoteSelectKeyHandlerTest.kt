@@ -67,6 +67,7 @@ class RemoteSelectKeyHandlerTest {
 
     private fun renderItem(grid: Boolean): MutableList<String> {
         val events = Collections.synchronizedList(mutableListOf<String>())
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
         composeTestRule.setContent {
             MaterialTheme {
                 val modifier = Modifier.testTag(TARGET_TAG)

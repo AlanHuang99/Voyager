@@ -30,6 +30,42 @@ class FileSharingTest {
     }
 
     @Test
+    fun writableLocalFileCanBeEditedThroughOpenWith() {
+        val file = createLocalFile("editable.txt")
+        val chooser = FileUtils.createOpenWithIntent(context, file).getOrThrow()
+        val target = chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)!!
+
+        assertTrue(target.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0)
+        assertTrue(chooser.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0)
+        context.contentResolver.openOutputStream(target.data!!, "wt")!!.use {
+            it.write("edited".toByteArray())
+        }
+        assertEquals("edited", File(file.path).readText())
+    }
+
+    @Test
+    fun readOnlyLocalFileDoesNotOfferWritePermission() {
+        val file = createLocalFile("readonly.txt")
+        val local = File(file.path)
+        assertTrue(local.setWritable(false, false))
+        try {
+            assertFalse(local.canWrite())
+            val intent = FileUtils.createOpenFileIntent(context, file).getOrThrow()
+            assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(0, intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        } finally {
+            local.setWritable(true, true)
+        }
+    }
+
+    @Test
+    fun sharingWritableLocalFilesRemainsReadOnly() {
+        val intent = FileUtils.createShareIntent(context, listOf(createLocalFile("shared.txt")))
+            .getOrThrow()
+        assertEquals(0, intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    }
+
+    @Test
     fun multipleLocalFilesBuildReadableSendMultipleIntent() {
         val files = listOf(createLocalFile("one.jpg"), createLocalFile("two.png"))
 
