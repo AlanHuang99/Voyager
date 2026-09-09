@@ -45,7 +45,7 @@ jobs:
           upload_translations: ${{ github.event_name == 'workflow_dispatch' && inputs.import_existing }}
           import_eq_suggestions: true
           download_translations: ${{ github.event_name != 'push' }}
-          skip_untranslated_strings: false
+          skip_untranslated_strings: true
           skip_untranslated_files: false
           push_translations: false
           create_pull_request: false
@@ -57,7 +57,7 @@ jobs:
         if: github.event_name != 'push'
         uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
 
-      - name: Omit untranslated new locales
+      - name: Preserve translations and fill missing resources
         if: github.event_name != 'push'
         run: |
           uv run --no-project python -B -m unittest discover -s scripts -p 'test_prepare_translation_export.py'
@@ -76,7 +76,7 @@ jobs:
 
       - name: Validate translations
         if: github.event_name != 'push'
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace
+        run: ./gradlew --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' testDebugUnitTest lintDebug assembleDebug assembleRelease --stacktrace
 
       - name: Open translation pull request
         if: github.event_name != 'push'
