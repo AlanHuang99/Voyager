@@ -14,7 +14,6 @@ class AddLanguageTest(unittest.TestCase):
         ])
         add_language(request, "927407", "pl")
         self.assertEqual(request.call_args_list[2].args, ("PATCH", "/projects/927407", [
-            {"op": "test", "path": "/targetLanguageIds", "value": ["fr", "zh-CN"]},
             {"op": "replace", "path": "/targetLanguageIds", "value": ["fr", "zh-CN", "pl"]},
         ]))
 

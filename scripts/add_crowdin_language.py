@@ -1,7 +1,7 @@
 """Purpose: enable one requested Crowdin target language without removing existing languages.
 Inputs: project ID, language ID, and CROWDIN_PERSONAL_TOKEN from the environment.
 Outputs: an updated Crowdin target-language list, verified by a second read.
-Notes: uses a conditional JSON Patch; never prints credentials or response bodies.
+Notes: merges the current target list and verifies the result; never prints credentials or full response bodies.
 """
 
 import json
@@ -30,8 +30,8 @@ def add_language(request, project_id: str, language_id: str) -> None:
         return
     if project["sourceLanguageId"] == language_id:
         raise ValueError("The source language cannot be added as a target")
+    # Crowdin's test operation compares internal numeric IDs with the public language codes and rejects an otherwise unchanged list.
     request("PATCH", project_path, [
-        {"op": "test", "path": "/targetLanguageIds", "value": existing},
         {"op": "replace", "path": "/targetLanguageIds", "value": [*existing, language_id]},
     ])
     verified = request("GET", project_path)["data"]["targetLanguageIds"]
