@@ -1,0 +1,6 @@
+Voyager 1.9.0:
+- Add storage categories, duplicate discovery, folder shortcuts, and audio tone actions
+- Add opt-in root sessions and guarded text editing
+- Improve background transfers, cancellation, conflicts, and FTP/SMB compatibility
+- Fix WebDAV document opening, external-editor saves, refresh, selection, and previews
+- Add French and Simplified Chinese translations and Crowdin contributions

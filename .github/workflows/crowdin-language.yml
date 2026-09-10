@@ -1,0 +1,33 @@
+name: Add Crowdin target language
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: Crowdin language ID to enable, for example pl for Polish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crowdin-translations
+  cancel-in-progress: false
+
+jobs:
+  add-language:
+    if: github.repository == 'AlanHuang99/Voyager' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Check language-management helper
+        run: uv run --no-project python -B -m unittest discover -s scripts -p 'test_add_crowdin_language.py'
+      - name: Enable requested language
+        env:
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          CROWDIN_PROJECT_ID: '927407'
+          CROWDIN_LANGUAGE_ID: ${{ inputs.language }}
+        run: uv run --no-project python -B scripts/add_crowdin_language.py

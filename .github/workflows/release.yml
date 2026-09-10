@@ -107,7 +107,23 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
 
       - name: Run unit tests, lint, and signed release build
-        run: ./gradlew testDebugUnitTest lintDebug assembleRelease --stacktrace
+        run: ./gradlew --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' testDebugUnitTest lintDebug assembleRelease --stacktrace
+
+      - name: Verify signed APK identities
+        env:
+          RELEASE_VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          RELEASE_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          expected_cert="$(sed -n 's/^AllowedAPKSigningKeys: //p' metadata/com.voyagerfiles.yml)"
+          test -n "$expected_cert"
+          for apk in app/build/outputs/apk/release/*.apk; do
+            "$build_tools/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-certificate.txt"
+            grep -Fx "Signer #1 certificate SHA-256 digest: $expected_cert" "$RUNNER_TEMP/apk-certificate.txt"
+            "$build_tools/aapt2" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+            grep -F "package: name='com.voyagerfiles' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION_NAME'" "$RUNNER_TEMP/apk-badging.txt"
+          done
 
       - name: Prepare GitHub Pages release site
         run: scripts/prepare-github-pages-release.sh "${{ steps.release.outputs.tag }}" app/build/outputs/apk/release public
@@ -129,9 +145,14 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" public/downloads/* --clobber
           else
+            notes_file="docs/releases/${RELEASE_TAG#v}.md"
+            notes_args=(--generate-notes)
+            if [ -f "$notes_file" ]; then
+              notes_args=(--notes-file "$notes_file")
+            fi
             gh release create "$RELEASE_TAG" public/downloads/* \
               --title "Voyager $RELEASE_TAG" \
-              --generate-notes \
+              "${notes_args[@]}" \
               --verify-tag
           fi
 

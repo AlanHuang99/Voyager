@@ -191,7 +191,7 @@ cat > "$output_dir/index.html" <<HTML
   <main>
     <header>
       <h1>Voyager $tag</h1>
-      <p>Signed Android APK downloads published from GitHub Actions. F-Droid builds are produced and signed independently from the F-Droid metadata.</p>
+      <p>Signed Android APK downloads published from GitHub Actions. F-Droid updates are published separately after their build and verification process.</p>
     </header>
 
     <section class="release" aria-label="Release downloads">
