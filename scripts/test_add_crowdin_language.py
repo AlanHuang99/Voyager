@@ -1,7 +1,9 @@
+import io
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError
 
-from add_crowdin_language import add_language
+from add_crowdin_language import add_language, main
 
 
 class AddLanguageTest(unittest.TestCase):
@@ -14,7 +16,6 @@ class AddLanguageTest(unittest.TestCase):
         ])
         add_language(request, "927407", "pl")
         self.assertEqual(request.call_args_list[2].args, ("PATCH", "/projects/927407", [
-            {"op": "test", "path": "/targetLanguageIds", "value": ["fr", "zh-CN"]},
             {"op": "replace", "path": "/targetLanguageIds", "value": ["fr", "zh-CN", "pl"]},
         ]))
 
@@ -41,6 +42,19 @@ class AddLanguageTest(unittest.TestCase):
         ])
         with self.assertRaises(RuntimeError):
             add_language(request, "927407", "pl")
+
+    def test_api_validation_error_reports_reason_without_credentials(self):
+        response = io.BytesIO(b'{"error":{"message":"Validation failed: secret-test-token"}}')
+        error = HTTPError("https://api.crowdin.com/api/v2/languages/pl", 400, "Bad Request", {}, response)
+        with patch.dict("os.environ", {
+            "CROWDIN_PERSONAL_TOKEN": "secret-test-token",
+            "CROWDIN_PROJECT_ID": "927407",
+            "CROWDIN_LANGUAGE_ID": "pl",
+        }), patch("add_crowdin_language.urlopen", side_effect=error):
+            with self.assertRaises(RuntimeError) as caught:
+                main()
+        self.assertIn("HTTP 400: Validation failed: [redacted]", str(caught.exception))
+        self.assertNotIn("secret-test-token", str(caught.exception))
 
 
 if __name__ == "__main__":
