@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   add-language:
-    if: github.repository == 'AlanHuang99/Voyager' && github.ref == 'refs/heads/codex/sync-fdroid-1.9.0'
+    if: github.repository == 'AlanHuang99/Voyager' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
