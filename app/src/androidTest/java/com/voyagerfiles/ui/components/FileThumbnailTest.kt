@@ -91,7 +91,13 @@ class FileThumbnailTest {
             }
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(FILE_ICON_TEST_TAG)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false)
+                .isNotEmpty()
+        }
         composeTestRule.onNodeWithTag(FILE_ICON_TEST_TAG).assertExists()
+        composeTestRule.onNodeWithTag(PDF_THUMBNAIL_TEST_TAG).assertDoesNotExist()
     }
 
     @Test
