@@ -119,9 +119,15 @@ jobs:
           expected_cert="$(sed -n 's/^AllowedAPKSigningKeys: //p' metadata/com.voyagerfiles.yml)"
           test -n "$expected_cert"
           for apk in app/build/outputs/apk/release/*.apk; do
-            "$build_tools/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-certificate.txt"
-            grep -Fx "Signer #1 certificate SHA-256 digest: $expected_cert" "$RUNNER_TEMP/apk-certificate.txt"
+            echo "Verifying $apk with $build_tools"
+            "$build_tools/apksigner" verify --print-certs "$apk" | tee "$RUNNER_TEMP/apk-certificate.txt"
+            actual_certs="$(sed -nE 's/^Signer .* certificate SHA-256 digest: ([0-9a-fA-F]{64})$/\1/p' "$RUNNER_TEMP/apk-certificate.txt" | tr '[:upper:]' '[:lower:]' | sort -u)"
+            if [ "$actual_certs" != "$expected_cert" ]; then
+              echo "::error::APK signing certificates do not match AllowedAPKSigningKeys."
+              exit 1
+            fi
             "$build_tools/aapt2" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+            head -n 1 "$RUNNER_TEMP/apk-badging.txt"
             grep -F "package: name='com.voyagerfiles' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION_NAME'" "$RUNNER_TEMP/apk-badging.txt"
           done
 
