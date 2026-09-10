@@ -53,7 +53,19 @@ def main() -> None:
             with urlopen(req, timeout=30) as response:
                 return json.load(response)
         except HTTPError as error:
-            raise RuntimeError(f"Crowdin {method} failed with HTTP {error.code}") from None
+            details = json.loads(error.read(65536))
+            messages = []
+            def collect_messages(value):
+                if isinstance(value, dict):
+                    if isinstance(value.get("message"), str):
+                        messages.append(value["message"].replace(token, "[redacted]"))
+                    for child in value.values():
+                        collect_messages(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        collect_messages(child)
+            collect_messages(details)
+            raise RuntimeError(f"Crowdin {method} failed with HTTP {error.code}: {'; '.join(messages)}") from None
 
     add_language(request, os.environ["CROWDIN_PROJECT_ID"], os.environ["CROWDIN_LANGUAGE_ID"])
 
