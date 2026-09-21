@@ -33,4 +33,16 @@ internal object BrowserNavigationBounds {
         return normalizedPath == normalizedRoot ||
             normalizedPath.startsWith("$normalizedRoot/")
     }
+
+    /** Whether [candidate] is [path] itself or lies above it, following [parentOf] up from [path]. */
+    fun isSameOrAncestor(candidate: String, path: String, parentOf: (String) -> String?): Boolean {
+        val target = normalizePath(candidate)
+        var current: String? = path
+        while (current != null) {
+            if (normalizePath(current) == target) return true
+            val parent = parentOf(current)
+            current = if (parent == current) null else parent
+        }
+        return false
+    }
 }

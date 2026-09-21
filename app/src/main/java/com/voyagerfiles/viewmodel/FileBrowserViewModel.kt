@@ -115,12 +115,18 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private var initialNavigationJob: Job? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
     private val loadGuard = DirectoryLoadGuard()
+    private val scrollMemory = DirectoryScrollMemory()
     private val sessionAutoCloseTracker = SessionAutoCloseTracker()
     private var backgroundedSessionIds = emptySet<String>()
     private var deferredAutoCloseSessionIds = emptySet<String>()
 
     private val _browseState = MutableStateFlow(BrowseState())
     val browseState: StateFlow<BrowseState> = _browseState.asStateFlow()
+
+    /** Start position for the directory on screen; the UI keeps it current through [onDirectoryScrolled]. */
+    val directoryScrollPosition: ScrollPosition
+        get() = scrollMemory.current
+
     private val _rootEditor = MutableStateFlow<RootTextEditorState?>(null)
     val rootEditor: StateFlow<RootTextEditorState?> = _rootEditor.asStateFlow()
 
@@ -368,12 +374,23 @@ class FileBrowserViewModel @JvmOverloads constructor(
         return false
     }
 
+    fun onDirectoryScrolled(position: ScrollPosition) {
+        scrollMemory.update(position)
+    }
+
     private suspend fun navigateToPath(path: String) {
         val normalizedPath = BrowserNavigationBounds.normalizePath(path)
         val sessionId = _activeSession.value?.id
         if (sessionId != null) {
             updateSession(sessionId) { it.copy(currentPath = normalizedPath) }
         }
+        val previousPath = _browseState.value.currentPath
+        scrollMemory.leave(sessionId, previousPath)
+        scrollMemory.enter(
+            sessionId,
+            normalizedPath,
+            returning = BrowserNavigationBounds.isSameOrAncestor(normalizedPath, previousPath, fileProvider::getParentPath),
+        )
         _browseState.update {
             it.copy(
                 currentPath = normalizedPath,
@@ -1471,6 +1488,12 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val provider = sessionProviders[sessionId] ?: return false
         fileProvider = provider
         browserSessionRootPath = session.rootPath
+        _activeSession.value?.let { previous ->
+            if (_sessions.value.any { it.id == previous.id }) {
+                scrollMemory.leave(previous.id, _browseState.value.currentPath)
+            }
+        }
+        scrollMemory.enter(session.id, session.currentPath, returning = true)
         _activeSession.value = session
         _browseState.update {
             it.copy(
@@ -1492,6 +1515,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val wasActive = _activeSession.value?.id == sessionId
         val remainingSessions = _sessions.value.filterNot { it.id == sessionId }
         _sessions.value = remainingSessions
+        scrollMemory.forgetSession(sessionId)
 
         if (!wasActive) {
             refreshActiveSessionSnapshot()
@@ -1507,6 +1531,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         fileProvider = FileProviderFactory.createLocal()
         browserSessionRootPath = null
         _activeSession.value = null
+        scrollMemory.enter(null, closedSession.rootPath, returning = false)
         _browseState.update {
             it.copy(
                 currentPath = closedSession.rootPath,
@@ -1530,6 +1555,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val remainingSessions = _sessions.value.filterNot { it.id in sessionIds }
         val activeSessionWasClosed = _activeSession.value?.id?.let { it in sessionIds } == true
         _sessions.value = remainingSessions
+        sessionIds.forEach(scrollMemory::forgetSession)
         clearClipboard()
         _snackbarMessage.value = null
 
@@ -1540,6 +1566,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 fileProvider = FileProviderFactory.createLocal()
                 browserSessionRootPath = null
                 _activeSession.value = null
+                scrollMemory.enter(null, "/", returning = false)
                 _browseState.update {
                     it.copy(
                         currentPath = "/",
@@ -1556,6 +1583,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 val nextProvider = checkNotNull(sessionProviders[nextSession.id])
                 fileProvider = nextProvider
                 browserSessionRootPath = nextSession.rootPath
+                scrollMemory.enter(nextSession.id, nextSession.currentPath, returning = true)
                 _activeSession.value = nextSession
                 _browseState.update {
                     it.copy(

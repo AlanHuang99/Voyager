@@ -92,10 +92,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -150,6 +152,7 @@ import com.voyagerfiles.viewmodel.ClipboardOperation
 import com.voyagerfiles.viewmodel.DeleteMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.OperationState
+import com.voyagerfiles.viewmodel.ScrollPosition
 import com.voyagerfiles.util.FolderShortcuts
 import kotlinx.coroutines.launch
 
@@ -179,6 +182,21 @@ fun BrowserScreen(
     var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) pullRefreshing = false
+    }
+    val listState = key(activeSession?.id, state.currentPath) {
+        val start = viewModel.directoryScrollPosition
+        rememberLazyListState(start.index, start.offset)
+    }
+    val gridState = key(activeSession?.id, state.currentPath) {
+        val start = viewModel.directoryScrollPosition
+        rememberLazyGridState(start.index, start.offset)
+    }
+    LaunchedEffect(listState, gridState, state.viewMode) {
+        val grid = state.viewMode == ViewMode.GRID
+        snapshotFlow {
+            if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        }.collect(viewModel::onDirectoryScrolled)
     }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
@@ -1022,7 +1040,6 @@ fun BrowserScreen(
                     }
 
                     state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
-                        val listState = rememberLazyListState()
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize().testTag("browser-files")
@@ -1066,7 +1083,6 @@ fun BrowserScreen(
                     }
 
                     state.viewMode == ViewMode.GRID -> {
-                        val gridState = rememberLazyGridState()
                         val gridPadding = with(LocalDensity.current) { 8.dp.toPx() }
                         LazyVerticalGrid(
                             state = gridState,
