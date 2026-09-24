@@ -121,6 +121,32 @@ class ArchiveServiceTest {
     }
 
     @Test
+    fun extractionListsOnlyTheDestinationNotTheFoldersItCreates() = runBlocking {
+        val fileNames = (1..200).map { "folder/file-$it.txt" }
+        val listedPaths = mutableListOf<String>()
+        val provider = object : ArchiveTestFileProvider() {
+            override suspend fun listFiles(path: String) = super.listFiles(path).also { listedPaths += path }
+        }.apply {
+            putDirectory("/workspace")
+            putFile(
+                "/workspace/many.zip",
+                zipBytes(*fileNames.map { ZipFixture(it, contents = it.toByteArray()) }.toTypedArray()),
+            )
+        }
+
+        val extracted = ArchiveService.extract(
+            provider,
+            provider.getFileInfo("/workspace/many.zip").getOrThrow(),
+            "/workspace",
+        ).getOrThrow()
+
+        assertEquals(setOf("/workspace"), listedPaths.toSet())
+        fileNames.forEach { name ->
+            assertEquals(name, provider.readFile("${extracted.path}/$name").decodeToString())
+        }
+    }
+
+    @Test
     fun rejectsZipSlipDuplicateNormalizedPathsAndSymlinksWithCleanup() = runBlocking {
         val unsafeArchives = listOf(
             zipBytes(ZipFixture("../escape.txt", contents = "escape".toByteArray())),
