@@ -55,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -188,25 +189,25 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 }
         }
         viewModelScope.launch {
-            prefs.showHidden.collect { show ->
+            prefs.showHidden.distinctUntilChanged().collect { show ->
                 _browseState.update { it.copy(showHidden = show) }
                 if (_browseState.value.currentPath != "/") refreshFiles()
             }
         }
         viewModelScope.launch {
-            prefs.sortBy.collect { sort ->
+            prefs.sortBy.distinctUntilChanged().collect { sort ->
                 _browseState.update { it.copy(sortBy = sort) }
                 if (_browseState.value.files.isNotEmpty()) resortFiles()
             }
         }
         viewModelScope.launch {
-            prefs.sortOrder.collect { order ->
+            prefs.sortOrder.distinctUntilChanged().collect { order ->
                 _browseState.update { it.copy(sortOrder = order) }
                 if (_browseState.value.files.isNotEmpty()) resortFiles()
             }
         }
         viewModelScope.launch {
-            prefs.viewMode.collect { mode ->
+            prefs.viewMode.distinctUntilChanged().collect { mode ->
                 _browseState.update { it.copy(viewMode = mode) }
             }
         }
