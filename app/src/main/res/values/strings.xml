@@ -377,6 +377,10 @@
     <string name="browser_sessions">Sessions</string>
     <string name="browser_no_active_sessions">No active sessions</string>
     <string name="browser_session_active">Active</string>
+    <string name="browser_locations_connections">Saved connections</string>
+    <string name="browser_locations_home">Go to Home</string>
+    <string name="browser_location_group_title">%1$s (%2$d)</string>
+    <string name="browser_locations_show_all">Show all (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="one">%1$d item (%2$s)</item>
         <item quantity="other">%1$d items (%2$s)</item>

@@ -40,7 +40,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
 - Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. Writable local files receive temporary write permission so an external editor can save changes; Share grants read access only. APK files open in Android's package installer.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
-- Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
+- Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open. The Sessions sheet in the browser switches between them and opens saved connections, bookmarks, or storage volumes in place, without returning Home.
 - Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
 - Set a local or document-tree audio file as the ringtone or notification tone after granting Android's system-settings permission.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.

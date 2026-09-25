@@ -239,6 +239,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
+            bookmarkDao.markUsed(normalizedPath, FileSource.LOCAL, System.currentTimeMillis())
             val sessionId = localSessionId(normalizedPath)
             if (_sessions.value.none { it.id == sessionId }) {
                 sessionProviders[sessionId] = FileProviderFactory.createLocal()

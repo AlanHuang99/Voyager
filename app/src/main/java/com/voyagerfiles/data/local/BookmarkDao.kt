@@ -27,6 +27,9 @@ interface BookmarkDao {
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE path = :path AND source = :source LIMIT 1)")
     suspend fun isBookmarked(path: String, source: FileSource): Boolean
 
+    @Query("UPDATE bookmarks SET lastUsedAt = :timestamp WHERE path = :path AND source = :source")
+    suspend fun markUsed(path: String, source: FileSource, timestamp: Long)
+
     @Transaction
     suspend fun insertIfAbsent(bookmark: Bookmark) {
         if (!isBookmarked(bookmark.path, bookmark.source)) insert(bookmark)

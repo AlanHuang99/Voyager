@@ -155,6 +155,7 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onNavigateBack = { navController.navigateHome() },
                 onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
+                hasAllFilesAccess = hasAllFilesAccess,
             )
         }
 

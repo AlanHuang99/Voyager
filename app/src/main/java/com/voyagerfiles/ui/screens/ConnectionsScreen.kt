@@ -262,7 +262,7 @@ private fun ConnectionCard(
     }
 }
 
-private fun protocolIcon(protocol: ConnectionProtocol): ImageVector = when (protocol) {
+internal fun protocolIcon(protocol: ConnectionProtocol): ImageVector = when (protocol) {
     ConnectionProtocol.SFTP -> Icons.Filled.Terminal
     ConnectionProtocol.FTP -> Icons.Filled.Folder
     ConnectionProtocol.SMB -> Icons.Filled.Lan

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.Check
@@ -55,14 +56,17 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
@@ -88,6 +92,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -109,6 +114,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -123,10 +129,12 @@ import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.ui.components.AudioToneMenuItems
 import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
+import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
+import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
@@ -167,6 +175,7 @@ fun BrowserScreen(
         LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION,
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
     onFindDuplicates: (String) -> Unit = {},
+    hasAllFilesAccess: Boolean = true,
 ) {
     val state by viewModel.browseState.collectAsState()
     val rootEditor by viewModel.rootEditor.collectAsState()
@@ -179,6 +188,7 @@ fun BrowserScreen(
     }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val connections by viewModel.connections.collectAsState()
     var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) pullRefreshing = false
@@ -1135,14 +1145,33 @@ fun BrowserScreen(
     }
 
     if (showSessionsSheet) {
+        val storageVolumes = remember(context, hasAllFilesAccess) {
+            if (hasAllFilesAccess) FileUtils.getStorageVolumes(context) else emptyList()
+        }
+        val locations = remember(sessions, connections, bookmarks, storageVolumes, hasAllFilesAccess) {
+            BrowserLocationsModel.forState(sessions, connections, bookmarks, storageVolumes, hasAllFilesAccess)
+        }
         SessionSwitcherSheet(
             sessions = sessions,
             activeSessionId = activeSession?.id,
+            locations = locations,
             onSelect = { sessionId ->
                 viewModel.activateSession(sessionId)
                 showSessionsSheet = false
             },
             onClose = { sessionId -> closeSession(sessionId) },
+            onOpenConnection = { connection ->
+                viewModel.connectToRemote(connection)
+                showSessionsSheet = false
+            },
+            onOpenLocalRoot = { path ->
+                viewModel.openLocalRoot(path)
+                showSessionsSheet = false
+            },
+            onNavigateHome = {
+                showSessionsSheet = false
+                leaveBrowser()
+            },
             onDismiss = { showSessionsSheet = false },
         )
     }
@@ -1522,38 +1551,256 @@ enum class SelectionToolbarAction {
 private fun SessionSwitcherSheet(
     sessions: List<BrowserSession>,
     activeSessionId: String?,
+    locations: BrowserLocationsModel,
     onSelect: (String) -> Unit,
     onClose: (String) -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+    onNavigateHome: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // Open fully expanded so every entry is reachable without a second swipe.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var expandedGroup by remember { mutableStateOf<LocationGroup?>(null) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        BackHandler(enabled = expandedGroup != null) { expandedGroup = null }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 24.dp),
         ) {
-            Text(
-                stringResource(R.string.browser_sessions),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-            if (sessions.isEmpty()) {
-                Text(
-                    stringResource(R.string.browser_no_active_sessions),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            when (val group = expandedGroup) {
+                null -> LocationOverview(
+                    sessions = sessions,
+                    activeSessionId = activeSessionId,
+                    locations = locations,
+                    onSelect = onSelect,
+                    onClose = onClose,
+                    onOpenConnection = onOpenConnection,
+                    onOpenLocalRoot = onOpenLocalRoot,
+                    onNavigateHome = onNavigateHome,
+                    onShowAll = { expandedGroup = it },
                 )
-            } else {
-                sessions.forEach { session ->
-                    SessionRow(
-                        session = session,
-                        isActive = session.id == activeSessionId,
-                        onSelect = { onSelect(session.id) },
-                        onClose = { onClose(session.id) },
-                    )
-                }
+                else -> LocationGroupList(
+                    group = group,
+                    locations = locations,
+                    onBack = { expandedGroup = null },
+                    onOpenConnection = onOpenConnection,
+                    onOpenLocalRoot = onOpenLocalRoot,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun LocationOverview(
+    sessions: List<BrowserSession>,
+    activeSessionId: String?,
+    locations: BrowserLocationsModel,
+    onSelect: (String) -> Unit,
+    onClose: (String) -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+    onNavigateHome: () -> Unit,
+    onShowAll: (LocationGroup) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.browser_sessions),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 8.dp),
+        )
+        IconButton(onClick = onNavigateHome, modifier = Modifier.testTag("location-home")) {
+            Icon(Icons.Filled.Home, stringResource(R.string.browser_locations_home))
+        }
+    }
+    if (sessions.isEmpty()) {
+        Text(
+            stringResource(R.string.browser_no_active_sessions),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+        )
+    } else {
+        sessions.forEach { session ->
+            SessionRow(
+                session = session,
+                isActive = session.id == activeSessionId,
+                onSelect = { onSelect(session.id) },
+                onClose = { onClose(session.id) },
+            )
+        }
+    }
+
+    if (!locations.isEmpty) {
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+    }
+    if (locations.connections.isNotEmpty()) {
+        LocationSectionHeader(stringResource(LocationGroup.CONNECTIONS.labelRes))
+        locations.recentConnections.forEach { connection ->
+            ConnectionLocationRow(connection, onOpenConnection)
+        }
+        if (locations.hasMoreConnections) {
+            ShowAllRow(LocationGroup.CONNECTIONS, locations.connections.size) { onShowAll(LocationGroup.CONNECTIONS) }
+        }
+    }
+    if (locations.bookmarks.isNotEmpty()) {
+        LocationSectionHeader(stringResource(LocationGroup.BOOKMARKS.labelRes))
+        locations.recentBookmarks.forEach { bookmark ->
+            BookmarkLocationRow(bookmark, onOpenLocalRoot)
+        }
+        if (locations.hasMoreBookmarks) {
+            ShowAllRow(LocationGroup.BOOKMARKS, locations.bookmarks.size) { onShowAll(LocationGroup.BOOKMARKS) }
+        }
+    }
+    if (locations.storageVolumes.isNotEmpty()) {
+        LocationSectionHeader(stringResource(R.string.home_storage_section))
+        locations.storageVolumes.forEach { volume ->
+            val path = volume.path ?: return@forEach
+            LocationRow(
+                icon = if (volume.isRemovable) Icons.Filled.SdStorage else Icons.Filled.Storage,
+                title = volume.description,
+                subtitle = path,
+                onClick = { onOpenLocalRoot(path) },
+                modifier = Modifier.testTag("location-storage:$path"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocationGroupList(
+    group: LocationGroup,
+    locations: BrowserLocationsModel,
+    onBack: () -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+) {
+    val count = when (group) {
+        LocationGroup.CONNECTIONS -> locations.connections.size
+        LocationGroup.BOOKMARKS -> locations.bookmarks.size
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp, end = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.testTag("location-back")) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
+        }
+        Text(
+            stringResource(R.string.browser_location_group_title, stringResource(group.labelRes), count),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 8.dp),
+        )
+    }
+    when (group) {
+        LocationGroup.CONNECTIONS -> locations.connections.forEach { connection ->
+            ConnectionLocationRow(connection, onOpenConnection)
+        }
+        LocationGroup.BOOKMARKS -> locations.bookmarks.forEach { bookmark ->
+            BookmarkLocationRow(bookmark, onOpenLocalRoot)
+        }
+    }
+}
+
+@Composable
+private fun ConnectionLocationRow(connection: RemoteConnection, onOpen: (RemoteConnection) -> Unit) {
+    LocationRow(
+        icon = protocolIcon(connection.protocol),
+        title = connection.name,
+        subtitle = stringResource(
+            R.string.connection_summary,
+            stringResource(connection.protocol.displayNameRes),
+            connection.host,
+            connection.port,
+        ),
+        onClick = { onOpen(connection) },
+        modifier = Modifier.testTag("location-connection:${connection.id}"),
+    )
+}
+
+@Composable
+private fun BookmarkLocationRow(bookmark: Bookmark, onOpen: (String) -> Unit) {
+    LocationRow(
+        icon = Icons.Filled.Bookmark,
+        title = bookmark.name,
+        subtitle = bookmark.path,
+        onClick = { onOpen(bookmark.path) },
+        modifier = Modifier.testTag("location-bookmark:${bookmark.id}"),
+    )
+}
+
+@Composable
+private fun ShowAllRow(group: LocationGroup, count: Int, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(start = 12.dp)
+            .testTag("location-show-all:${group.name}"),
+    ) {
+        Text(stringResource(R.string.browser_locations_show_all, count))
+    }
+}
+
+@Composable
+private fun LocationSectionHeader(label: String) {
+    Text(
+        label,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun LocationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
