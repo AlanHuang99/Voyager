@@ -196,8 +196,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
         viewModelScope.launch {
             prefs.showHidden.distinctUntilChanged().collect { show ->
+                val changed = _browseState.value.showHidden != show
                 _browseState.update { it.copy(showHidden = show) }
-                if (_browseState.value.currentPath != "/") refreshFiles()
+                if (changed && _browseState.value.currentPath != "/") refreshFiles()
             }
         }
         viewModelScope.launch {

@@ -197,23 +197,6 @@ fun BrowserScreen(
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) pullRefreshing = false
     }
-    val listState = key(activeSession?.id, state.currentPath) {
-        val start = viewModel.directoryScrollPosition
-        rememberLazyListState(start.index, start.offset)
-    }
-    val gridState = key(activeSession?.id, state.currentPath) {
-        val start = viewModel.directoryScrollPosition
-        rememberLazyGridState(start.index, start.offset)
-    }
-    val scrollSessionId = activeSession?.id
-    val scrollPath = state.currentPath
-    LaunchedEffect(listState, gridState, state.viewMode, scrollSessionId, scrollPath) {
-        val grid = state.viewMode == ViewMode.GRID
-        snapshotFlow {
-            if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
-            else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-        }.collect { viewModel.onDirectoryScrolled(scrollSessionId, scrollPath, it) }
-    }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
@@ -965,6 +948,24 @@ fun BrowserScreen(
             }
         },
     ) { padding ->
+        // Keep scroll state in the lazy layouts' content composition and outside the loading branches.
+        val listState = key(activeSession?.id, state.currentPath) {
+            val start = viewModel.directoryScrollPosition
+            rememberLazyListState(start.index, start.offset)
+        }
+        val gridState = key(activeSession?.id, state.currentPath) {
+            val start = viewModel.directoryScrollPosition
+            rememberLazyGridState(start.index, start.offset)
+        }
+        val scrollSessionId = activeSession?.id
+        val scrollPath = state.currentPath
+        LaunchedEffect(listState, gridState, state.viewMode, scrollSessionId, scrollPath) {
+            val grid = state.viewMode == ViewMode.GRID
+            snapshotFlow {
+                if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+                else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }.collect { viewModel.onDirectoryScrolled(scrollSessionId, scrollPath, it) }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()

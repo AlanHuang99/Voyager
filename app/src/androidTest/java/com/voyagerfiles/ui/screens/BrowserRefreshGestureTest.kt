@@ -47,7 +47,9 @@ class BrowserRefreshGestureTest {
         viewModel = FileBrowserViewModel(app)
         showBrowser()
         compose.runOnIdle { viewModel.openLocalRoot(root.path) }
-        compose.waitUntil(5_000) { !viewModel.browseState.value.isLoading }
+        compose.waitUntil(5_000) {
+            viewModel.browseState.value.let { it.currentPath == root.path && !it.isLoading }
+        }
         compose.onNodeWithText("Empty folder").assertExists()
         root.resolve("new.txt").writeText("new")
         pull("Empty folder")
