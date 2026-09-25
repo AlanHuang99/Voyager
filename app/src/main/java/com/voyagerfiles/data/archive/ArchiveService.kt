@@ -394,12 +394,7 @@ object ArchiveService {
         name: String,
     ): FileItem {
         requireChildAbsent(provider, parentPath, name)
-        val created = provider.createFile(parentPath, name).getOrThrow()
-        if (created.name != name) {
-            runCatching { provider.delete(created.path).getOrThrow() }
-            throw ArchiveConflictException(created.path)
-        }
-        return created
+        return createExactFile(provider, parentPath, name)
     }
 
     private suspend fun createCheckedDirectory(
@@ -408,7 +403,31 @@ object ArchiveService {
         name: String,
     ): FileItem {
         requireChildAbsent(provider, parentPath, name)
-        val created = provider.createDirectory(parentPath, name).getOrThrow()
+        return createExactDirectory(provider, parentPath, name)
+    }
+
+    /**
+     * Creates [name] without listing [parentPath] first. Only for folders Voyager just created, where
+     * a listing per child would make extracting n files into one folder cost O(n²) entries.
+     */
+    private suspend fun createExactFile(
+        provider: FileProvider,
+        parentPath: String,
+        name: String,
+    ): FileItem = requireExactName(provider, provider.createFile(parentPath, name).getOrThrow(), name)
+
+    private suspend fun createExactDirectory(
+        provider: FileProvider,
+        parentPath: String,
+        name: String,
+    ): FileItem = requireExactName(provider, provider.createDirectory(parentPath, name).getOrThrow(), name)
+
+    /** Some providers pick a free name such as "name (1)" instead of failing on a conflict. */
+    private suspend fun requireExactName(
+        provider: FileProvider,
+        created: FileItem,
+        name: String,
+    ): FileItem {
         if (created.name != name) {
             runCatching { provider.delete(created.path).getOrThrow() }
             throw ArchiveConflictException(created.path)
@@ -483,7 +502,7 @@ object ArchiveService {
                 throw UnsafeArchiveEntryException(rawName, "the path conflicts with another entry type")
             }
             val parentPath = ensureDirectory(segments.dropLast(1), rawName)
-            val created = createCheckedFile(provider, parentPath, segments.last())
+            val created = createExactFile(provider, parentPath, segments.last())
             nodeTypes[key] = NodeType.FILE
             providerPaths[key] = created.path
 
@@ -557,7 +576,7 @@ object ArchiveService {
                     }
 
                     null -> {
-                        val created = createCheckedDirectory(
+                        val created = createExactDirectory(
                             provider,
                             currentProviderPath,
                             segment,
