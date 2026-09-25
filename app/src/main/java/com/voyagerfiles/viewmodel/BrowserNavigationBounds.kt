@@ -38,7 +38,8 @@ internal object BrowserNavigationBounds {
     fun isSameOrAncestor(candidate: String, path: String, parentOf: (String) -> String?): Boolean {
         val target = normalizePath(candidate)
         var current: String? = path
-        while (current != null) {
+        val visited = mutableSetOf<String>()
+        while (current != null && visited.add(current)) {
             if (normalizePath(current) == target) return true
             val parent = parentOf(current)
             current = if (parent == current) null else parent

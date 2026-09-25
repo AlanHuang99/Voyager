@@ -357,6 +357,10 @@
     <string name="browser_sessions">会话</string>
     <string name="browser_no_active_sessions">没有活动会话</string>
     <string name="browser_session_active">活动</string>
+    <string name="browser_locations_connections">Saved connections</string>
+    <string name="browser_locations_home">Go to Home</string>
+    <string name="browser_location_group_title">%1$s (%2$d)</string>
+    <string name="browser_locations_show_all">Show all (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="other">%1$d 项（%2$s）</item>
     </plurals>
@@ -462,4 +466,10 @@
     <string name="root_editor_save">保存文件</string>
     <string name="root_session_closed">Root 会话已关闭。请重新打开后再保存。</string>
     <string name="action_discard">放弃</string>
+    <string name="settings_search_bar">Search bar</string>
+    <string name="search_bar_top">Always visible at top</string>
+    <string name="search_bar_compact">Compact toolbar search</string>
+    <string name="search_bar_bottom">Always visible at bottom</string>
+    <string name="action_search">Search</string>
+    <string name="action_close_search">Close search</string>
 </resources>

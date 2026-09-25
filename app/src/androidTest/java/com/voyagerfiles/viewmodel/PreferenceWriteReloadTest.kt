@@ -16,11 +16,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 
-/**
- * DataStore re-emits every mapped preference flow on any edit. The browser must not reload the
- * directory when a preference it does not depend on changes; that reload was visible as a flash
- * behind the Sessions sheet and cost a listing round trip on remote sessions.
- */
+/** DataStore re-emits every mapped preference flow on any edit. The browser must not reload the directory when a preference it does not depend on changes; that reload was visible as a flash behind the Sessions sheet and cost a listing round trip on remote sessions. */
 class PreferenceWriteReloadTest {
     private val application = ApplicationProvider.getApplicationContext<Application>()
     private val preferences = PreferencesManager(application)

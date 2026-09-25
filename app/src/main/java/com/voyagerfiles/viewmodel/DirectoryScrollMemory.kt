@@ -7,10 +7,7 @@ data class ScrollPosition(val index: Int = 0, val offset: Int = 0) {
     }
 }
 
-/**
- * Remembers how far each directory of a browser session was scrolled, so that returning to a
- * directory picks up where the user left it while entering a directory afresh starts at the top.
- */
+/** Remembers how far each directory of a browser session was scrolled, so that returning to a directory picks up where the user left it while entering a directory afresh starts at the top. */
 class DirectoryScrollMemory {
     private data class Key(val sessionId: String?, val path: String)
 
@@ -28,10 +25,7 @@ class DirectoryScrollMemory {
         remembered[Key(sessionId, path)] = current
     }
 
-    /**
-     * Makes [path] the directory on screen and returns where it starts: the remembered position
-     * when [returning] to it, otherwise the top. Either way the directory's memory is consumed.
-     */
+    /** Makes [path] the directory on screen and returns where it starts: the remembered position when [returning] to it, otherwise the top. Either way the directory's memory is consumed. */
     fun enter(sessionId: String?, path: String, returning: Boolean): ScrollPosition {
         val stored = remembered.remove(Key(sessionId, path))
         current = if (returning) stored ?: ScrollPosition.TOP else ScrollPosition.TOP

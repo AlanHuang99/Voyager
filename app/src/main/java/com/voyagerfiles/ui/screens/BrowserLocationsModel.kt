@@ -15,15 +15,7 @@ internal enum class LocationGroup(@StringRes val labelRes: Int) {
     BOOKMARKS(R.string.home_bookmarks_title),
 }
 
-/**
- * Locations the browser's Sessions sheet can open as a new session without returning Home.
- *
- * Entries whose root already has an open session are omitted, because that session is listed
- * directly above them. Tapping a listed location therefore always creates a session. Local
- * entries follow the same all-files-access rule as Home. Connections are ordered by last
- * connection and bookmarks by last use, so the overview can show the few most recent entries
- * and leave the rest to the full list.
- */
+/** Locations the browser's Sessions sheet can open as a new session without returning Home. Entries whose root already has an open session are omitted, because that session is listed directly above them. Tapping a listed location therefore always creates a session. Local entries follow the same all-files-access rule as Home. Connections are ordered by last connection and bookmarks by last use, so the overview can show the few most recent entries and leave the rest to the full list. */
 data class BrowserLocationsModel(
     val connections: List<RemoteConnection>,
     val bookmarks: List<Bookmark>,

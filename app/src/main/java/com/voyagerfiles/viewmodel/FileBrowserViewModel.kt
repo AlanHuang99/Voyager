@@ -52,6 +52,7 @@ import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.UploadSourceFactory
 import kotlinx.coroutines.Dispatchers
+import com.voyagerfiles.data.model.SearchBarMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -160,6 +161,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
     val trashState: StateFlow<TrashState> = _trashState.asStateFlow()
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
+    val searchBarMode = prefs.searchBarMode.stateIn(viewModelScope, SharingStarted.Eagerly, SearchBarMode.TOP)
+
+    fun setSearchBarMode(mode: SearchBarMode) {
+        viewModelScope.launch { prefs.setSearchBarMode(mode) }
+    }
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val autoCloseSessions = prefs.autoCloseSessions.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val sessionAutoCloseTimeout = prefs.sessionAutoCloseTimeout.stateIn(
@@ -376,8 +382,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
         return false
     }
 
-    fun onDirectoryScrolled(position: ScrollPosition) {
-        scrollMemory.update(position)
+    fun onDirectoryScrolled(sessionId: String?, path: String, position: ScrollPosition) {
+        if (sessionId == _activeSession.value?.id && path == _browseState.value.currentPath) {
+            scrollMemory.update(position)
+        }
     }
 
     private suspend fun navigateToPath(path: String) {

@@ -8,13 +8,18 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
@@ -51,10 +56,13 @@ internal fun Modifier.dragFileSelection(
     val haptic by rememberUpdatedState(onStartHaptic)
     val edge = with(LocalDensity.current) { 56.dp.toPx() }
     val speed = with(LocalDensity.current) { 720.dp.toPx() }
-    return if (!enabled) this else pointerInput(paths, listState, gridState, gridContentOffset) {
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    return if (!enabled) this else onGloballyPositioned { origin = it.positionInRoot() }
+        .pointerInput(paths, listState, gridState, gridContentOffset) {
         coroutineScope {
             var range: DragSelectionRange? = null
-            var pointer = Offset.Zero
+            var pointerInRoot = Offset.Zero
+            var dragging = false
             var scrollJob: Job? = null
             fun items(): List<DragItem> = listState?.layoutInfo?.visibleItemsInfo?.map {
                 DragItem(it.key as String, Rect(0f, it.offset.toFloat(), size.width.toFloat(), (it.offset + it.size).toFloat()))
@@ -73,14 +81,18 @@ internal fun Modifier.dragFileSelection(
             }
             fun update() {
                 val active = range ?: return
-                itemAt(pointer, nearest = true)?.let { updateSelection(active.selectionAt(it)) }
+                itemAt(pointerInRoot - origin, nearest = true)?.let { updateSelection(active.selectionAt(it)) }
             }
-            fun velocity(): Float = when {
+            fun velocity(): Float {
+                if (!dragging) return 0f
+                val pointer = pointerInRoot - origin
+                return when {
                 pointer.y < edge && (listState?.canScrollBackward ?: gridState!!.canScrollBackward) ->
                     -speed * ((edge - pointer.y) / edge).coerceIn(0f, 1f)
                 pointer.y > size.height - edge && (listState?.canScrollForward ?: gridState!!.canScrollForward) ->
                     speed * ((pointer.y - size.height + edge) / edge).coerceIn(0f, 1f)
                 else -> 0f
+                }
             }
             fun updateAutoScroll() {
                 if (velocity() == 0f) {
@@ -104,17 +116,18 @@ internal fun Modifier.dragFileSelection(
                 scrollJob?.cancel()
                 scrollJob = null
                 range = null
+                dragging = false
             }
             try {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
                     val anchor = itemAt(press.position, nearest = false) ?: return@awaitEachGesture
-                    pointer = press.position
+                    pointerInRoot = press.position + origin
+                    val pressInRoot = pointerInRoot
                     range = DragSelectionRange(paths, anchor, latestSelection)
                     haptic()
-                    update()
-                    updateAutoScroll()
+                    updateSelection(checkNotNull(range).selectionAt(anchor))
                     try {
                         while (true) {
                             // Own motion and release before the child's click or scroll recognizer.
@@ -123,9 +136,15 @@ internal fun Modifier.dragFileSelection(
                             if (change.isConsumed) break
                             change.consume()
                             if (!change.pressed) break
-                            pointer = change.position
-                            update()
-                            updateAutoScroll()
+                            pointerInRoot = change.position + origin
+                            // The selection toolbar can move the list under a stationary finger. Only physical motion starts a range drag.
+                            if (!dragging && (pointerInRoot - pressInRoot).getDistance() > viewConfiguration.touchSlop) {
+                                dragging = true
+                            }
+                            if (dragging) {
+                                update()
+                                updateAutoScroll()
+                            }
                             awaitPointerEvent(PointerEventPass.Final)
                         }
                     } finally {

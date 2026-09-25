@@ -102,12 +102,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.focus.focusRequester
+import com.voyagerfiles.data.model.SearchBarMode
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalConfiguration
@@ -201,18 +205,22 @@ fun BrowserScreen(
         val start = viewModel.directoryScrollPosition
         rememberLazyGridState(start.index, start.offset)
     }
-    LaunchedEffect(listState, gridState, state.viewMode) {
+    val scrollSessionId = activeSession?.id
+    val scrollPath = state.currentPath
+    LaunchedEffect(listState, gridState, state.viewMode, scrollSessionId, scrollPath) {
         val grid = state.viewMode == ViewMode.GRID
         snapshotFlow {
             if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
             else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-        }.collect(viewModel::onDirectoryScrolled)
+        }.collect { viewModel.onDirectoryScrolled(scrollSessionId, scrollPath, it) }
     }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
+    val searchBarMode by viewModel.searchBarMode.collectAsState()
+    var compactSearchExpanded by rememberSaveable(searchBarMode, activeSession?.id, state.currentPath) { mutableStateOf(false) }
     val operationState by viewModel.operationState.collectAsState()
     val transferConflict by viewModel.transferConflict.collectAsState()
     val operationResult by viewModel.lastOperationResult.collectAsState()
@@ -227,6 +235,11 @@ fun BrowserScreen(
     val shortcutFailedMessage = stringResource(R.string.shortcut_unavailable)
     val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
     val focusManager = LocalFocusManager.current
+    fun closeCompactSearch() {
+        compactSearchExpanded = false
+        viewModel.setSearchQuery("")
+        focusManager.clearFocus()
+    }
     val hapticFeedback = LocalHapticFeedback.current
     val inputModeManager = LocalInputModeManager.current
     val firstItemFocusRequester = remember { FocusRequester() }
@@ -276,6 +289,22 @@ fun BrowserScreen(
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
+
+    fun toggleFolderBookmark(path: String) {
+        if (bookmarks.any { it.path == path && it.source == FileSource.LOCAL }) {
+            viewModel.removeBookmark(path, FileSource.LOCAL)
+        } else {
+            viewModel.addBookmark(path, path.substringAfterLast("/").ifEmpty { rootLabel })
+        }
+        scope.launch { snackbarHostState.showSnackbar(bookmarkToggledMessage) }
+    }
+
+    fun pinFolder(path: String) {
+        scope.launch {
+            val requested = runCatching { FolderShortcuts.requestPin(context, path) }.getOrDefault(false)
+            snackbarHostState.showSnackbar(if (requested) shortcutRequestedMessage else shortcutFailedMessage)
+        }
+    }
 
     fun toggleSelection(path: String) {
         if (shouldPerformSelectionHaptic(state.selectedFiles, path)) {
@@ -429,6 +458,7 @@ fun BrowserScreen(
     BackHandler {
         when {
             isSelectionMode -> viewModel.clearSelection()
+            searchBarMode == SearchBarMode.COMPACT && (compactSearchExpanded || state.searchQuery.isNotEmpty()) -> closeCompactSearch()
             else -> navigateUpOrLeave()
         }
     }
@@ -507,6 +537,15 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                selectedItems.singleOrNull()?.takeIf { it.isDirectory && it.source == FileSource.LOCAL }?.let { folder ->
+                                    FolderMenuItems(
+                                        bookmarked = bookmarks.any { it.path == folder.path && it.source == FileSource.LOCAL },
+                                        canFindDuplicates = runningOperation == null,
+                                        onBookmark = { showSelectionMoreMenu = false; toggleFolderBookmark(folder.path) },
+                                        onPin = { showSelectionMoreMenu = false; pinFolder(folder.path) },
+                                        onFindDuplicates = { showSelectionMoreMenu = false; onFindDuplicates(folder.path) },
+                                    )
+                                }
                                 selectedItems.singleOrNull()?.takeIf(AudioToneInstaller::isSupported)?.let { file ->
                                     AudioToneMenuItems(file) { selected, tone ->
                                         showSelectionMoreMenu = false
@@ -660,6 +699,11 @@ fun BrowserScreen(
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
                             }
                             Spacer(modifier = Modifier.weight(1f))
+                            if (searchBarMode == SearchBarMode.COMPACT) {
+                                IconButton(onClick = { compactSearchExpanded = true }) {
+                                    Icon(Icons.Filled.Search, stringResource(R.string.action_search))
+                                }
+                            }
                             IconButton(onClick = { showSessionsSheet = true }) {
                                 Icon(Icons.Filled.Folder, stringResource(R.string.content_desc_sessions))
                             }
@@ -810,59 +854,12 @@ fun BrowserScreen(
                                         },
                                     )
                                     if (state.source == FileSource.LOCAL) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.duplicates_title)) },
-                                            enabled = runningOperation == null,
-                                            onClick = { showMoreMenu = false; onFindDuplicates(state.currentPath) },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.shortcut_pin_folder)) },
-                                            leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                                            onClick = {
-                                                showMoreMenu = false
-                                                val path = state.currentPath
-                                                scope.launch {
-                                                    val requested = runCatching {
-                                                        FolderShortcuts.requestPin(context, path)
-                                                    }.getOrDefault(false)
-                                                    snackbarHostState.showSnackbar(
-                                                        if (requested) shortcutRequestedMessage else shortcutFailedMessage,
-                                                    )
-                                                }
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(stringResource(
-                                                    if (isCurrentFolderBookmarked) R.string.action_remove_bookmark
-                                                    else R.string.action_bookmark_folder,
-                                                ))
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    if (isCurrentFolderBookmarked) Icons.Filled.BookmarkRemove
-                                                    else Icons.Filled.BookmarkAdd,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.testTag(
-                                                        if (isCurrentFolderBookmarked) "bookmark-remove-icon"
-                                                        else "bookmark-add-icon",
-                                                    ),
-                                                )
-                                            },
-                                            onClick = {
-                                                if (isCurrentFolderBookmarked) {
-                                                    viewModel.removeBookmark(state.currentPath, state.source)
-                                                } else {
-                                                    viewModel.addBookmark(
-                                                        state.currentPath,
-                                                        state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
-                                                    )
-                                                }
-                                                showMoreMenu = false
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar(bookmarkToggledMessage)
-                                                }
-                                            },
+                                        FolderMenuItems(
+                                            bookmarked = isCurrentFolderBookmarked,
+                                            canFindDuplicates = runningOperation == null,
+                                            onBookmark = { showMoreMenu = false; toggleFolderBookmark(state.currentPath) },
+                                            onPin = { showMoreMenu = false; pinFolder(state.currentPath) },
+                                            onFindDuplicates = { showMoreMenu = false; onFindDuplicates(state.currentPath) },
                                         )
                                     }
                                 }
@@ -880,49 +877,65 @@ fun BrowserScreen(
                             selectedFilter = state.fileTypeFilter,
                             onQueryChange = viewModel::setSearchQuery,
                             onFilterChange = viewModel::setFileTypeFilter,
+                            showSearch = searchBarMode == SearchBarMode.TOP ||
+                                (searchBarMode == SearchBarMode.COMPACT && (compactSearchExpanded || state.searchQuery.isNotEmpty())),
+                            onCloseSearch = if (searchBarMode == SearchBarMode.COMPACT) ::closeCompactSearch else null,
                         )
                     }
                 }
             }
         },
         bottomBar = {
-            AnimatedVisibility(
-                visible = clipboardPaths.isNotEmpty() && clipboardOp != ClipboardOperation.NONE,
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it }),
-            ) {
-                BottomAppBar(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Text(
-                        pluralStringResource(
-                            R.plurals.browser_clipboard_summary,
-                            clipboardPaths.size,
-                            clipboardPaths.size,
-                            stringResource(
-                                if (clipboardOp == ClipboardOperation.CUT) R.string.browser_clipboard_cut
-                                else R.string.browser_clipboard_copy,
-                            ),
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 16.dp),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    TextButton(onClick = {
-                        viewModel.clearClipboard()
-                    }) {
-                        Text(stringResource(R.string.action_cancel))
-                    }
-                    IconButton(
-                        onClick = { viewModel.paste() },
-                        enabled = runningOperation == null,
-                    ) {
-                        Icon(
-                            Icons.Filled.ContentPaste,
-                            stringResource(R.string.browser_paste_here),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            Column(modifier = Modifier.imePadding()) {
+                if (searchBarMode == SearchBarMode.BOTTOM && !isSelectionMode) {
+                    Surface(color = MaterialTheme.colorScheme.surface) {
+                        BrowserSearchField(
+                            query = state.searchQuery,
+                            onQueryChange = viewModel::setSearchQuery,
+                            modifier = Modifier.fillMaxWidth()
+                                .then(if (clipboardPaths.isEmpty()) Modifier.navigationBarsPadding() else Modifier)
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = clipboardPaths.isNotEmpty() && clipboardOp != ClipboardOperation.NONE,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it }),
+                ) {
+                    BottomAppBar(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.browser_clipboard_summary,
+                                clipboardPaths.size,
+                                clipboardPaths.size,
+                                stringResource(
+                                    if (clipboardOp == ClipboardOperation.CUT) R.string.browser_clipboard_cut
+                                    else R.string.browser_clipboard_copy,
+                                ),
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 16.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        TextButton(onClick = {
+                            viewModel.clearClipboard()
+                        }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        IconButton(
+                            onClick = { viewModel.paste() },
+                            enabled = runningOperation == null,
+                        ) {
+                            Icon(
+                                Icons.Filled.ContentPaste,
+                                stringResource(R.string.browser_paste_here),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
                     }
                 }
             }
@@ -1368,7 +1381,13 @@ private fun BrowserFilterControls(
     selectedFilter: FileTypeFilter,
     onQueryChange: (String) -> Unit,
     onFilterChange: (FileTypeFilter) -> Unit,
+    showSearch: Boolean = true,
+    onCloseSearch: (() -> Unit)? = null,
 ) {
+    if (!showSearch) {
+        FileTypeFilterRow(selectedFilter, onFilterChange, PaddingValues(horizontal = 16.dp, vertical = 8.dp), Modifier.fillMaxWidth())
+        return
+    }
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         if (maxWidth >= 600.dp) {
             Row(
@@ -1380,6 +1399,7 @@ private fun BrowserFilterControls(
                 BrowserSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
+                    onCloseSearch = onCloseSearch,
                     modifier = Modifier.weight(0.42f),
                 )
                 FileTypeFilterRow(
@@ -1394,6 +1414,7 @@ private fun BrowserFilterControls(
                 BrowserSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
+                    onCloseSearch = onCloseSearch,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -1414,13 +1435,22 @@ private fun BrowserSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier,
+    onCloseSearch: (() -> Unit)? = null,
 ) {
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(onCloseSearch != null) {
+        if (onCloseSearch != null) searchFocus.requestFocus()
+    }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
-            if (query.isNotEmpty()) {
+            if (onCloseSearch != null) {
+                IconButton(onClick = onCloseSearch) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.action_close_search))
+                }
+            } else if (query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(Icons.Filled.Close, stringResource(R.string.content_desc_clear_search))
                 }
@@ -1428,7 +1458,7 @@ private fun BrowserSearchField(
         },
         placeholder = { Text(stringResource(R.string.browser_search_placeholder)) },
         singleLine = true,
-        modifier = modifier.testTag(BROWSER_SEARCH_TEST_TAG),
+        modifier = modifier.focusRequester(searchFocus).testTag(BROWSER_SEARCH_TEST_TAG),
     )
 }
 
@@ -1861,4 +1891,35 @@ private fun SessionRow(
             Icon(Icons.Filled.Close, stringResource(R.string.content_desc_close_session))
         }
     }
+}
+
+@Composable
+private fun FolderMenuItems(
+    bookmarked: Boolean,
+    canFindDuplicates: Boolean,
+    onBookmark: () -> Unit,
+    onPin: () -> Unit,
+    onFindDuplicates: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.duplicates_title)) },
+        enabled = canFindDuplicates,
+        onClick = onFindDuplicates,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.shortcut_pin_folder)) },
+        leadingIcon = { Icon(Icons.Filled.Folder, null) },
+        onClick = onPin,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(if (bookmarked) R.string.action_remove_bookmark else R.string.action_bookmark_folder)) },
+        leadingIcon = {
+            Icon(
+                if (bookmarked) Icons.Filled.BookmarkRemove else Icons.Filled.BookmarkAdd,
+                contentDescription = null,
+                modifier = Modifier.testTag(if (bookmarked) "bookmark-remove-icon" else "bookmark-add-icon"),
+            )
+        },
+        onClick = onBookmark,
+    )
 }

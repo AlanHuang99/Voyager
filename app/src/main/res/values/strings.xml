@@ -489,4 +489,10 @@
     <string name="root_editor_save">Save file</string>
     <string name="root_session_closed">Root session is closed. Reopen it before saving.</string>
     <string name="action_discard">Discard</string>
+    <string name="settings_search_bar">Search bar</string>
+    <string name="search_bar_top">Always visible at top</string>
+    <string name="search_bar_compact">Compact toolbar search</string>
+    <string name="search_bar_bottom">Always visible at bottom</string>
+    <string name="action_search">Search</string>
+    <string name="action_close_search">Close search</string>
 </resources>

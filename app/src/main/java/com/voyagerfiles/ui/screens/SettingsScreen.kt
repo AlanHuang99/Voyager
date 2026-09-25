@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.voyagerfiles.BuildConfig
 import com.voyagerfiles.R
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
+import com.voyagerfiles.data.model.SearchBarMode
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.theme.BlackColors
 import com.voyagerfiles.ui.theme.DarkColors
@@ -94,6 +95,8 @@ fun SettingsScreen(
     val autoCloseSessions by viewModel.autoCloseSessions.collectAsState()
     val sessionAutoCloseTimeout by viewModel.sessionAutoCloseTimeout.collectAsState()
     val homeLayout by viewModel.homeLayout.collectAsState()
+    val searchBarMode by viewModel.searchBarMode.collectAsState()
+    var searchModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var selectedThemeCategoryIndex by rememberSaveable { mutableIntStateOf(0) }
     var timeoutMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val selectedThemeCategory = themeCategories[selectedThemeCategoryIndex]
@@ -363,6 +366,30 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_search_bar), style = MaterialTheme.typography.bodyLarge)
+                Box {
+                    TextButton(onClick = { searchModeMenuExpanded = true }) {
+                        Text(stringResource(searchBarMode.labelRes))
+                    }
+                    DropdownMenu(expanded = searchModeMenuExpanded, onDismissRequest = { searchModeMenuExpanded = false }) {
+                        SearchBarMode.entries.forEach { mode ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(mode.labelRes)) },
+                                onClick = {
+                                    viewModel.setSearchBarMode(mode)
+                                    searchModeMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier
