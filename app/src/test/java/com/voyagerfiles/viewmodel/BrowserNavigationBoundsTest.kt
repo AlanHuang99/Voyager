@@ -71,4 +71,34 @@ class BrowserNavigationBoundsTest {
             )
         )
     }
+
+    @Test
+    fun sameOrAncestorFollowsParentsUpFromPath() {
+        val parentOf: (String) -> String? = { path ->
+            if (path == "/") null else path.substringBeforeLast("/").ifEmpty { "/" }
+        }
+
+        assertTrue(BrowserNavigationBounds.isSameOrAncestor("/a/b/c", "/a/b/c", parentOf))
+        assertTrue(BrowserNavigationBounds.isSameOrAncestor("/a", "/a/b/c/", parentOf))
+        assertTrue(BrowserNavigationBounds.isSameOrAncestor("/", "/a/b/c", parentOf))
+        assertFalse(BrowserNavigationBounds.isSameOrAncestor("/a/b/c", "/a", parentOf))
+        assertFalse(BrowserNavigationBounds.isSameOrAncestor("/a/x", "/a/b/c", parentOf))
+    }
+
+    @Test
+    fun sameOrAncestorUsesProviderParentsForContentUris() {
+        val root = "content://com.android.externalstorage.documents/tree/primary%3A/document/primary%3A"
+        val download = "content://com.android.externalstorage.documents/tree/primary%3A/document/primary%3ADownload"
+        val nested = "content://com.android.externalstorage.documents/tree/primary%3A/document/primary%3ADownload%2Fnested"
+        val parents = mapOf(nested to download, download to root)
+
+        assertTrue(BrowserNavigationBounds.isSameOrAncestor(download, nested, parents::get))
+        assertTrue(BrowserNavigationBounds.isSameOrAncestor(root, nested, parents::get))
+        assertFalse(BrowserNavigationBounds.isSameOrAncestor(nested, download, parents::get))
+    }
+
+    @Test
+    fun sameOrAncestorStopsWhenProviderRepeatsPath() {
+        assertFalse(BrowserNavigationBounds.isSameOrAncestor("/a", "/b", parentOf = { it }))
+    }
 }
