@@ -377,6 +377,10 @@
     <string name="browser_sessions">Sessions</string>
     <string name="browser_no_active_sessions">No active sessions</string>
     <string name="browser_session_active">Active</string>
+    <string name="browser_locations_connections">Saved connections</string>
+    <string name="browser_locations_home">Go to Home</string>
+    <string name="browser_location_group_title">%1$s (%2$d)</string>
+    <string name="browser_locations_show_all">Show all (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="one">%1$d item (%2$s)</item>
         <item quantity="other">%1$d items (%2$s)</item>
@@ -485,4 +489,10 @@
     <string name="root_editor_save">Save file</string>
     <string name="root_session_closed">Root session is closed. Reopen it before saving.</string>
     <string name="action_discard">Discard</string>
+    <string name="settings_search_bar">Search bar</string>
+    <string name="search_bar_top">Always visible at top</string>
+    <string name="search_bar_compact">Compact toolbar search</string>
+    <string name="search_bar_bottom">Always visible at bottom</string>
+    <string name="action_search">Search</string>
+    <string name="action_close_search">Close search</string>
 </resources>

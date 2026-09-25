@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.Check
@@ -55,14 +56,17 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
@@ -88,6 +92,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -97,18 +102,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.focus.focusRequester
+import com.voyagerfiles.data.model.SearchBarMode
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -123,10 +133,12 @@ import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.ui.components.AudioToneMenuItems
 import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
+import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
+import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
@@ -167,6 +179,7 @@ fun BrowserScreen(
         LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION,
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
     onFindDuplicates: (String) -> Unit = {},
+    hasAllFilesAccess: Boolean = true,
 ) {
     val state by viewModel.browseState.collectAsState()
     val rootEditor by viewModel.rootEditor.collectAsState()
@@ -179,30 +192,18 @@ fun BrowserScreen(
     }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val connections by viewModel.connections.collectAsState()
     var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) pullRefreshing = false
-    }
-    val listState = key(activeSession?.id, state.currentPath) {
-        val start = viewModel.directoryScrollPosition
-        rememberLazyListState(start.index, start.offset)
-    }
-    val gridState = key(activeSession?.id, state.currentPath) {
-        val start = viewModel.directoryScrollPosition
-        rememberLazyGridState(start.index, start.offset)
-    }
-    LaunchedEffect(listState, gridState, state.viewMode) {
-        val grid = state.viewMode == ViewMode.GRID
-        snapshotFlow {
-            if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
-            else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-        }.collect(viewModel::onDirectoryScrolled)
     }
     val clipboardPaths by viewModel.clipboardPaths.collectAsState()
     val clipboardOp by viewModel.clipboardOperation.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
+    val searchBarMode by viewModel.searchBarMode.collectAsState()
+    var compactSearchExpanded by rememberSaveable(searchBarMode, activeSession?.id, state.currentPath) { mutableStateOf(false) }
     val operationState by viewModel.operationState.collectAsState()
     val transferConflict by viewModel.transferConflict.collectAsState()
     val operationResult by viewModel.lastOperationResult.collectAsState()
@@ -217,6 +218,11 @@ fun BrowserScreen(
     val shortcutFailedMessage = stringResource(R.string.shortcut_unavailable)
     val archiveDefaultName = stringResource(R.string.browser_archive_default_name)
     val focusManager = LocalFocusManager.current
+    fun closeCompactSearch() {
+        compactSearchExpanded = false
+        viewModel.setSearchQuery("")
+        focusManager.clearFocus()
+    }
     val hapticFeedback = LocalHapticFeedback.current
     val inputModeManager = LocalInputModeManager.current
     val firstItemFocusRequester = remember { FocusRequester() }
@@ -266,6 +272,22 @@ fun BrowserScreen(
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
+
+    fun toggleFolderBookmark(path: String) {
+        if (bookmarks.any { it.path == path && it.source == FileSource.LOCAL }) {
+            viewModel.removeBookmark(path, FileSource.LOCAL)
+        } else {
+            viewModel.addBookmark(path, path.substringAfterLast("/").ifEmpty { rootLabel })
+        }
+        scope.launch { snackbarHostState.showSnackbar(bookmarkToggledMessage) }
+    }
+
+    fun pinFolder(path: String) {
+        scope.launch {
+            val requested = runCatching { FolderShortcuts.requestPin(context, path) }.getOrDefault(false)
+            snackbarHostState.showSnackbar(if (requested) shortcutRequestedMessage else shortcutFailedMessage)
+        }
+    }
 
     fun toggleSelection(path: String) {
         if (shouldPerformSelectionHaptic(state.selectedFiles, path)) {
@@ -419,6 +441,7 @@ fun BrowserScreen(
     BackHandler {
         when {
             isSelectionMode -> viewModel.clearSelection()
+            searchBarMode == SearchBarMode.COMPACT && (compactSearchExpanded || state.searchQuery.isNotEmpty()) -> closeCompactSearch()
             else -> navigateUpOrLeave()
         }
     }
@@ -497,6 +520,15 @@ fun BrowserScreen(
                                 expanded = showSelectionMoreMenu,
                                 onDismissRequest = { showSelectionMoreMenu = false },
                             ) {
+                                selectedItems.singleOrNull()?.takeIf { it.isDirectory && it.source == FileSource.LOCAL }?.let { folder ->
+                                    FolderMenuItems(
+                                        bookmarked = bookmarks.any { it.path == folder.path && it.source == FileSource.LOCAL },
+                                        canFindDuplicates = runningOperation == null,
+                                        onBookmark = { showSelectionMoreMenu = false; toggleFolderBookmark(folder.path) },
+                                        onPin = { showSelectionMoreMenu = false; pinFolder(folder.path) },
+                                        onFindDuplicates = { showSelectionMoreMenu = false; onFindDuplicates(folder.path) },
+                                    )
+                                }
                                 selectedItems.singleOrNull()?.takeIf(AudioToneInstaller::isSupported)?.let { file ->
                                     AudioToneMenuItems(file) { selected, tone ->
                                         showSelectionMoreMenu = false
@@ -650,6 +682,11 @@ fun BrowserScreen(
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
                             }
                             Spacer(modifier = Modifier.weight(1f))
+                            if (searchBarMode == SearchBarMode.COMPACT) {
+                                IconButton(onClick = { compactSearchExpanded = true }) {
+                                    Icon(Icons.Filled.Search, stringResource(R.string.action_search))
+                                }
+                            }
                             IconButton(onClick = { showSessionsSheet = true }) {
                                 Icon(Icons.Filled.Folder, stringResource(R.string.content_desc_sessions))
                             }
@@ -800,59 +837,12 @@ fun BrowserScreen(
                                         },
                                     )
                                     if (state.source == FileSource.LOCAL) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.duplicates_title)) },
-                                            enabled = runningOperation == null,
-                                            onClick = { showMoreMenu = false; onFindDuplicates(state.currentPath) },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.shortcut_pin_folder)) },
-                                            leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                                            onClick = {
-                                                showMoreMenu = false
-                                                val path = state.currentPath
-                                                scope.launch {
-                                                    val requested = runCatching {
-                                                        FolderShortcuts.requestPin(context, path)
-                                                    }.getOrDefault(false)
-                                                    snackbarHostState.showSnackbar(
-                                                        if (requested) shortcutRequestedMessage else shortcutFailedMessage,
-                                                    )
-                                                }
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(stringResource(
-                                                    if (isCurrentFolderBookmarked) R.string.action_remove_bookmark
-                                                    else R.string.action_bookmark_folder,
-                                                ))
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    if (isCurrentFolderBookmarked) Icons.Filled.BookmarkRemove
-                                                    else Icons.Filled.BookmarkAdd,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.testTag(
-                                                        if (isCurrentFolderBookmarked) "bookmark-remove-icon"
-                                                        else "bookmark-add-icon",
-                                                    ),
-                                                )
-                                            },
-                                            onClick = {
-                                                if (isCurrentFolderBookmarked) {
-                                                    viewModel.removeBookmark(state.currentPath, state.source)
-                                                } else {
-                                                    viewModel.addBookmark(
-                                                        state.currentPath,
-                                                        state.currentPath.substringAfterLast("/").ifEmpty { rootLabel },
-                                                    )
-                                                }
-                                                showMoreMenu = false
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar(bookmarkToggledMessage)
-                                                }
-                                            },
+                                        FolderMenuItems(
+                                            bookmarked = isCurrentFolderBookmarked,
+                                            canFindDuplicates = runningOperation == null,
+                                            onBookmark = { showMoreMenu = false; toggleFolderBookmark(state.currentPath) },
+                                            onPin = { showMoreMenu = false; pinFolder(state.currentPath) },
+                                            onFindDuplicates = { showMoreMenu = false; onFindDuplicates(state.currentPath) },
                                         )
                                     }
                                 }
@@ -870,49 +860,65 @@ fun BrowserScreen(
                             selectedFilter = state.fileTypeFilter,
                             onQueryChange = viewModel::setSearchQuery,
                             onFilterChange = viewModel::setFileTypeFilter,
+                            showSearch = searchBarMode == SearchBarMode.TOP ||
+                                (searchBarMode == SearchBarMode.COMPACT && (compactSearchExpanded || state.searchQuery.isNotEmpty())),
+                            onCloseSearch = if (searchBarMode == SearchBarMode.COMPACT) ::closeCompactSearch else null,
                         )
                     }
                 }
             }
         },
         bottomBar = {
-            AnimatedVisibility(
-                visible = clipboardPaths.isNotEmpty() && clipboardOp != ClipboardOperation.NONE,
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it }),
-            ) {
-                BottomAppBar(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Text(
-                        pluralStringResource(
-                            R.plurals.browser_clipboard_summary,
-                            clipboardPaths.size,
-                            clipboardPaths.size,
-                            stringResource(
-                                if (clipboardOp == ClipboardOperation.CUT) R.string.browser_clipboard_cut
-                                else R.string.browser_clipboard_copy,
-                            ),
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 16.dp),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    TextButton(onClick = {
-                        viewModel.clearClipboard()
-                    }) {
-                        Text(stringResource(R.string.action_cancel))
-                    }
-                    IconButton(
-                        onClick = { viewModel.paste() },
-                        enabled = runningOperation == null,
-                    ) {
-                        Icon(
-                            Icons.Filled.ContentPaste,
-                            stringResource(R.string.browser_paste_here),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            Column(modifier = Modifier.imePadding()) {
+                if (searchBarMode == SearchBarMode.BOTTOM && !isSelectionMode) {
+                    Surface(color = MaterialTheme.colorScheme.surface) {
+                        BrowserSearchField(
+                            query = state.searchQuery,
+                            onQueryChange = viewModel::setSearchQuery,
+                            modifier = Modifier.fillMaxWidth()
+                                .then(if (clipboardPaths.isEmpty()) Modifier.navigationBarsPadding() else Modifier)
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = clipboardPaths.isNotEmpty() && clipboardOp != ClipboardOperation.NONE,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it }),
+                ) {
+                    BottomAppBar(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.browser_clipboard_summary,
+                                clipboardPaths.size,
+                                clipboardPaths.size,
+                                stringResource(
+                                    if (clipboardOp == ClipboardOperation.CUT) R.string.browser_clipboard_cut
+                                    else R.string.browser_clipboard_copy,
+                                ),
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 16.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        TextButton(onClick = {
+                            viewModel.clearClipboard()
+                        }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        IconButton(
+                            onClick = { viewModel.paste() },
+                            enabled = runningOperation == null,
+                        ) {
+                            Icon(
+                                Icons.Filled.ContentPaste,
+                                stringResource(R.string.browser_paste_here),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
                     }
                 }
             }
@@ -942,6 +948,24 @@ fun BrowserScreen(
             }
         },
     ) { padding ->
+        // Keep scroll state in the lazy layouts' content composition and outside the loading branches.
+        val listState = key(activeSession?.id, state.currentPath) {
+            val start = viewModel.directoryScrollPosition
+            rememberLazyListState(start.index, start.offset)
+        }
+        val gridState = key(activeSession?.id, state.currentPath) {
+            val start = viewModel.directoryScrollPosition
+            rememberLazyGridState(start.index, start.offset)
+        }
+        val scrollSessionId = activeSession?.id
+        val scrollPath = state.currentPath
+        LaunchedEffect(listState, gridState, state.viewMode, scrollSessionId, scrollPath) {
+            val grid = state.viewMode == ViewMode.GRID
+            snapshotFlow {
+                if (grid) ScrollPosition(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+                else ScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }.collect { viewModel.onDirectoryScrolled(scrollSessionId, scrollPath, it) }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1135,14 +1159,33 @@ fun BrowserScreen(
     }
 
     if (showSessionsSheet) {
+        val storageVolumes = remember(context, hasAllFilesAccess) {
+            if (hasAllFilesAccess) FileUtils.getStorageVolumes(context) else emptyList()
+        }
+        val locations = remember(sessions, connections, bookmarks, storageVolumes, hasAllFilesAccess) {
+            BrowserLocationsModel.forState(sessions, connections, bookmarks, storageVolumes, hasAllFilesAccess)
+        }
         SessionSwitcherSheet(
             sessions = sessions,
             activeSessionId = activeSession?.id,
+            locations = locations,
             onSelect = { sessionId ->
                 viewModel.activateSession(sessionId)
                 showSessionsSheet = false
             },
             onClose = { sessionId -> closeSession(sessionId) },
+            onOpenConnection = { connection ->
+                viewModel.connectToRemote(connection)
+                showSessionsSheet = false
+            },
+            onOpenLocalRoot = { path ->
+                viewModel.openLocalRoot(path)
+                showSessionsSheet = false
+            },
+            onNavigateHome = {
+                showSessionsSheet = false
+                leaveBrowser()
+            },
             onDismiss = { showSessionsSheet = false },
         )
     }
@@ -1339,7 +1382,13 @@ private fun BrowserFilterControls(
     selectedFilter: FileTypeFilter,
     onQueryChange: (String) -> Unit,
     onFilterChange: (FileTypeFilter) -> Unit,
+    showSearch: Boolean = true,
+    onCloseSearch: (() -> Unit)? = null,
 ) {
+    if (!showSearch) {
+        FileTypeFilterRow(selectedFilter, onFilterChange, PaddingValues(horizontal = 16.dp, vertical = 8.dp), Modifier.fillMaxWidth())
+        return
+    }
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         if (maxWidth >= 600.dp) {
             Row(
@@ -1351,6 +1400,7 @@ private fun BrowserFilterControls(
                 BrowserSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
+                    onCloseSearch = onCloseSearch,
                     modifier = Modifier.weight(0.42f),
                 )
                 FileTypeFilterRow(
@@ -1365,6 +1415,7 @@ private fun BrowserFilterControls(
                 BrowserSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
+                    onCloseSearch = onCloseSearch,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -1385,13 +1436,22 @@ private fun BrowserSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier,
+    onCloseSearch: (() -> Unit)? = null,
 ) {
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(onCloseSearch != null) {
+        if (onCloseSearch != null) searchFocus.requestFocus()
+    }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
-            if (query.isNotEmpty()) {
+            if (onCloseSearch != null) {
+                IconButton(onClick = onCloseSearch) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.action_close_search))
+                }
+            } else if (query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(Icons.Filled.Close, stringResource(R.string.content_desc_clear_search))
                 }
@@ -1399,7 +1459,7 @@ private fun BrowserSearchField(
         },
         placeholder = { Text(stringResource(R.string.browser_search_placeholder)) },
         singleLine = true,
-        modifier = modifier.testTag(BROWSER_SEARCH_TEST_TAG),
+        modifier = modifier.focusRequester(searchFocus).testTag(BROWSER_SEARCH_TEST_TAG),
     )
 }
 
@@ -1522,38 +1582,256 @@ enum class SelectionToolbarAction {
 private fun SessionSwitcherSheet(
     sessions: List<BrowserSession>,
     activeSessionId: String?,
+    locations: BrowserLocationsModel,
     onSelect: (String) -> Unit,
     onClose: (String) -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+    onNavigateHome: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // Open fully expanded so every entry is reachable without a second swipe.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var expandedGroup by remember { mutableStateOf<LocationGroup?>(null) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        BackHandler(enabled = expandedGroup != null) { expandedGroup = null }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 24.dp),
         ) {
-            Text(
-                stringResource(R.string.browser_sessions),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-            if (sessions.isEmpty()) {
-                Text(
-                    stringResource(R.string.browser_no_active_sessions),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            when (val group = expandedGroup) {
+                null -> LocationOverview(
+                    sessions = sessions,
+                    activeSessionId = activeSessionId,
+                    locations = locations,
+                    onSelect = onSelect,
+                    onClose = onClose,
+                    onOpenConnection = onOpenConnection,
+                    onOpenLocalRoot = onOpenLocalRoot,
+                    onNavigateHome = onNavigateHome,
+                    onShowAll = { expandedGroup = it },
                 )
-            } else {
-                sessions.forEach { session ->
-                    SessionRow(
-                        session = session,
-                        isActive = session.id == activeSessionId,
-                        onSelect = { onSelect(session.id) },
-                        onClose = { onClose(session.id) },
-                    )
-                }
+                else -> LocationGroupList(
+                    group = group,
+                    locations = locations,
+                    onBack = { expandedGroup = null },
+                    onOpenConnection = onOpenConnection,
+                    onOpenLocalRoot = onOpenLocalRoot,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun LocationOverview(
+    sessions: List<BrowserSession>,
+    activeSessionId: String?,
+    locations: BrowserLocationsModel,
+    onSelect: (String) -> Unit,
+    onClose: (String) -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+    onNavigateHome: () -> Unit,
+    onShowAll: (LocationGroup) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.browser_sessions),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 8.dp),
+        )
+        IconButton(onClick = onNavigateHome, modifier = Modifier.testTag("location-home")) {
+            Icon(Icons.Filled.Home, stringResource(R.string.browser_locations_home))
+        }
+    }
+    if (sessions.isEmpty()) {
+        Text(
+            stringResource(R.string.browser_no_active_sessions),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+        )
+    } else {
+        sessions.forEach { session ->
+            SessionRow(
+                session = session,
+                isActive = session.id == activeSessionId,
+                onSelect = { onSelect(session.id) },
+                onClose = { onClose(session.id) },
+            )
+        }
+    }
+
+    if (!locations.isEmpty) {
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+    }
+    if (locations.connections.isNotEmpty()) {
+        LocationSectionHeader(stringResource(LocationGroup.CONNECTIONS.labelRes))
+        locations.recentConnections.forEach { connection ->
+            ConnectionLocationRow(connection, onOpenConnection)
+        }
+        if (locations.hasMoreConnections) {
+            ShowAllRow(LocationGroup.CONNECTIONS, locations.connections.size) { onShowAll(LocationGroup.CONNECTIONS) }
+        }
+    }
+    if (locations.bookmarks.isNotEmpty()) {
+        LocationSectionHeader(stringResource(LocationGroup.BOOKMARKS.labelRes))
+        locations.recentBookmarks.forEach { bookmark ->
+            BookmarkLocationRow(bookmark, onOpenLocalRoot)
+        }
+        if (locations.hasMoreBookmarks) {
+            ShowAllRow(LocationGroup.BOOKMARKS, locations.bookmarks.size) { onShowAll(LocationGroup.BOOKMARKS) }
+        }
+    }
+    if (locations.storageVolumes.isNotEmpty()) {
+        LocationSectionHeader(stringResource(R.string.home_storage_section))
+        locations.storageVolumes.forEach { volume ->
+            val path = volume.path ?: return@forEach
+            LocationRow(
+                icon = if (volume.isRemovable) Icons.Filled.SdStorage else Icons.Filled.Storage,
+                title = volume.description,
+                subtitle = path,
+                onClick = { onOpenLocalRoot(path) },
+                modifier = Modifier.testTag("location-storage:$path"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocationGroupList(
+    group: LocationGroup,
+    locations: BrowserLocationsModel,
+    onBack: () -> Unit,
+    onOpenConnection: (RemoteConnection) -> Unit,
+    onOpenLocalRoot: (String) -> Unit,
+) {
+    val count = when (group) {
+        LocationGroup.CONNECTIONS -> locations.connections.size
+        LocationGroup.BOOKMARKS -> locations.bookmarks.size
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp, end = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.testTag("location-back")) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back))
+        }
+        Text(
+            stringResource(R.string.browser_location_group_title, stringResource(group.labelRes), count),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 8.dp),
+        )
+    }
+    when (group) {
+        LocationGroup.CONNECTIONS -> locations.connections.forEach { connection ->
+            ConnectionLocationRow(connection, onOpenConnection)
+        }
+        LocationGroup.BOOKMARKS -> locations.bookmarks.forEach { bookmark ->
+            BookmarkLocationRow(bookmark, onOpenLocalRoot)
+        }
+    }
+}
+
+@Composable
+private fun ConnectionLocationRow(connection: RemoteConnection, onOpen: (RemoteConnection) -> Unit) {
+    LocationRow(
+        icon = protocolIcon(connection.protocol),
+        title = connection.name,
+        subtitle = stringResource(
+            R.string.connection_summary,
+            stringResource(connection.protocol.displayNameRes),
+            connection.host,
+            connection.port,
+        ),
+        onClick = { onOpen(connection) },
+        modifier = Modifier.testTag("location-connection:${connection.id}"),
+    )
+}
+
+@Composable
+private fun BookmarkLocationRow(bookmark: Bookmark, onOpen: (String) -> Unit) {
+    LocationRow(
+        icon = Icons.Filled.Bookmark,
+        title = bookmark.name,
+        subtitle = bookmark.path,
+        onClick = { onOpen(bookmark.path) },
+        modifier = Modifier.testTag("location-bookmark:${bookmark.id}"),
+    )
+}
+
+@Composable
+private fun ShowAllRow(group: LocationGroup, count: Int, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(start = 12.dp)
+            .testTag("location-show-all:${group.name}"),
+    ) {
+        Text(stringResource(R.string.browser_locations_show_all, count))
+    }
+}
+
+@Composable
+private fun LocationSectionHeader(label: String) {
+    Text(
+        label,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun LocationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1614,4 +1892,35 @@ private fun SessionRow(
             Icon(Icons.Filled.Close, stringResource(R.string.content_desc_close_session))
         }
     }
+}
+
+@Composable
+private fun FolderMenuItems(
+    bookmarked: Boolean,
+    canFindDuplicates: Boolean,
+    onBookmark: () -> Unit,
+    onPin: () -> Unit,
+    onFindDuplicates: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.duplicates_title)) },
+        enabled = canFindDuplicates,
+        onClick = onFindDuplicates,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.shortcut_pin_folder)) },
+        leadingIcon = { Icon(Icons.Filled.Folder, null) },
+        onClick = onPin,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(if (bookmarked) R.string.action_remove_bookmark else R.string.action_bookmark_folder)) },
+        leadingIcon = {
+            Icon(
+                if (bookmarked) Icons.Filled.BookmarkRemove else Icons.Filled.BookmarkAdd,
+                contentDescription = null,
+                modifier = Modifier.testTag(if (bookmarked) "bookmark-remove-icon" else "bookmark-add-icon"),
+            )
+        },
+        onClick = onBookmark,
+    )
 }

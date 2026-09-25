@@ -52,9 +52,11 @@ import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.UploadSourceFactory
 import kotlinx.coroutines.Dispatchers
+import com.voyagerfiles.data.model.SearchBarMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -159,6 +161,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
     val trashState: StateFlow<TrashState> = _trashState.asStateFlow()
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
+    val searchBarMode = prefs.searchBarMode.stateIn(viewModelScope, SharingStarted.Eagerly, SearchBarMode.TOP)
+
+    fun setSearchBarMode(mode: SearchBarMode) {
+        viewModelScope.launch { prefs.setSearchBarMode(mode) }
+    }
     val useTrash = prefs.useTrash.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val autoCloseSessions = prefs.autoCloseSessions.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val sessionAutoCloseTimeout = prefs.sessionAutoCloseTimeout.stateIn(
@@ -188,25 +195,26 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 }
         }
         viewModelScope.launch {
-            prefs.showHidden.collect { show ->
+            prefs.showHidden.distinctUntilChanged().collect { show ->
+                val changed = _browseState.value.showHidden != show
                 _browseState.update { it.copy(showHidden = show) }
-                if (_browseState.value.currentPath != "/") refreshFiles()
+                if (changed && _browseState.value.currentPath != "/") refreshFiles()
             }
         }
         viewModelScope.launch {
-            prefs.sortBy.collect { sort ->
+            prefs.sortBy.distinctUntilChanged().collect { sort ->
                 _browseState.update { it.copy(sortBy = sort) }
                 if (_browseState.value.files.isNotEmpty()) resortFiles()
             }
         }
         viewModelScope.launch {
-            prefs.sortOrder.collect { order ->
+            prefs.sortOrder.distinctUntilChanged().collect { order ->
                 _browseState.update { it.copy(sortOrder = order) }
                 if (_browseState.value.files.isNotEmpty()) resortFiles()
             }
         }
         viewModelScope.launch {
-            prefs.viewMode.collect { mode ->
+            prefs.viewMode.distinctUntilChanged().collect { mode ->
                 _browseState.update { it.copy(viewMode = mode) }
             }
         }
@@ -238,6 +246,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         cancelInitialNavigation()
         viewModelScope.launch {
             val normalizedPath = BrowserNavigationBounds.normalizePath(path)
+            bookmarkDao.markUsed(normalizedPath, FileSource.LOCAL, System.currentTimeMillis())
             val sessionId = localSessionId(normalizedPath)
             if (_sessions.value.none { it.id == sessionId }) {
                 sessionProviders[sessionId] = FileProviderFactory.createLocal()
@@ -374,8 +383,10 @@ class FileBrowserViewModel @JvmOverloads constructor(
         return false
     }
 
-    fun onDirectoryScrolled(position: ScrollPosition) {
-        scrollMemory.update(position)
+    fun onDirectoryScrolled(sessionId: String?, path: String, position: ScrollPosition) {
+        if (sessionId == _activeSession.value?.id && path == _browseState.value.currentPath) {
+            scrollMemory.update(position)
+        }
     }
 
     private suspend fun navigateToPath(path: String) {

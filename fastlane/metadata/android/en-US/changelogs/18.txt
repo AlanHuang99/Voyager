@@ -1,0 +1,7 @@
+- Fix unintended drag selection when the toolbar changes.
+- Use the Voyager splash icon and a dark background in dark mode.
+- Add compact and bottom search preferences.
+- Add bookmark, shortcut, and duplicate actions for selected folders.
+- Open saved locations from the Sessions sheet.
+- Restore directory scroll positions and avoid unnecessary reloads.
+- Reduce repeated listings during archive extraction.

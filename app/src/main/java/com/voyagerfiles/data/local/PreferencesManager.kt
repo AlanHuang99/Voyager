@@ -14,6 +14,7 @@ import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.HomeLayout
 import com.voyagerfiles.data.model.HomeSection
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
+import com.voyagerfiles.data.model.SearchBarMode
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.theme.AppTheme
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class PreferencesManager(private val context: Context) {
 
     private object Keys {
+        val SEARCH_BAR_MODE = stringPreferencesKey("search_bar_mode")
         val THEME = stringPreferencesKey("theme")
         val SHOW_HIDDEN = booleanPreferencesKey("show_hidden")
         val USE_TRASH = booleanPreferencesKey("use_trash")
@@ -85,6 +87,14 @@ class PreferencesManager(private val context: Context) {
     }
 
     val homeLayout: Flow<HomeLayout> = context.dataStore.data.map(::homeLayoutFromPreferences)
+
+    val searchBarMode: Flow<SearchBarMode> = context.dataStore.data.map { prefs ->
+        SearchBarMode.fromName(prefs[Keys.SEARCH_BAR_MODE])
+    }
+
+    suspend fun setSearchBarMode(mode: SearchBarMode) {
+        context.dataStore.edit { it[Keys.SEARCH_BAR_MODE] = mode.name }
+    }
 
     val customPrimary: Flow<Long> = context.dataStore.data.map { prefs ->
         prefs[Keys.CUSTOM_PRIMARY] ?: 0xFF6750A4

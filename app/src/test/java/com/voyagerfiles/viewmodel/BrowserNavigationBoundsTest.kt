@@ -101,4 +101,10 @@ class BrowserNavigationBoundsTest {
     fun sameOrAncestorStopsWhenProviderRepeatsPath() {
         assertFalse(BrowserNavigationBounds.isSameOrAncestor("/a", "/b", parentOf = { it }))
     }
+
+    @Test
+    fun sameOrAncestorStopsWhenProviderParentsFormACycle() {
+        val parents = mapOf("/b" to "/c", "/c" to "/b")
+        assertFalse(BrowserNavigationBounds.isSameOrAncestor("/a", "/b", parents::get))
+    }
 }

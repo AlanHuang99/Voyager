@@ -28,7 +28,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 
 - Browse internal storage and mounted external volumes such as SD cards and USB/OTG media.
 - Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
-- Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder.
+- Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder. Keep search at the top, move it to the bottom, or use compact toolbar search.
 - Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
 - Browse Home categories for APKs, videos, audio, images and documents across mounted shared storage, with cancellable scanning and explicit coverage information.
 - Find duplicate files in a local folder by content, choose copies to remove, and recheck a copy to keep before removal.
@@ -40,7 +40,8 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
 - Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. Writable local files receive temporary write permission so an external editor can save changes; Share grants read access only. APK files open in Android's package installer.
 - Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
-- Bookmark local folders, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open.
+- Keep directory scroll positions when returning to a parent, switching sessions, or refreshing a listing.
+- Bookmark local folders from either the browser or a selected folder, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open. The Sessions sheet in the browser switches between them and opens saved connections, bookmarks, or storage volumes in place, without returning Home.
 - Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
 - Set a local or document-tree audio file as the ringtone or notification tone after granting Android's system-settings permission.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
