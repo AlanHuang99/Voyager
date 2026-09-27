@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class TransferService : Service() {
@@ -44,6 +45,9 @@ class TransferService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "voyager:transfer")
             .apply { acquire(MAX_WAKE_MILLIS) }
         scope.launch {
+            // Android drops a package's notification updates beyond about five per second, and a
+            // dropped update is never replayed. The state flow keeps only its latest value, so a
+            // pause after each post skips the updates in between and still posts the final state.
             controller.state.collect { state ->
                 if (state is OperationState.Running) {
                     if (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this@TransferService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -53,6 +57,7 @@ class TransferService : Service() {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     if (latestStartId != 0) stopSelfResult(latestStartId)
                 }
+                delay(NOTIFICATION_UPDATE_INTERVAL_MILLIS)
             }
         }
     }
@@ -64,7 +69,9 @@ class TransferService : Service() {
         if (operation == null) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelfResult(startId)
-        } else {
+        } else if (intent?.action == null) {
+            // Only a start from a new operation must promote the service; after Cancel the paced
+            // updates post the new state, and an extra post here counts against the rate limit.
             ServiceCompat.startForeground(
                 this, NOTIFICATION_ID, notification(operation),
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
@@ -126,5 +133,6 @@ class TransferService : Service() {
         const val EXTRA_OPERATION_ID = "operation_id"
         const val ACTION_CANCEL = "com.voyagerfiles.action.CANCEL_TRANSFER"
         const val MAX_WAKE_MILLIS = 6 * 60 * 60 * 1000L
+        const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 400L
     }
 }
