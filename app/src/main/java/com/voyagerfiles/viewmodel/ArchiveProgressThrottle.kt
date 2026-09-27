@@ -23,7 +23,7 @@ internal class ArchiveProgressThrottle(
             phase = progress.phase
             phaseStartedAt = now
         }
-        val finished = progress.totalEntries?.let { total -> progress.completedEntries >= total } == true ||
+        val finished = progress.totalEntries?.let { total -> progress.completedEntries + progress.skippedEntries >= total } == true ||
             progress.totalBytes?.let { total -> total > 0 && progress.processedBytes >= total } == true
         if (!phaseChanged && !finished && now - lastPublishedAt < intervalNanos) return null
         lastPublishedAt = now

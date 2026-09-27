@@ -204,16 +204,20 @@ class ArchiveProgressAndCancellationTest {
             putFile("/workspace/bundle.tar.gz", archive)
         }
 
+        var report: ArchiveExtractionReport? = null
         assertCancelled {
             withContext(token.contextElement()) {
                 ArchiveService.extract(
                     provider,
                     provider.getFileInfo("/workspace/bundle.tar.gz").getOrThrow(),
                     "/workspace",
+                    onReport = { report = it },
                 )
             }
         }
-        assertFalse(provider.exists("/workspace/bundle_extracted"))
+        // one.bin was written before the transport closed, so it is kept for the user to decide.
+        assertTrue(provider.exists("/workspace/bundle_extracted/one.bin"))
+        assertFalse(report!!.complete)
     }
 
     private suspend fun assertCancelled(block: suspend () -> Result<*>) {
