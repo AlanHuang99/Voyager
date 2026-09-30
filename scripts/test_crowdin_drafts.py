@@ -19,16 +19,17 @@ class DraftTests(unittest.TestCase):
         self.assertTrue(body["skipApprovedTranslations"])
 
     def test_inspection_never_exposes_provider_credentials_or_writes(self):
-        api = Mock(return_value={"data": [{"data": {
+        api = Mock(side_effect=[{"data": [{"data": {
             "id": 12, "name": "Test engine", "credentials": {"apiKey": "private-key"},
-        }}]})
+        }}]}, {"data": []}, {"data": []}])
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             run(api, "inspect")
         self.assertNotIn("private-key", output.getvalue())
         self.assertNotIn("credentials", output.getvalue())
         self.assertEqual(api.call_args.args[0], "GET")
-        self.assertEqual(api.call_count, 1)
+        self.assertEqual(api.call_count, 3)
+        self.assertTrue(all(call.args[0] == "GET" for call in api.call_args_list))
 
     def test_missing_target_prevents_mutation(self):
         api = Mock(return_value={"data": {"sourceLanguageId": "en", "targetLanguageIds": ["it"]}})

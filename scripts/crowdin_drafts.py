@@ -62,6 +62,14 @@ def run(api, mode, engine_id=None, *, sleep=time.sleep):
             fields = ("id", "name", "type", "isEnabled", "enabledProjectIds",
                       "supportedLanguageIds", "enabledLanguageIds")
             print(json.dumps({key: engine[key] for key in fields if key in engine}), flush=True)
+        for progress in list_items(api, f"/projects/{PROJECT_ID}/languages/progress"):
+            if progress["languageId"] in LANGUAGES:
+                print("Translation progress: " + json.dumps(progress), flush=True)
+        jobs = api("GET", f"/projects/{PROJECT_ID}/pre-translations?limit=5&orderBy=createdAt%20desc")["data"]
+        for item in jobs:
+            job = item["data"]
+            fields = ("identifier", "status", "progress", "attributes", "createdAt", "finishedAt")
+            print("Recent job: " + json.dumps({key: job[key] for key in fields if key in job}), flush=True)
         return
     if engine_id is None or engine_id <= 0:
         raise ValueError("A positive MT engine ID is required")
@@ -88,6 +96,8 @@ def run(api, mode, engine_id=None, *, sleep=time.sleep):
         if status == "finished":
             report = api("GET", job_path + "/report")["data"]
             print(json.dumps(report), flush=True)
+            if not report.get("languages"):
+                print("No new translations were reported; inspect translation progress before considering drafts complete.", flush=True)
             return
         if status in {"failed", "canceled"}:
             raise RuntimeError(f"Pre-translation {status}; inspect the job before retrying")
