@@ -1,0 +1,4 @@
+- Add provisional translations for Simplified Chinese, Traditional Chinese, Spanish, French, German, Brazilian Portuguese, Japanese, Korean, Italian, and Vietnamese.
+- Add a translation contribution link in Settings and a dismissible notice on Home.
+- Preserve existing translations and English fallbacks for unreviewed sensitive messages.
+- Correct file-manager terminology in translated controls.

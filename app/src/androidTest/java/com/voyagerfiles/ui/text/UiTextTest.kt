@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.R
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class UiTextTest {
@@ -65,15 +66,19 @@ class UiTextTest {
         )
 
         assertEquals("Delete \"report.pdf\"?", filename.resolve(us))
-        assertEquals("Delete \"report.pdf\"?", filename.resolve(german))
+        assertEquals(german.getString(R.string.dialog_delete_named_title, "report.pdf"), filename.resolve(german))
         assertEquals("2 items", count.resolve(us))
-        assertEquals("2 items", count.resolve(german))
+        assertEquals(german.getQuantityString(R.plurals.items_count, 2, 2), count.resolve(german))
+        assertNotEquals(count.resolve(us), count.resolve(german))
         assertEquals("12.5%", percentage.resolve(us))
         assertEquals("12,5%", percentage.resolve(german))
         assertEquals("WebDAV • files.example:8443", host.resolve(us))
         assertEquals("WebDAV • files.example:8443", host.resolve(german))
         assertEquals("Could not download: disk full", error.resolve(us))
-        assertEquals("Could not download: disk full", error.resolve(german))
+        assertEquals(
+            german.getString(R.string.operation_failed, german.getString(R.string.operation_download), "disk full"),
+            error.resolve(german),
+        )
     }
 
     private fun resourcesFor(locale: Locale) = ApplicationProvider.getApplicationContext<Context>()

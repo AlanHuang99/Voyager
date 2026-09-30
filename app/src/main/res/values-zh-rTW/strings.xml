@@ -449,7 +449,7 @@
     <string name="duplicates_group">%1$d copies, %2$s each</string>
     <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
     <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
-    <string name="category_scope">檔案會跨越已掛載的共享儲存空間進行傳輸。應用程式私有儲存和文件提供者的授權資訊不會被掃描。</string>
+    <string name="category_scope">掃描已掛載共用儲存空間中的檔案。不掃描應用程式私有儲存空間或透過文件提供者授權的目錄。</string>
     <string name="category_hidden_included">包含隱藏檔案（設定）。</string>
     <string name="category_hidden_excluded">已排除隱藏檔案（設定）。</string>
     <string name="category_pending">未掃描</string>
