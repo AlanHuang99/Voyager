@@ -41,6 +41,8 @@
     <string name="progress_renaming">正在重命名</string>
     <string name="progress_compressing">正在压缩</string>
     <string name="progress_extracting">正在解压</string>
+    <string name="progress_reading_archive">正在读取压缩包</string>
+    <string name="progress_preparing_archive">正在准备</string>
     <string name="progress_copying">正在复制</string>
     <string name="progress_moving">正在移动</string>
     <string name="progress_pasting">正在粘贴</string>
@@ -65,6 +67,34 @@
     <string name="selected_archive_unavailable">所选压缩包已不可用。请刷新文件夹后重试。</string>
     <string name="archive_unavailable">该压缩包已不可用。请刷新文件夹后重试。</string>
     <string name="archive_extracted_to">已解压到 %1$s</string>
+    <string name="archive_extraction_cancelled">已取消解压</string>
+    <string name="archive_compression_cancelled">已取消压缩</string>
+    <string name="archive_extraction_cancelled_kept">已取消解压。已解压的文件保留在 %1$s</string>
+    <string name="archive_extraction_stopped_kept">解压已停止（%1$s）。已将目前解压的文件保留在 %2$s</string>
+    <string name="archive_extracted_to_with_note">已解压到 %1$s · %2$s</string>
+    <string name="archive_extracted_to_with_notes">已解压到 %1$s · %2$s · %3$s</string>
+    <plurals name="archive_entries_renamed">
+        <item quantity="other">已重命名 %d 项</item>
+    </plurals>
+    <plurals name="archive_entries_not_extracted">
+        <item quantity="other">%d 项无法解压</item>
+    </plurals>
+    <string name="archive_details">详情</string>
+    <string name="archive_details_title">解压详情</string>
+    <string name="archive_details_not_extracted">未解压</string>
+    <string name="archive_details_renamed">已重命名，因为此位置不区分大小写</string>
+    <plurals name="archive_details_more">
+        <item quantity="other">还有 %d 项</item>
+    </plurals>
+    <string name="archive_remove_extracted">删除已解压的文件</string>
+    <string name="archive_remove_title">删除已解压的文件？</string>
+    <plurals name="archive_remove_message">
+        <item quantity="other">这将永久删除 %2$s 中已解压的 %1$d 个文件。</item>
+    </plurals>
+    <string name="archive_remove_confirm">删除</string>
+    <string name="archive_removed">已删除 %1$s</string>
+    <string name="operation_remove_extracted">删除已解压的文件</string>
+    <string name="progress_removing_extracted">正在删除已解压的文件</string>
     <string name="paste_success">粘贴成功</string>
     <string name="file_already_on_device">此文件已在本设备上</string>
     <string name="choose_inside_location">请选择此位置内的文件或文件夹</string>

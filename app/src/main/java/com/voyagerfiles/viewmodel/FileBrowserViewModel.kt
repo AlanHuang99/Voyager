@@ -13,6 +13,9 @@ import com.voyagerfiles.audio.AudioTone
 import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.ArchivePhase
+import com.voyagerfiles.data.archive.PartialExtractionException
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
 import com.voyagerfiles.data.archive.ArchiveProgress
 import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.local.AppDatabase
@@ -153,6 +156,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     val transferConflict = operationController.conflicts.pending
     fun resolveTransferConflict(request: TransferConflictDecisions.Request, response: ConflictResponse) =
         operationController.conflicts.respond(request, response)
+    /** The last extraction's report and the provider it wrote to, so Remove deletes from the right place. */
+    private var extractionProvider: Pair<ArchiveExtractionReport, FileProvider>? = null
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -748,7 +753,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val destinationDirectory = state.currentPath
         val publishProgress = archiveProgressPublisher(R.string.progress_compressing)
 
-        launchOperation(R.string.progress_compressing, R.string.operation_compress) {
+        launchOperation(
+            R.string.progress_compressing,
+            R.string.operation_compress,
+            cancelledMessage = { UiText.Resource(R.string.archive_compression_cancelled) },
+        ) {
             ArchiveService.createZip(
                 provider = provider,
                 selectedItems = selectedItems,
@@ -810,27 +819,73 @@ class FileBrowserViewModel @JvmOverloads constructor(
     ) {
         val provider = fileProvider
         val publishProgress = archiveProgressPublisher(R.string.progress_extracting)
+        var report: ArchiveExtractionReport? = null
 
-        launchOperation(R.string.progress_extracting, R.string.operation_extract) {
-            ArchiveService.extract(
-                provider = provider,
-                archive = archive,
-                destinationDirectory = destinationDirectory,
-                onProgress = publishProgress,
-            ).fold(
-                onSuccess = { extractionRoot ->
-                    if (clearSelectionAfter) clearSelection()
+        launchOperation(
+            R.string.progress_extracting,
+            R.string.operation_extract,
+            cancelledMessage = {
+                report?.let { UiText.Resource(R.string.archive_extraction_cancelled_kept, listOf(UiText.Dynamic(it.root.name))) }
+                    ?: UiText.Resource(R.string.archive_extraction_cancelled)
+            },
+        ) {
+            try {
+                ArchiveService.extract(
+                    provider = provider,
+                    archive = archive,
+                    destinationDirectory = destinationDirectory,
+                    onProgress = publishProgress,
+                    onReport = { extracted ->
+                        report = extracted
+                        extractionProvider = extracted to provider
+                        operationController.attachArchiveReport(extracted)
+                    },
+                ).fold(
+                    onSuccess = { extractionRoot ->
+                        if (clearSelectionAfter) clearSelection()
+                        refreshFiles()
+                        report?.notExtracted?.firstOrNull()?.let { operationController.recordFailure(it.error) }
+                        showSnackbar(
+                            OperationMessages.archiveExtracted(
+                                extractionRoot.name,
+                                renamedEntries = report?.renamedCount ?: 0,
+                                notExtractedEntries = report?.notExtractedCount ?: 0,
+                            ),
+                        )
+                    },
+                    onFailure = { error ->
+                        operationController.recordFailure(error)
+                        if (error is PartialExtractionException) {
+                            refreshFiles()
+                            showSnackbar(OperationMessages.archivePartiallyExtracted(error))
+                        } else {
+                            showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
+                        }
+                    },
+                )
+            } catch (cancellation: CancellationException) {
+                if (report != null) refreshFiles()
+                throw cancellation
+            }
+        }
+    }
+
+    /** Deletes a partial extraction the user chose to remove from its result. */
+    fun removeExtraction(report: ArchiveExtractionReport) {
+        val (reported, provider) = extractionProvider ?: return
+        if (reported !== report) return
+        extractionProvider = null
+        val publishProgress = archiveProgressPublisher(R.string.progress_removing_extracted)
+        launchOperation(R.string.progress_removing_extracted, R.string.operation_remove_extracted) {
+            ArchiveService.removeExtraction(provider, report.root, report.extractedFiles, publishProgress).fold(
+                onSuccess = {
                     refreshFiles()
-                    showSnackbar(
-                        UiText.Resource(
-                            R.string.archive_extracted_to,
-                            listOf(UiText.Dynamic(extractionRoot.name)),
-                        ),
-                    )
+                    showSnackbar(UiText.Resource(R.string.archive_removed, listOf(UiText.Dynamic(report.root.name))))
                 },
                 onFailure = { error ->
                     operationController.recordFailure(error)
-                    showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
+                    refreshFiles()
+                    showSnackbar(OperationMessages.failure(R.string.operation_remove_extracted, error))
                 },
             )
         }
@@ -1303,14 +1358,15 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private fun launchOperation(
         @StringRes progressLabel: Int,
         @StringRes operationName: Int,
+        cancelledMessage: () -> UiText = { UiText.Resource(R.string.transfer_cancelled) },
         block: suspend () -> Unit,
     ) {
         val started = operationController.launch(
             label = UiText.Resource(progressLabel),
-            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone),
+            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone, R.string.operation_extract, R.string.operation_compress),
             onFailure = { error ->
                 showSnackbar(
-                    if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)
+                    if (error is CancellationException) cancelledMessage()
                     else OperationMessages.failure(operationName, error),
                 )
             },
@@ -1333,42 +1389,30 @@ class FileBrowserViewModel @JvmOverloads constructor(
         initialNavigationJob = null
     }
 
-    private fun archiveProgressPublisher(@StringRes labelRes: Int): (ArchiveProgress) -> Unit {
-        val label = UiText.Resource(labelRes)
-        var lastEntryName: String? = null
-        var lastCompletedEntries = -1
-        var lastPublishedBytes = 0L
-        return { progress ->
-            val entryChanged = progress.currentEntryName != lastEntryName
-            val completedEntriesChanged = progress.completedEntries != lastCompletedEntries
-            val reachedKnownTotal = progress.totalBytes
-                ?.takeIf { it > 0 }
-                ?.let { total ->
-                    progress.processedBytes >= total &&
-                        (entryChanged || lastPublishedBytes < total)
-                }
-                ?: false
-            val crossedPublicationThreshold = !entryChanged &&
-                progress.processedBytes - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
-            if (
-                entryChanged ||
-                completedEntriesChanged ||
-                reachedKnownTotal ||
-                crossedPublicationThreshold
-            ) {
-                lastEntryName = progress.currentEntryName
-                lastCompletedEntries = progress.completedEntries
-                lastPublishedBytes = progress.processedBytes
-                updateOperationProgress(
-                    TransferProgress(
-                        label = label,
-                        completedItems = progress.completedEntries,
-                        currentItemName = progress.currentEntryName?.substringAfterLast('/'),
-                        copiedBytes = progress.processedBytes,
-                        totalBytes = progress.totalBytes,
-                    )
-                )
+    private fun archiveProgressPublisher(
+        @StringRes labelRes: Int,
+        throttle: ArchiveProgressThrottle = ArchiveProgressThrottle(),
+    ): (ArchiveProgress) -> Unit = { progress ->
+        if (progress.phase == ArchivePhase.REMOVING) operationController.disallowCancel()
+        throttle.accept(progress)?.let { elapsedNanos ->
+            val label = when (progress.phase) {
+                ArchivePhase.READING_SOURCE -> R.string.progress_reading_archive
+                ArchivePhase.PREPARING -> R.string.progress_preparing_archive
+                ArchivePhase.WRITING -> labelRes
+                ArchivePhase.REMOVING -> R.string.progress_removing_extracted
             }
+            updateOperationProgress(
+                TransferProgress(
+                    label = UiText.Resource(label),
+                    completedItems = progress.completedEntries,
+                    totalItems = progress.totalEntries,
+                    currentItemName = progress.currentEntryName?.substringAfterLast('/'),
+                    copiedBytes = progress.processedBytes,
+                    totalBytes = progress.totalBytes,
+                    elapsedNanos = elapsedNanos,
+                    skippedItems = progress.skippedEntries,
+                )
+            )
         }
     }
 

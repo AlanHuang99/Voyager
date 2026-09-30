@@ -2,7 +2,12 @@ package com.voyagerfiles.data.archive
 
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.StreamTransfer
+import com.voyagerfiles.data.repository.TransferAbortable
+import com.voyagerfiles.data.repository.TransferCancellation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -13,8 +18,11 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import java.io.EOFException
 import java.io.File
+import java.io.FilterInputStream
 import java.io.InputStream
+import java.util.Locale
 
 object ArchiveService {
     private const val BUFFER_SIZE = 64 * 1024
@@ -33,47 +41,44 @@ object ArchiveService {
                 "ZIP archive names must end with .zip"
             }
             validateChildName(archiveName)
+            requireChildAbsent(provider, destinationDirectory, archiveName)
+            val plan = planZip(provider, selectedItems, onProgress)
             createdArchive = createCheckedFile(provider, destinationDirectory, archiveName)
-            val state = ZipCreationState()
-            val entryNames = mutableSetOf<String>()
 
             provider.getOutputStream(createdArchive.path).getOrThrow().use { providerOutput ->
-                ZipArchiveOutputStream(providerOutput).use { zip ->
-                    zip.setEncoding("UTF-8")
-                    zip.setUseLanguageEncodingFlag(true)
-                    zip.setUseZip64(Zip64Mode.AsNeeded)
-                    selectedItems.forEach { item ->
-                        val topLevelName = safeProviderEntryName(item.name)
-                        addZipItem(
-                            provider = provider,
-                            item = item,
-                            entryName = topLevelName,
-                            zip = zip,
-                            entryNames = entryNames,
-                            state = state,
-                            onProgress = onProgress,
-                        )
+                val abort = TransferCancellation.registerAbort {
+                    (providerOutput as? TransferAbortable)?.abortTransfer()
+                }
+                try {
+                    ZipArchiveOutputStream(providerOutput).use { zip ->
+                        zip.setEncoding("UTF-8")
+                        zip.setUseLanguageEncodingFlag(true)
+                        zip.setUseZip64(Zip64Mode.AsNeeded)
+                        writeZip(provider, plan, zip, onProgress)
                     }
+                } finally {
+                    abort.close()
                 }
             }
 
             Result.success(provider.getFileInfo(createdArchive.path).getOrThrow())
         } catch (error: Throwable) {
-            createdArchive?.let { archive ->
-                runCatching {
-                    if (provider.exists(archive.path)) {
-                        provider.delete(archive.path).getOrThrow()
-                    }
-                }.onFailure(error::addSuppressed)
+            val cancellation = cancellationOf(error)
+            withContext(NonCancellable) {
+                createdArchive?.let { archive ->
+                    runCatching {
+                        if (provider.exists(archive.path)) {
+                            provider.delete(archive.path).getOrThrow()
+                        }
+                    }.onFailure(error::addSuppressed)
+                }
             }
+            if (cancellation != null) throw cancellation
             Result.failure(
                 if (error is ArchiveException || error is IllegalArgumentException) {
                     error
                 } else {
-                    ArchiveException(
-                        "Could not create $archiveName: ${error.message ?: "archive write failed"}",
-                        error,
-                    )
+                    ArchiveException(failureReason(error, "archive write failed"), error)
                 }
             )
         }
@@ -83,9 +88,10 @@ object ArchiveService {
         provider: FileProvider,
         archive: FileItem,
         destinationDirectory: String,
+        onReport: (ArchiveExtractionReport) -> Unit = {},
         onProgress: (ArchiveProgress) -> Unit = {},
     ): Result<FileItem> = withContext(Dispatchers.IO) {
-        var extractionRoot: FileItem? = null
+        var tree: ExtractionTree? = null
         try {
             require(!archive.isDirectory) { "Select an archive file to extract" }
             val format = ArchiveFormat.detect(archive.name)
@@ -102,192 +108,252 @@ object ArchiveService {
 
             val rootName = "${format.stem(archive.name)}_extracted"
             validateChildName(rootName)
-            extractionRoot = createCheckedDirectory(provider, destinationDirectory, rootName)
-            val tree = ExtractionTree(provider, extractionRoot, onProgress)
+            requireChildAbsent(provider, destinationDirectory, rootName)
+            val extractionTree = ExtractionTree(provider, onProgress) {
+                createCheckedDirectory(provider, destinationDirectory, rootName)
+            }
+            tree = extractionTree
 
+            val sourceSize = archive.size.takeIf { it > 0 }
             provider.getInputStream(archive.path).getOrThrow().use { input ->
-                when (format) {
-                    ArchiveFormat.ZIP -> extractZip(input, tree)
-                    ArchiveFormat.TAR -> extractTar(input, tree)
-                    ArchiveFormat.TAR_GZIP -> {
-                        gzipInput(input).use { compressed ->
-                            extractTar(compressed, tree)
-                        }
+                val abort = TransferCancellation.registerAbort { abortInput(input) }
+                try {
+                    if (format == ArchiveFormat.ZIP) {
+                        extractionTree.sourceErrorsSkippable = true
+                        extractZip(input, sourceSize, extractionTree)
+                    } else {
+                        // Stream formats have no index, so progress follows the compressed input.
+                        val source = CountingInputStream(input)
+                        extractionTree.sourcePosition = source::count
+                        extractionTree.totalBytes = sourceSize
+                        extractStream(format, archive.name, source, extractionTree)
                     }
-
-                    ArchiveFormat.TAR_BZIP2 -> {
-                        BZip2CompressorInputStream(input, true).use { compressed ->
-                            extractTar(compressed, tree)
-                        }
-                    }
-
-                    ArchiveFormat.GZIP -> {
-                        gzipInput(input).use { compressed ->
-                            tree.writeFile(
-                                rawName = format.stem(archive.name),
-                                input = compressed,
-                                totalBytes = null,
-                            )
-                        }
-                    }
-
-                    ArchiveFormat.BZIP2 -> {
-                        BZip2CompressorInputStream(input, true).use { compressed ->
-                            tree.writeFile(
-                                rawName = format.stem(archive.name),
-                                input = compressed,
-                                totalBytes = null,
-                            )
-                        }
-                    }
-
-                    ArchiveFormat.RAR_UNSUPPORTED -> error("Unsupported RAR reached extraction")
+                } finally {
+                    abort.close()
                 }
             }
 
-            Result.success(extractionRoot)
+            extractionTree.root()
+            val report = extractionTree.report(complete = true)
+            // When every entry failed there is nothing to keep, so this is a failed extraction.
+            report.notExtracted.firstOrNull()?.takeIf { report.extractedEntries == 0 }?.let { throw it.error }
+            onReport(report)
+            Result.success(report.root)
         } catch (error: Throwable) {
-            extractionRoot?.let { root ->
-                runCatching {
-                    if (provider.exists(root.path)) {
-                        provider.delete(root.path).getOrThrow()
-                    }
-                }.onFailure(error::addSuppressed)
+            val cancellation = cancellationOf(error)
+            // An unsafe entry means the archive cannot be trusted, so nothing of it is kept.
+            val kept = withContext(NonCancellable + TransferCancellation.detached()) {
+                runCatching { tree?.keepOrRemove(keep = error !is UnsafeArchiveEntryException) }
+                    .onFailure(error::addSuppressed)
+                    .getOrNull()
             }
-            Result.failure(
-                if (error is ArchiveException || error is IllegalArgumentException) {
-                    error
-                } else {
-                    CorruptArchiveException(
-                        "Could not extract ${archive.name}: ${error.message ?: "the archive is invalid or corrupt"}",
-                        error,
-                    )
-                }
-            )
+            kept?.let(onReport)
+            if (cancellation != null) throw cancellation
+            val failure = if (error is ArchiveException || error is IllegalArgumentException) {
+                error
+            } else {
+                val truncated = generateSequence(error) { it.cause }.any { it is EOFException }
+                CorruptArchiveException(
+                    if (truncated) "the archive ends early and may be incomplete"
+                    else failureReason(error, "the archive is invalid or corrupt"),
+                    error,
+                )
+            }
+            Result.failure(kept?.let { PartialExtractionException(it.root, failure) } ?: failure)
         }
     }
 
-    private suspend fun addZipItem(
+    /**
+     * Deletes an extraction the user chose to remove, counting files against [extractedFiles]. Each
+     * folder is listed once; it runs to the end, because stopping halfway would leave a torn folder.
+     */
+    suspend fun removeExtraction(
         provider: FileProvider,
-        item: FileItem,
-        entryName: String,
-        zip: ZipArchiveOutputStream,
-        entryNames: MutableSet<String>,
-        state: ZipCreationState,
-        onProgress: (ArchiveProgress) -> Unit,
-    ) {
-        val normalizedName = if (item.isDirectory) "$entryName/" else entryName
-        val normalizedKey = ArchiveEntryPath.parse(normalizedName).getOrThrow().joinToString("/")
-        if (!entryNames.add(normalizedKey)) {
-            throw UnsafeArchiveEntryException(normalizedName, "duplicate normalized entry path")
-        }
+        root: FileItem,
+        extractedFiles: Int?,
+        onProgress: (ArchiveProgress) -> Unit = {},
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            var removedFiles = 0
 
-        val entry = ZipArchiveEntry(normalizedName).apply {
-            if (item.lastModified.time > 0) time = item.lastModified.time
-        }
-        zip.putArchiveEntry(entry)
-        var entryFailure: Throwable? = null
-        try {
-            if (!item.isDirectory) {
-                var processedBytes = 0L
-                provider.getInputStream(item.path).getOrThrow().use { input ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        if (read == 0) continue
-                        zip.write(buffer, 0, read)
-                        processedBytes += read
-                        onProgress(
-                            ArchiveProgress(
-                                currentEntryName = entryName,
-                                completedEntries = state.completedEntries,
-                                processedBytes = processedBytes,
-                                totalBytes = item.size.takeIf { it >= 0 },
-                            )
+            suspend fun remove(item: FileItem) {
+                if (item.isDirectory) {
+                    provider.listFiles(item.path).getOrThrow().forEach { child -> remove(child) }
+                }
+                provider.delete(item.path).getOrThrow()
+                if (!item.isDirectory) {
+                    removedFiles++
+                    onProgress(
+                        ArchiveProgress(
+                            phase = ArchivePhase.REMOVING,
+                            currentEntryName = item.name,
+                            completedEntries = removedFiles,
+                            totalEntries = extractedFiles?.coerceAtLeast(removedFiles),
                         )
-                    }
+                    )
                 }
             }
-        } catch (error: Throwable) {
-            entryFailure = error
-            throw error
-        } finally {
-            runCatching { zip.closeArchiveEntry() }
-                .onFailure { closeError ->
-                    if (entryFailure != null) {
-                        entryFailure.addSuppressed(closeError)
-                    } else {
-                        throw closeError
-                    }
+
+            remove(root)
+        }
+    }
+
+    /**
+     * Walks the selection before the archive exists, so totals are known up front and duplicate
+     * paths fail without leaving a partial archive. Each folder is still listed only once.
+     */
+    private suspend fun planZip(
+        provider: FileProvider,
+        selectedItems: List<FileItem>,
+        onProgress: (ArchiveProgress) -> Unit,
+    ): List<ZipPlanEntry> {
+        val plan = mutableListOf<ZipPlanEntry>()
+        val entryNames = mutableSetOf<String>()
+
+        suspend fun visit(item: FileItem, entryName: String) {
+            TransferCancellation.check()
+            val zipName = if (item.isDirectory) "$entryName/" else entryName
+            val normalizedKey = ArchiveEntryPath.parse(zipName).getOrThrow().joinToString("/")
+            if (!entryNames.add(normalizedKey)) {
+                throw UnsafeArchiveEntryException(zipName, "duplicate normalized entry path")
+            }
+            plan += ZipPlanEntry(item, entryName, zipName)
+            onProgress(
+                ArchiveProgress(
+                    phase = ArchivePhase.PREPARING,
+                    currentEntryName = entryName,
+                    completedEntries = plan.size,
+                )
+            )
+            if (item.isDirectory) {
+                provider.listFiles(item.path).getOrThrow().forEach { child ->
+                    visit(child, "$entryName/${safeProviderEntryName(child.name)}")
                 }
+            }
         }
 
-        state.completedEntries++
-        onProgress(
+        selectedItems.forEach { item -> visit(item, safeProviderEntryName(item.name)) }
+        return plan
+    }
+
+    private suspend fun writeZip(
+        provider: FileProvider,
+        plan: List<ZipPlanEntry>,
+        zip: ZipArchiveOutputStream,
+        onProgress: (ArchiveProgress) -> Unit,
+    ) {
+        val fileSizes = plan.filterNot { it.item.isDirectory }.map { it.item.size }
+        val totalBytes = fileSizes.takeIf { sizes -> sizes.all { it >= 0 } }?.sum()
+        var completedEntries = 0
+        var writtenBytes = 0L
+
+        fun report(entryName: String, pendingBytes: Long) = onProgress(
             ArchiveProgress(
                 currentEntryName = entryName,
-                completedEntries = state.completedEntries,
-                processedBytes = item.size.takeIf { !item.isDirectory && it >= 0 } ?: 0,
-                totalBytes = item.size.takeIf { !item.isDirectory && it >= 0 },
+                completedEntries = completedEntries,
+                totalEntries = plan.size,
+                processedBytes = writtenBytes + pendingBytes,
+                totalBytes = totalBytes,
             )
         )
 
-        if (item.isDirectory) {
-            provider.listFiles(item.path).getOrThrow().forEach { child ->
-                addZipItem(
-                    provider = provider,
-                    item = child,
-                    entryName = "$entryName/${safeProviderEntryName(child.name)}",
-                    zip = zip,
-                    entryNames = entryNames,
-                    state = state,
-                    onProgress = onProgress,
-                )
+        plan.forEach { planned ->
+            TransferCancellation.check()
+            val entry = ZipArchiveEntry(planned.zipName).apply {
+                if (planned.item.lastModified.time > 0) time = planned.item.lastModified.time
             }
+            zip.putArchiveEntry(entry)
+            var entryFailure: Throwable? = null
+            var entryBytes = 0L
+            try {
+                if (!planned.item.isDirectory) {
+                    provider.getInputStream(planned.item.path).getOrThrow().use { input ->
+                        StreamTransfer.copy(input, zip, planned.entryName, totalBytes = null) { copied ->
+                            entryBytes = copied.bytesTransferred
+                            report(planned.entryName, entryBytes)
+                        }
+                    }
+                }
+            } catch (error: Throwable) {
+                entryFailure = error
+                throw error
+            } finally {
+                runCatching { zip.closeArchiveEntry() }
+                    .onFailure { closeError ->
+                        if (entryFailure != null) {
+                            entryFailure.addSuppressed(closeError)
+                        } else {
+                            throw closeError
+                        }
+                    }
+            }
+            completedEntries++
+            writtenBytes += entryBytes
+            report(planned.entryName, 0)
         }
     }
 
     private suspend fun extractZip(
         input: InputStream,
+        sourceSize: Long?,
         tree: ExtractionTree,
-    ) {
-        val temporaryZip = File.createTempFile("voyager-archive-", ".zip")
-        var extractionFailure: Throwable? = null
-        try {
-            temporaryZip.outputStream().use { output ->
-                copyBounded(input, output)
+    ) = withSpooledArchive(input, ".zip", sourceSize, tree::reportReadingSource) { spooledZip ->
+        ZipFile.builder().setFile(spooledZip).get().use { zip ->
+            val entries = zip.entries.toList()
+            entries.forEach { entry -> validateZipEntry(entry, zip.canReadEntryData(entry)) }
+            val fileSizes = entries.filterNot(::isZipDirectory).map { it.size }
+            tree.totalEntries = entries.size
+            tree.totalBytes = fileSizes.takeIf { sizes -> sizes.all { it >= 0 } }?.sum()
+            entries.forEach { entry ->
+                extractZipEntry(entry, tree) { zip.getInputStream(entry) }
             }
-            ZipFile.builder().setFile(temporaryZip).get().use { zip ->
-                val entries = zip.entries
-                while (entries.hasMoreElements()) {
-                    val entry = entries.nextElement()
-                    validateZipEntry(entry, zip.canReadEntryData(entry))
-                    val unixType = entry.unixMode and UnixStat.FILE_TYPE_FLAG
-                    val isDirectory = entry.isDirectory || unixType == UnixStat.DIR_FLAG
-                    if (isDirectory) {
-                        tree.createDirectory(entry.name)
-                    } else {
-                        zip.getInputStream(entry).use { entryInput ->
-                            tree.writeFile(
-                                rawName = entry.name,
-                                input = entryInput,
-                                totalBytes = entry.size.takeIf { it >= 0 },
-                            )
-                        }
-                    }
+        }
+    }
+
+    private suspend fun extractZipEntry(
+        entry: ZipArchiveEntry,
+        tree: ExtractionTree,
+        openEntry: () -> InputStream,
+    ) {
+        if (isZipDirectory(entry)) {
+            tree.createDirectory(entry.name)
+        } else {
+            openEntry().use { entryInput ->
+                tree.writeFile(rawName = entry.name, input = entryInput)
+            }
+        }
+    }
+
+    private fun isZipDirectory(entry: ZipArchiveEntry): Boolean =
+        entry.isDirectory || (entry.unixMode and UnixStat.FILE_TYPE_FLAG) == UnixStat.DIR_FLAG
+
+    /** Copies [input] to an app-private temporary file for readers that need random access. */
+    private suspend fun <T> withSpooledArchive(
+        input: InputStream,
+        suffix: String,
+        sourceSize: Long?,
+        onCopied: (copiedBytes: Long, totalBytes: Long?) -> Unit,
+        block: suspend (File) -> T,
+    ): T {
+        val spooledArchive = File.createTempFile("voyager-archive-", suffix)
+        var failure: Throwable? = null
+        try {
+            spooledArchive.outputStream().use { output ->
+                StreamTransfer.copy(input, output, spooledArchive.name, sourceSize) { copied ->
+                    onCopied(copied.bytesTransferred, sourceSize)
                 }
             }
+            return block(spooledArchive)
         } catch (error: Throwable) {
-            extractionFailure = error
+            failure = error
             throw error
         } finally {
-            if (temporaryZip.exists() && !temporaryZip.delete()) {
+            if (spooledArchive.exists() && !spooledArchive.delete()) {
                 val cleanupError = ArchiveException(
-                    "Could not remove the temporary ZIP file ${temporaryZip.name}",
+                    "Could not remove the temporary archive file ${spooledArchive.name}",
                 )
-                if (extractionFailure != null) {
-                    extractionFailure.addSuppressed(cleanupError)
+                if (failure != null) {
+                    failure.addSuppressed(cleanupError)
                 } else {
                     throw cleanupError
                 }
@@ -295,15 +361,41 @@ object ArchiveService {
         }
     }
 
-    private fun copyBounded(input: InputStream, output: java.io.OutputStream) {
-        val buffer = ByteArray(BUFFER_SIZE)
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            if (read == 0) continue
-            output.write(buffer, 0, read)
+    private suspend fun extractStream(
+        format: ArchiveFormat,
+        archiveName: String,
+        input: InputStream,
+        tree: ExtractionTree,
+    ) {
+        when (format) {
+            ArchiveFormat.TAR -> extractTar(input, tree)
+            ArchiveFormat.TAR_GZIP -> gzipInput(input).use { extractTar(it, tree) }
+            ArchiveFormat.TAR_BZIP2 -> BZip2CompressorInputStream(input, true).use { extractTar(it, tree) }
+            ArchiveFormat.GZIP -> gzipInput(input).use { compressed ->
+                tree.totalEntries = 1
+                tree.writeFile(rawName = format.stem(archiveName), input = compressed)
+            }
+            ArchiveFormat.BZIP2 -> BZip2CompressorInputStream(input, true).use { compressed ->
+                tree.totalEntries = 1
+                tree.writeFile(rawName = format.stem(archiveName), input = compressed)
+            }
+            ArchiveFormat.ZIP -> error("ZIP archives are extracted from a spooled copy")
+            ArchiveFormat.RAR_UNSUPPORTED -> error("Unsupported RAR reached extraction")
         }
     }
+
+    /** The operation's message already names the action and the archive, so this is only the cause. */
+    private fun failureReason(error: Throwable, fallback: String): String =
+        error.message?.takeIf { it.isNotBlank() } ?: fallback
+
+    private fun abortInput(input: InputStream) {
+        if (input is TransferAbortable) input.abortTransfer() else input.close()
+    }
+
+    /** An aborted stream surfaces as an I/O error; the cancellation token says what really happened. */
+    private fun cancellationOf(error: Throwable): CancellationException? =
+        error as? CancellationException
+            ?: runCatching { TransferCancellation.check() }.exceptionOrNull() as? CancellationException
 
     private fun gzipInput(input: InputStream): GzipCompressorInputStream =
         GzipCompressorInputStream.builder()
@@ -315,6 +407,7 @@ object ArchiveService {
         entry: ZipArchiveEntry,
         canReadEntryData: Boolean,
     ) {
+        ArchiveEntryPath.parse(entry.name).getOrThrow()
         if (entry.generalPurposeBit.usesEncryption()) {
             throw UnsupportedArchiveException(
                 ArchiveFormat.ZIP,
@@ -350,11 +443,7 @@ object ArchiveService {
                 if (entry.isDirectory) {
                     tree.createDirectory(entry.name)
                 } else {
-                    tree.writeFile(
-                        rawName = entry.name,
-                        input = tar,
-                        totalBytes = entry.size.takeIf { it >= 0 },
-                    )
+                    tree.writeFile(rawName = entry.name, input = tar)
                 }
             }
         }
@@ -465,86 +554,255 @@ object ArchiveService {
         return segments.single()
     }
 
-    private class ZipCreationState {
-        var completedEntries: Int = 0
+    /** [entryName] names the item in progress; [zipName] is the entry, with "/" for folders. */
+    private class ZipPlanEntry(val item: FileItem, val entryName: String, val zipName: String)
+
+    private class CountingInputStream(input: InputStream) : FilterInputStream(input) {
+        @Volatile
+        var count: Long = 0
+            private set
+
+        override fun read(): Int = super.read().also { if (it >= 0) count++ }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            super.read(buffer, offset, length).also { if (it > 0) count += it }
+
+        override fun skip(n: Long): Long = super.skip(n).also { count += it }
+
+        override fun markSupported(): Boolean = false
+    }
+
+    /** Remembers whether reading the entry failed, which a stream format cannot skip past. */
+    private class ReadFailureTrackingInputStream(input: InputStream) : FilterInputStream(input) {
+        var failed = false
+            private set
+
+        override fun read(): Int = tracked { super.read() }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            tracked { super.read(buffer, offset, length) }
+
+        override fun skip(n: Long): Long = tracked { super.skip(n) }
+
+        private inline fun <T> tracked(block: () -> T): T = try {
+            block()
+        } catch (error: Throwable) {
+            failed = true
+            throw error
+        }
     }
 
     private class ExtractionTree(
         private val provider: FileProvider,
-        root: FileItem,
         private val onProgress: (ArchiveProgress) -> Unit,
+        private val createRoot: suspend () -> FileItem,
     ) {
+        private var createdRoot: FileItem? = null
         private val entryNames = mutableSetOf<String>()
-        private val nodeTypes = mutableMapOf("" to NodeType.DIRECTORY)
-        private val providerPaths = mutableMapOf("" to root.path)
+        private val nodeTypes = mutableMapOf<String, NodeType>()
+        private val providerPaths = mutableMapOf<String, String>()
+
+        /**
+         * Children of each created folder by case-folded name, with the path of a child folder or null
+         * for a file. This tree is the only writer there, so it never has to list them.
+         */
+        private val children = mutableMapOf<String, MutableMap<String, String?>>()
+
+        /** Creation order, so a removal deletes children before their folder and can count as it goes. */
+        private val createdPaths = mutableListOf<String>()
         private var completedEntries = 0
+        private var writtenFiles = 0
+        private val renamed = mutableListOf<RenamedEntry>()
+        private val notExtracted = mutableListOf<FailedEntry>()
+        private var renamedCount = 0
+        private var notExtractedCount = 0
+        private var writtenBytes = 0L
+        var totalEntries: Int? = null
+        var totalBytes: Long? = null
+
+        /** When set, byte progress follows this position in the compressed source instead of bytes written. */
+        var sourcePosition: (() -> Long)? = null
+
+        /** True when entries are read independently, so a broken entry does not break the ones after it. */
+        var sourceErrorsSkippable = false
+
+        fun reportReadingSource(copiedBytes: Long, totalBytes: Long?) = onProgress(
+            ArchiveProgress(
+                phase = ArchivePhase.READING_SOURCE,
+                processedBytes = copiedBytes,
+                totalBytes = totalBytes,
+            )
+        )
+
+        /** Creates the extraction root on first use, so an unreadable archive leaves nothing behind. */
+        suspend fun root(): FileItem = createdRoot ?: createRoot().also { root ->
+            createdRoot = root
+            nodeTypes[""] = NodeType.DIRECTORY
+            providerPaths[""] = root.path
+        }
+
+        fun report(complete: Boolean) = ArchiveExtractionReport(
+            root = checkNotNull(createdRoot),
+            extractedEntries = completedEntries,
+            extractedFiles = writtenFiles,
+            totalEntries = totalEntries,
+            renamed = renamed.toList(),
+            notExtracted = notExtracted.toList(),
+            renamedCount = renamedCount,
+            notExtractedCount = notExtractedCount,
+            complete = complete,
+        )
+
+        /**
+         * After a failure or cancel, keeps what was written and returns its report. When nothing was
+         * extracted, or [keep] is false, removes it instead and restores the last counts for the result.
+         */
+        suspend fun keepOrRemove(keep: Boolean): ArchiveExtractionReport? {
+            createdRoot ?: return null
+            if (keep && completedEntries > 0) return report(complete = false)
+            val summary = progress(currentEntryName = null)
+            discard()
+            onProgress(summary)
+            return null
+        }
+
+        private suspend fun discard() {
+            val root = createdRoot ?: return
+            val removals = createdPaths.asReversed()
+            removals.forEachIndexed { index, path ->
+                // A leftover makes the final recursive delete below fail, which reports it.
+                runCatching { provider.delete(path).getOrThrow() }
+                onProgress(
+                    ArchiveProgress(
+                        phase = ArchivePhase.REMOVING,
+                        currentEntryName = path.substringAfterLast('/'),
+                        completedEntries = index + 1,
+                        totalEntries = removals.size,
+                    )
+                )
+            }
+            if (provider.exists(root.path)) {
+                provider.delete(root.path).getOrThrow()
+            }
+            createdRoot = null
+            entryNames.clear()
+            nodeTypes.clear()
+            providerPaths.clear()
+            children.clear()
+            createdPaths.clear()
+            completedEntries = 0
+            writtenFiles = 0
+            renamed.clear()
+            notExtracted.clear()
+            renamedCount = 0
+            notExtractedCount = 0
+            writtenBytes = 0
+        }
 
         suspend fun createDirectory(rawName: String) {
+            TransferCancellation.check()
             val segments = registerEntry(rawName)
-            ensureDirectory(segments, rawName)
-            completedEntries++
-            onProgress(
-                ArchiveProgress(
-                    currentEntryName = segments.joinToString("/"),
-                    completedEntries = completedEntries,
-                )
-            )
+            if (ensureDirectory(segments, rawName) != null) completedEntries++
+            report(segments.joinToString("/"))
         }
 
         suspend fun writeFile(
             rawName: String,
             input: InputStream,
-            totalBytes: Long?,
         ) {
+            TransferCancellation.check()
             val segments = registerEntry(rawName)
             val key = segments.joinToString("/")
             if (nodeTypes[key] != null) {
                 throw UnsafeArchiveEntryException(rawName, "the path conflicts with another entry type")
             }
-            val parentPath = ensureDirectory(segments.dropLast(1), rawName)
-            val created = createExactFile(provider, parentPath, segments.last())
-            nodeTypes[key] = NodeType.FILE
-            providerPaths[key] = created.path
+            // A parent is missing only when it was itself a file that could not be extracted.
+            val parentPath = ensureDirectory(segments.dropLast(1), rawName) ?: return skip(key, error = null)
+            val name = claimName(parentPath, segments.last(), key, isDirectory = false)
 
-            var processedBytes = 0L
+            val source = ReadFailureTrackingInputStream(input)
+            var fileBytes = 0L
             try {
-                provider.getOutputStream(created.path).getOrThrow().use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        if (read == 0) continue
-                        output.write(buffer, 0, read)
-                        processedBytes += read
-                        onProgress(
-                            ArchiveProgress(
-                                currentEntryName = key,
-                                completedEntries = completedEntries,
-                                processedBytes = processedBytes,
-                                totalBytes = totalBytes,
-                            )
-                        )
+                val created = createExactFile(provider, parentPath, name)
+                createdPaths += created.path
+                nodeTypes[key] = NodeType.FILE
+                providerPaths[key] = created.path
+                try {
+                    provider.getOutputStream(created.path).getOrThrow().use { output ->
+                        StreamTransfer.copy(source, output, key, totalBytes = null) { copied ->
+                            fileBytes = copied.bytesTransferred
+                            report(key, fileBytes)
+                        }
                     }
+                } catch (error: Throwable) {
+                    withContext(NonCancellable) {
+                        runCatching {
+                            if (provider.exists(created.path)) {
+                                provider.delete(created.path).getOrThrow()
+                            }
+                        }.onFailure(error::addSuppressed)
+                    }
+                    createdPaths.removeAt(createdPaths.lastIndex)
+                    throw error
                 }
             } catch (error: Throwable) {
-                runCatching {
-                    if (provider.exists(created.path)) {
-                        provider.delete(created.path).getOrThrow()
-                    }
-                }.onFailure(error::addSuppressed)
-                throw error
+                if (!canSkip(error, source)) throw error
+                return skip(key, error)
             }
 
             completedEntries++
-            onProgress(
-                ArchiveProgress(
-                    currentEntryName = key,
-                    completedEntries = completedEntries,
-                    processedBytes = processedBytes,
-                    totalBytes = totalBytes,
-                )
-            )
+            writtenFiles++
+            writtenBytes += fileBytes
+            report(key)
         }
+
+        private fun canSkip(error: Throwable, source: ReadFailureTrackingInputStream): Boolean =
+            error is Exception &&
+                cancellationOf(error) == null &&
+                (sourceErrorsSkippable || !source.failed)
+
+        private fun skip(key: String, error: Throwable?) {
+            nodeTypes[key] = NodeType.SKIPPED
+            if (error != null) {
+                notExtractedCount++
+                if (notExtracted.size < ArchiveExtractionReport.MAX_LISTED) notExtracted += FailedEntry(key, error)
+            }
+            report(key)
+        }
+
+        /** Returns the name to create [name] under in [parentPath], numbered when only the case differs. */
+        private fun claimName(
+            parentPath: String,
+            name: String,
+            entryPath: String,
+            isDirectory: Boolean,
+        ): String {
+            val used = children.getOrPut(parentPath) { mutableMapOf() }
+            if (name.foldCase() !in used) {
+                used[name.foldCase()] = null
+                return name
+            }
+            val free = generateSequence(1) { it + 1 }
+                .map { numberedName(name, it, isDirectory) }
+                .first { it.foldCase() !in used }
+            used[free.foldCase()] = null
+            renamedCount++
+            if (renamed.size < ArchiveExtractionReport.MAX_LISTED) renamed += RenamedEntry(entryPath, free)
+            return free
+        }
+
+        private fun report(entryName: String, pendingBytes: Long = 0) =
+            onProgress(progress(entryName, pendingBytes))
+
+        private fun progress(currentEntryName: String?, pendingBytes: Long = 0) = ArchiveProgress(
+            currentEntryName = currentEntryName,
+            completedEntries = completedEntries,
+            totalEntries = totalEntries,
+            processedBytes = sourcePosition?.invoke() ?: (writtenBytes + pendingBytes),
+            totalBytes = totalBytes,
+            skippedEntries = notExtractedCount,
+            renamedEntries = renamedCount,
+        )
 
         private fun registerEntry(rawName: String): List<String> {
             val segments = ArchiveEntryPath.parse(rawName).getOrThrow()
@@ -555,12 +813,13 @@ object ArchiveService {
             return segments
         }
 
+        /** Returns the folder's provider path, or null when a segment is a file that could not be extracted. */
         private suspend fun ensureDirectory(
             segments: List<String>,
             rawName: String,
-        ): String {
+        ): String? {
             var currentKey = ""
-            var currentProviderPath = providerPaths.getValue("")
+            var currentProviderPath = root().path
             for (segment in segments) {
                 currentKey = if (currentKey.isEmpty()) segment else "$currentKey/$segment"
                 when (nodeTypes[currentKey]) {
@@ -571,19 +830,25 @@ object ArchiveService {
                         )
                     }
 
+                    NodeType.SKIPPED -> return null
+
                     NodeType.DIRECTORY -> {
                         currentProviderPath = providerPaths.getValue(currentKey)
                     }
 
                     null -> {
-                        val created = createExactDirectory(
-                            provider,
-                            currentProviderPath,
-                            segment,
-                        )
+                        val parentPath = currentProviderPath
+                        // A folder whose name differs only in case merges into the one created first,
+                        // as it would on a case-insensitive disk; nothing inside it is lost.
+                        currentProviderPath = children[parentPath]?.get(segment.foldCase()) ?: run {
+                            val name = claimName(parentPath, segment, currentKey, isDirectory = true)
+                            val created = createExactDirectory(provider, parentPath, name)
+                            createdPaths += created.path
+                            children.getValue(parentPath)[name.foldCase()] = created.path
+                            created.path
+                        }
                         nodeTypes[currentKey] = NodeType.DIRECTORY
-                        providerPaths[currentKey] = created.path
-                        currentProviderPath = created.path
+                        providerPaths[currentKey] = currentProviderPath
                     }
                 }
             }
@@ -593,6 +858,16 @@ object ArchiveService {
         private enum class NodeType {
             DIRECTORY,
             FILE,
+            SKIPPED,
         }
+    }
+
+    private fun String.foldCase(): String = lowercase(Locale.ROOT)
+
+    /** "photo.png" becomes "photo (1).png"; folders keep dots in their names. */
+    private fun numberedName(name: String, number: Int, isDirectory: Boolean): String {
+        val extensionStart = name.lastIndexOf('.').takeIf { !isDirectory && it > 0 }
+            ?: return "$name ($number)"
+        return "${name.substring(0, extensionStart)} ($number)${name.substring(extensionStart)}"
     }
 }

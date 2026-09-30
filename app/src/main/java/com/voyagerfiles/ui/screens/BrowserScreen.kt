@@ -975,7 +975,7 @@ fun BrowserScreen(
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
             if (runningOperation == null) {
-                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult) }
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult, onRemoveExtraction = viewModel::removeExtraction) }
             }
             PullToRefreshBox(
                 isRefreshing = pullRefreshing && state.isLoading,
@@ -1343,11 +1343,6 @@ internal fun OperationProgressContent(
             stateDescription = progress.stateDescription(progressLabel, completedItemsText)
         },
     ) {
-        if (operation.cancellable && onCancel != null) {
-            TextButton(onClick = onCancel, enabled = !operation.cancelling) {
-                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
-            }
-        }
         val fraction = progress.fraction
         if (fraction != null) {
             LinearProgressIndicator(
@@ -1372,6 +1367,16 @@ internal fun OperationProgressContent(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+        }
+        // Below the text, where the result card puts its actions once the operation ends.
+        if (operation.cancellable && onCancel != null) {
+            TextButton(
+                onClick = onCancel,
+                enabled = !operation.cancelling,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
+            }
         }
     }
 }
