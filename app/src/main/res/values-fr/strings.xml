@@ -316,10 +316,10 @@
     <string name="settings_use_trash">Utiliser la Corbeille pour les fichiers locaux</string>
     <string name="settings_use_trash_description">Désactivez uniquement si les suppressions locales doivent être définitives</string>
     <string name="settings_about">À propos</string>
-    <string name="translation_help">Help improve translations</string>
-    <string name="translation_notice">This translation is a work in progress.</string>
-    <string name="translation_dismiss">Dismiss translation notice</string>
-    <string name="translation_link_unavailable">Could not open Crowdin. Visit crowdin.com/project/voyagerandroid to help translate.</string>
+    <string name="translation_help">Contribuez à améliorer les traductions</string>
+    <string name="translation_notice">Cette traduction est en cours d\'élaboration.</string>
+    <string name="translation_dismiss">Fermer l\'avis de traduction</string>
+    <string name="translation_link_unavailable">Impossible d\'ouvrir Crowdin. Rendez-vous sur crowdin.com/project/voyagerandroid pour contribuer à la traduction.</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_app_description">Voyager - Un explorateur de fichiers Material Design 3 prenant en charge SFTP, FTP, SMB et WebDAV.</string>
     <string name="settings_license">Sous licence GPLv3 | Compatible F-Droid</string>
@@ -373,10 +373,10 @@
     <string name="browser_sessions">Sessions</string>
     <string name="browser_no_active_sessions">Aucune session active</string>
     <string name="browser_session_active">Active</string>
-    <string name="browser_locations_connections">Saved connections</string>
-    <string name="browser_locations_home">Go to Home</string>
+    <string name="browser_locations_connections">Connexions enregistrées</string>
+    <string name="browser_locations_home">Retour à l\'accueil</string>
     <string name="browser_location_group_title">%1$s (%2$d)</string>
-    <string name="browser_locations_show_all">Show all (%1$d)</string>
+    <string name="browser_locations_show_all">Afficher tout (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="one">%1$d élément (%2$s)</item>
         <item quantity="other">%1$d éléments (%2$s)</item>
@@ -485,10 +485,10 @@
     <string name="root_editor_save">Enregistrer le fichier</string>
     <string name="root_session_closed">La session root est fermée. Rouvrez-la avant d’enregistrer.</string>
     <string name="action_discard">Abandonner</string>
-    <string name="settings_search_bar">Search bar</string>
-    <string name="search_bar_top">Always visible at top</string>
-    <string name="search_bar_compact">Compact toolbar search</string>
-    <string name="search_bar_bottom">Always visible at bottom</string>
-    <string name="action_search">Search</string>
-    <string name="action_close_search">Close search</string>
+    <string name="settings_search_bar">Barre de recherche</string>
+    <string name="search_bar_top">Toujours visible en haut</string>
+    <string name="search_bar_compact">Recherche compacte dans la barre d\'outils</string>
+    <string name="search_bar_bottom">Toujours visible en bas</string>
+    <string name="action_search">Recherche</string>
+    <string name="action_close_search">Fermer la recherche</string>
 </resources>
