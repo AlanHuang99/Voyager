@@ -1,0 +1,38 @@
+name: Crowdin Italian and Vietnamese drafts
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect engines or create unapproved drafts
+        type: choice
+        options: [inspect, pretranslate]
+        default: inspect
+      engine_id:
+        description: Machine translation engine ID (required for pretranslate)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crowdin-translations
+  cancel-in-progress: false
+
+jobs:
+  drafts:
+    if: github.repository == 'AlanHuang99/Voyager' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Test draft safeguards
+        run: uv run --no-project python -B -m unittest discover -s scripts -p 'test_crowdin_drafts.py'
+      - name: Inspect or pretranslate
+        env:
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          CROWDIN_DRAFT_MODE: ${{ inputs.mode }}
+          CROWDIN_MT_ENGINE_ID: ${{ inputs.engine_id }}
+        run: uv run --no-project python -B scripts/crowdin_drafts.py

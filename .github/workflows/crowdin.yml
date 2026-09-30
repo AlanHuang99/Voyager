@@ -46,6 +46,7 @@ jobs:
           import_eq_suggestions: true
           download_translations: ${{ github.event_name != 'push' }}
           skip_untranslated_strings: true
+          export_only_approved: true
           skip_untranslated_files: false
           push_translations: false
           create_pull_request: false
