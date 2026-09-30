@@ -304,6 +304,10 @@
     <string name="settings_use_trash">对本地文件使用回收站</string>
     <string name="settings_use_trash_description">仅当本地删除应设为永久时关闭此选项</string>
     <string name="settings_about">关于</string>
+    <string name="translation_help">Help improve translations</string>
+    <string name="translation_notice">This translation is a work in progress.</string>
+    <string name="translation_dismiss">Dismiss translation notice</string>
+    <string name="translation_link_unavailable">Could not open Crowdin. Visit crowdin.com/project/voyagerandroid to help translate.</string>
     <string name="settings_version">版本 %1$s</string>
     <string name="settings_app_description">Voyager —— 一款采用 Material Design 3 的文件浏览器，支持 SFTP、FTP、SMB 与 WebDAV。</string>
     <string name="settings_license">基于 GPLv3 许可 | 兼容 F-Droid</string>

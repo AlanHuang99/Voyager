@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.model.SortOrder
@@ -30,6 +31,7 @@ class PreferencesManager(private val context: Context) {
         val SHOW_HIDDEN = booleanPreferencesKey("show_hidden")
         val USE_TRASH = booleanPreferencesKey("use_trash")
         val LIMITED_ACCESS_ACCEPTED = booleanPreferencesKey("limited_access_accepted")
+        val DISMISSED_TRANSLATION_NOTICES = stringSetPreferencesKey("dismissed_translation_notices")
         val SORT_BY = stringPreferencesKey("sort_by")
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val VIEW_MODE = stringPreferencesKey("view_mode")
@@ -57,6 +59,17 @@ class PreferencesManager(private val context: Context) {
 
     val limitedAccessAccepted: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.LIMITED_ACCESS_ACCEPTED] ?: false
+    }
+
+    val dismissedTranslationNotices: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DISMISSED_TRANSLATION_NOTICES] ?: emptySet()
+    }
+
+    suspend fun dismissTranslationNotice(languageUrl: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DISMISSED_TRANSLATION_NOTICES] =
+                (prefs[Keys.DISMISSED_TRANSLATION_NOTICES] ?: emptySet()) + languageUrl
+        }
     }
 
     val sortBy: Flow<SortBy> = context.dataStore.data.map { prefs ->

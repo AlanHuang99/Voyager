@@ -1,0 +1,28 @@
+{
+  "locales": {
+    "zh-CN": "zh-rCN",
+    "zh-TW": "zh-rTW",
+    "es-ES": "es",
+    "fr": "fr",
+    "de": "de",
+    "pt-BR": "pt-rBR",
+    "ja": "ja",
+    "ko": "ko",
+    "it": "it",
+    "vi": "vi"
+  },
+  "android_aliases": {
+    "es-rES": "es", "fr-rFR": "fr", "de-rDE": "de", "ja-rJP": "ja",
+    "ko-rKR": "ko", "it-rIT": "it", "vi-rVN": "vi"
+  },
+  "protected_prefixes": [
+    "permission_", "warning_", "sftp_", "root_", "dialog_delete_", "dialog_move_",
+    "transfer_conflict_", "connection_delete_", "settings_use_trash", "content_desc_delete",
+    "dialog_public_key", "duplicates_"
+  ],
+  "protected_names": [
+    "action_delete", "action_empty", "action_empty_trash", "trash_empty_title", "trash_empty_message",
+    "connection_webdav_http_warning", "connection_ftp_warning", "connection_webdav_encrypted",
+    "settings_full_access_description", "settings_limited_access_description", "home_limited_storage_message"
+  ]
+}

@@ -120,6 +120,8 @@ All runtime dependencies are open source and license-compatible with GPLv3; the 
 
 [Translate Voyager on Crowdin](https://crowdin.com/project/voyagerandroid) in your browser. Choose a language, translate a few untranslated strings, or improve existing translations. Coding experience is not required; contributions of any size are welcome.
 
+The app links to Crowdin from **Settings > About > Help improve translations**. Provisional translations show a dismissible notice on Home. The initial rollout covers Simplified Chinese, Traditional Chinese, Spanish, French, German, Brazilian Portuguese, Japanese, Korean, Italian, and Vietnamese; some sensitive messages retain English until reviewed. Corrections arrive in subsequent app releases.
+
 See the [translation guide](docs/TRANSLATING.md) for the meaning of file-manager terms, formatting rules, and how translations reach the app. To request a language or ask about an unclear phrase, use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions). Screenshots of Voyager can help explain where a string appears.
 
 ## Contributing

@@ -58,11 +58,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.booleanResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
+import com.voyagerfiles.ui.components.TranslationNotice
+import com.voyagerfiles.ui.components.rememberTranslationLinkOpener
 import com.voyagerfiles.data.index.StorageCategory
 import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.FileItem
@@ -89,6 +92,10 @@ fun HomeScreen(
     onNavigateToCategory: (StorageCategory) -> Unit = {},
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
+    val dismissedTranslationNotices by viewModel.dismissedTranslationNotices.collectAsState()
+    val translationUrl = stringResource(R.string.translation_crowdin_url)
+    val isProvisionalTranslation = booleanResource(R.bool.translation_provisional)
+    val openTranslationLink = rememberTranslationLinkOpener()
     var bookmarkToRemove by remember { mutableStateOf<Bookmark?>(null) }
     val removeBookmarkLabel = stringResource(R.string.action_remove_bookmark)
     val sessions by viewModel.sessions.collectAsState()
@@ -140,6 +147,17 @@ fun HomeScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (isProvisionalTranslation && dismissedTranslationNotices?.contains(translationUrl) == false) {
+                item(key = "translation-notice") {
+                    TranslationNotice(
+                        onImprove = {
+                            openTranslationLink()
+                            viewModel.dismissTranslationNotice(translationUrl)
+                        },
+                        onDismiss = { viewModel.dismissTranslationNotice(translationUrl) },
+                    )
+                }
             }
             homeLayout?.visibleSections?.forEach { section ->
                 when (section) {

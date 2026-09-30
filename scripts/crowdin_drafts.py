@@ -1,19 +1,19 @@
-"""Purpose: inspect MT engines or draft missing Italian and Vietnamese translations.
+"""Purpose: inspect MT engines or draft missing translations for the ten rollout locales.
 Inputs: Crowdin token, operation mode, and explicit MT engine ID in environment variables.
 Outputs: engine metadata or a completed pre-translation report, without credentials.
-Notes: requires approval-only synchronization; never replaces or approves translations.
+Notes: never replaces or approves translations; export policy controls provisional use.
 """
 
 import json
 import os
-from pathlib import Path
 import time
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+from translation_rollout import LOCALES
 
 PROJECT_ID = 927407
-LANGUAGES = ["it", "vi"]
+LANGUAGES = list(LOCALES)
 
 
 def request(method, path, body=None):
@@ -44,7 +44,7 @@ def draft_body(engine_id, file_id, *, languages=None):
         raise ValueError("A positive MT engine ID is required")
     languages = LANGUAGES.copy() if languages is None else languages
     if not languages or not set(languages).issubset(LANGUAGES):
-        raise ValueError("Draft targets must be Italian or Vietnamese")
+        raise ValueError("Draft targets must belong to the configured rollout")
     return {
         "languageIds": languages, "fileIds": [file_id],
         "method": "mt", "engineId": engine_id,
@@ -76,14 +76,14 @@ def run(api, mode, engine_id=None, *, sleep=time.sleep):
     project_path = f"/projects/{PROJECT_ID}"
     project = api("GET", project_path)["data"]
     if project["sourceLanguageId"] != "en" or not set(LANGUAGES).issubset(project["targetLanguageIds"]):
-        raise ValueError("Expected English source and enabled Italian and Vietnamese targets")
+        raise ValueError("Expected English source and all rollout targets enabled")
     engine = api("GET", f"/mts/{engine_id}")["data"]
     languages = [language for language in LANGUAGES if language in engine["supportedLanguageIds"]]
     missing = sorted(set(LANGUAGES) - set(languages))
     if missing:
         print(f"Engine does not support these targets; drafts remain pending: {', '.join(missing)}", flush=True)
     if not languages:
-        raise ValueError("Engine does not support either draft language")
+        raise ValueError("Engine does not support any rollout language")
     files = [item for item in list_items(api, project_path + "/files") if item["name"] == "strings.xml"]
     if len(files) != 1:
         raise ValueError("Expected exactly one strings.xml source file")
@@ -107,9 +107,5 @@ def run(api, mode, engine_id=None, *, sleep=time.sleep):
 
 if __name__ == "__main__":
     mode = os.environ.get("CROWDIN_DRAFT_MODE", "inspect")
-    if mode == "pretranslate":
-        workflow = Path(".github/workflows/crowdin.yml").read_text()
-        if "          export_only_approved: true\n" not in workflow:
-            raise RuntimeError("Approval-only export must be configured before creating drafts")
     engine = os.environ.get("CROWDIN_MT_ENGINE_ID", "")
     run(request, mode, int(engine) if engine else None)

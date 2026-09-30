@@ -56,6 +56,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.voyagerfiles.BuildConfig
 import com.voyagerfiles.R
+import com.voyagerfiles.ui.components.TranslationContributionButton
+import com.voyagerfiles.ui.components.rememberTranslationLinkOpener
 import com.voyagerfiles.data.model.SessionAutoCloseTimeout
 import com.voyagerfiles.data.model.SearchBarMode
 import com.voyagerfiles.ui.theme.AppTheme
@@ -90,6 +92,7 @@ fun SettingsScreen(
     onOpenRoot: () -> Unit = {},
 ) {
     val currentTheme by viewModel.theme.collectAsState()
+    val openTranslationLink = rememberTranslationLinkOpener()
     val browseState by viewModel.browseState.collectAsState()
     val useTrash by viewModel.useTrash.collectAsState()
     val autoCloseSessions by viewModel.autoCloseSessions.collectAsState()
@@ -455,6 +458,8 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            TranslationContributionButton(onClick = openTranslationLink)
         }
     }
 }

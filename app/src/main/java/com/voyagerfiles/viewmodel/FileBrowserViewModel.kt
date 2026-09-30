@@ -174,6 +174,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
         SessionAutoCloseTimeout.FIFTEEN_MINUTES,
     )
     val homeLayout = prefs.homeLayout.stateInWithLoading(viewModelScope)
+    val dismissedTranslationNotices: StateFlow<Set<String>?> = prefs.dismissedTranslationNotices.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null,
+    )
+
+    fun dismissTranslationNotice(languageUrl: String) {
+        viewModelScope.launch { prefs.dismissTranslationNotice(languageUrl) }
+    }
     val limitedAccessAccepted = prefs.limitedAccessAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val connections = connectionRepository.connections.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val bookmarks = bookmarkDao.getAllBookmarks().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())

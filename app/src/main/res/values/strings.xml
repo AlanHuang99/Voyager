@@ -324,6 +324,10 @@
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
     <string name="settings_about">About</string>
+    <string name="translation_help">Help improve translations</string>
+    <string name="translation_notice">This translation is a work in progress.</string>
+    <string name="translation_dismiss">Dismiss translation notice</string>
+    <string name="translation_link_unavailable">Could not open Crowdin. Visit crowdin.com/project/voyagerandroid to help translate.</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_app_description">Voyager - A Material Design 3 file browser with SFTP, FTP, SMB, and WebDAV support.</string>
     <string name="settings_license">Licensed under GPLv3 | F-Droid compatible</string>

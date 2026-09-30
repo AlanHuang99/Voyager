@@ -28,6 +28,8 @@ Reports are written under `app/build/reports/`. APKs are written under `app/buil
 
 The JVM localization contract checks that production Compose copy uses Android resources, resource names are unique, multi-argument formats use indexed placeholders, plurals define `one` and `other`, and translatable values are nonempty. Android lint separately checks hardcoded text, missing translations, and invalid resource formats.
 
+Run `uv run --no-project python -B -m unittest discover -s scripts -p 'test_*.py'` to verify Crowdin draft scope, approved/existing wording precedence, sensitive-message fallbacks, placeholder validation, and archive filtering. On a device, run `TranslationContributionTest`, then check the Home notice and Settings link in a rollout language at large font sizes. Dismiss the notice, restart the app, and verify it stays dismissed for that language while the Settings link still opens the matching Crowdin page.
+
 ```bash
 ./gradlew testDebugUnitTest --tests com.voyagerfiles.ui.LocalizationResourceContractTest lintDebug --stacktrace
 ```

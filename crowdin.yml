@@ -11,3 +11,11 @@ files:
       android_code:
         fr: fr
         zh-CN: zh-rCN
+        zh-TW: zh-rTW
+        es-ES: es
+        de: de
+        pt-BR: pt-rBR
+        ja: ja
+        ko: ko
+        it: it
+        vi: vi

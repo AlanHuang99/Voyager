@@ -5,13 +5,15 @@ import io
 import unittest
 from unittest.mock import Mock
 
-from crowdin_drafts import draft_body, run
+from crowdin_drafts import LANGUAGES, draft_body, run
 
 
 class DraftTests(unittest.TestCase):
     def test_drafts_are_unapproved_and_do_not_replace_translations(self):
         body = draft_body(12, 34)
-        self.assertEqual(body["languageIds"], ["it", "vi"])
+        self.assertEqual(body["languageIds"], LANGUAGES)
+        self.assertEqual(len(LANGUAGES), 10)
+        self.assertTrue({"zh-CN", "zh-TW", "es-ES"}.issubset(LANGUAGES))
         self.assertEqual(body["fileIds"], [34])
         self.assertEqual(body["scope"], "untranslated")
         self.assertEqual(body["replaceTranslationsOption"], "none")
@@ -39,8 +41,8 @@ class DraftTests(unittest.TestCase):
 
     def test_failed_job_is_not_reported_as_completed_or_retried(self):
         api = Mock(side_effect=[
-            {"data": {"sourceLanguageId": "en", "targetLanguageIds": ["it", "vi"]}},
-            {"data": {"id": 12, "supportedLanguageIds": ["it", "vi"]}},
+            {"data": {"sourceLanguageId": "en", "targetLanguageIds": LANGUAGES}},
+            {"data": {"id": 12, "supportedLanguageIds": LANGUAGES}},
             {"data": [{"data": {"id": 34, "name": "strings.xml"}}]},
             {"data": {"identifier": "job-id"}},
             {"data": {"status": "failed"}},
@@ -51,8 +53,8 @@ class DraftTests(unittest.TestCase):
 
     def test_completed_job_returns_report_after_waiting(self):
         api = Mock(side_effect=[
-            {"data": {"sourceLanguageId": "en", "targetLanguageIds": ["it", "vi"]}},
-            {"data": {"id": 12, "supportedLanguageIds": ["it", "vi"]}},
+            {"data": {"sourceLanguageId": "en", "targetLanguageIds": LANGUAGES}},
+            {"data": {"id": 12, "supportedLanguageIds": LANGUAGES}},
             {"data": [{"data": {"id": 34, "name": "strings.xml"}}]},
             {"data": {"identifier": "job-id"}},
             {"data": {"status": "inProgress"}},
@@ -69,8 +71,8 @@ class DraftTests(unittest.TestCase):
 
     def test_ambiguous_source_files_prevent_mutation(self):
         api = Mock(side_effect=[
-            {"data": {"sourceLanguageId": "en", "targetLanguageIds": ["it", "vi"]}},
-            {"data": {"id": 12, "supportedLanguageIds": ["it", "vi"]}},
+            {"data": {"sourceLanguageId": "en", "targetLanguageIds": LANGUAGES}},
+            {"data": {"id": 12, "supportedLanguageIds": LANGUAGES}},
             {"data": [{"data": {"id": value, "name": "strings.xml"}} for value in [34, 35]]},
         ])
         with self.assertRaises(ValueError):
@@ -79,7 +81,7 @@ class DraftTests(unittest.TestCase):
 
     def test_unsupported_target_is_reported_and_excluded(self):
         api = Mock(side_effect=[
-            {"data": {"sourceLanguageId": "en", "targetLanguageIds": ["it", "vi"]}},
+            {"data": {"sourceLanguageId": "en", "targetLanguageIds": LANGUAGES}},
             {"data": {"id": 12, "supportedLanguageIds": ["it"]}},
             {"data": [{"data": {"id": 34, "name": "strings.xml"}}]},
             {"data": {"identifier": "job-id"}},
@@ -89,12 +91,13 @@ class DraftTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             run(api, "pretranslate", 12)
-        self.assertIn("drafts remain pending: vi", output.getvalue())
+        self.assertIn("drafts remain pending:", output.getvalue())
+        self.assertIn("vi", output.getvalue())
         self.assertEqual(api.call_args_list[3].args[2]["languageIds"], ["it"])
 
     def test_out_of_scope_language_is_rejected(self):
         with self.assertRaises(ValueError):
-            draft_body(12, 34, languages=["fr"])
+            draft_body(12, 34, languages=["pl"])
 
 
 if __name__ == "__main__":
