@@ -449,7 +449,7 @@
     <string name="duplicates_group">%1$d copies, %2$s each</string>
     <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
     <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
-    <string name="category_scope">マウントされた共有ストレージ上のファイルはスキャンされません。アプリ専用ストレージおよびドキュメントプロバイダーの権限はスキャン対象外です。</string>
+    <string name="category_scope">マウントされた共有ストレージ内のファイルをスキャンします。アプリ専用ストレージおよびドキュメントプロバイダー経由でアクセスが許可されたフォルダはスキャン対象外です。</string>
     <string name="category_hidden_included">隠しファイルが含まれています（設定）。</string>
     <string name="category_hidden_excluded">隠しファイルを除外する（設定）。</string>
     <string name="category_pending">スキャンされていません</string>

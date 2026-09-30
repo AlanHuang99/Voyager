@@ -461,7 +461,7 @@
     <string name="duplicates_group">%1$d copies, %2$s each</string>
     <string name="duplicates_removed">%1$d removed; %2$d could not be removed. %3$s</string>
     <string name="duplicates_operation_busy">Wait for the current file operation to finish, then try again.</string>
-    <string name="category_scope">Dateien auf eingebundenem, gemeinsam genutztem Speicher werden nicht gescannt. App-privater Speicher und Dokumentenanbieterberechtigungen werden nicht gescannt.</string>
+    <string name="category_scope">Dateien im eingebundenen gemeinsamen Speicher werden durchsucht. App-privater Speicher und über Dokumentanbieter freigegebene Ordner werden nicht durchsucht.</string>
     <string name="category_hidden_included">Versteckte Dateien enthalten (Einstellungen).</string>
     <string name="category_hidden_excluded">Versteckte Dateien ausgeschlossen (Einstellungen).</string>
     <string name="category_pending">Nicht gescannt</string>
