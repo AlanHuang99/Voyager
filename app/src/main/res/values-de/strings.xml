@@ -10,7 +10,7 @@
     <string name="operation_delete">löschen</string>
     <string name="operation_rename">umbenennen</string>
     <string name="operation_compress">Kompresse</string>
-    <string name="operation_extract">Extrakt</string>
+    <string name="operation_extract">entpacken</string>
     <string name="operation_copy">Kopie</string>
     <string name="operation_move">bewegen</string>
     <string name="operation_paste">Paste</string>
@@ -154,7 +154,7 @@
     <string name="theme_rose_pine">Rosé Pine</string>
     <string name="theme_tokyo_night">Tokio bei Nacht</string>
     <string name="theme_high_contrast">Hoher Kontrast</string>
-    <string name="theme_custom">Brauch</string>
+    <string name="theme_custom">Benutzerdefiniert</string>
     <string name="create_new_folder">Neuer Ordner</string>
     <string name="create_new_file">Neue Datei</string>
     <string name="create_upload_files">Dateien hochladen</string>
@@ -267,7 +267,7 @@
     <string name="details_size">Größe</string>
     <string name="details_modified">Modifiziert</string>
     <string name="details_source">Quelle</string>
-    <string name="details_path">Weg</string>
+    <string name="details_path">Pfad</string>
     <string name="details_owner">Eigentümer</string>
     <string name="details_permissions">Berechtigungen</string>
     <string name="details_source_local">Lokaler Speicher</string>
@@ -358,7 +358,7 @@
     <string name="browser_hide_hidden">Versteckte Dateien ausblenden</string>
     <string name="browser_root">Wurzel</string>
     <string name="browser_clipboard_copy">Kopie</string>
-    <string name="browser_clipboard_cut">schneiden</string>
+    <string name="browser_clipboard_cut">Ausschneiden</string>
     <string name="browser_paste_here">Hier einfügen</string>
     <string name="browser_load_failed">Dateien konnten nicht geladen werden</string>
     <string name="browser_empty_folder">Leerer Ordner</string>
@@ -366,8 +366,8 @@
     <string name="browser_clear_search_filters">Suche und Filter löschen</string>
     <string name="browser_extract_archive_title">Archiv extrahieren?</string>
     <string name="browser_extract_archive_message">Extrahieren Sie %1$s in einen neuen Ordner an diesem Speicherort?</string>
-    <string name="browser_extract">Extrakt</string>
-    <string name="playback_direct_unavailable_title">Direkte Eröffnung nicht möglich</string>
+    <string name="browser_extract">Entpacken</string>
+    <string name="playback_direct_unavailable_title">Direktes Öffnen nicht möglich</string>
     <string name="playback_direct_unavailable_message">Diese Datei konnte nicht remote geöffnet werden. Soll ich die Datei stattdessen herunterladen?</string>
     <string name="browser_search_placeholder">Durchsuchen Sie diesen Ordner</string>
     <string name="browser_sessions">Sitzungen</string>
@@ -419,13 +419,13 @@
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
     <string name="transfer_channel">Dateiübertragungen</string>
-    <string name="transfer_cancelling">Überweisung stornieren</string>
-    <string name="transfer_cancelled">Transfer storniert</string>
+    <string name="transfer_cancelling">Übertragung wird abgebrochen</string>
+    <string name="transfer_cancelled">Übertragung abgebrochen</string>
     <string name="action_remove_bookmark">Aus den Lesezeichen entfernen</string>
     <string name="transfer_items_completed">%1$d von %2$d abgeschlossen</string>
     <string name="transfer_completed">Vollendet</string>
     <string name="transfer_finished_with_errors">Mit Fehlern abgeschlossen</string>
-    <string name="transfer_dismiss_result">Ergebnis der Verwerfungsoperation</string>
+    <string name="transfer_dismiss_result">Vorgangsergebnis ausblenden</string>
     <string name="shortcut_pin_folder">Ordner zum Startbildschirm hinzufügen</string>
     <string name="shortcut_requested">Bestätigen Sie die Verknüpfung in Ihrem Launcher.</string>
     <string name="shortcut_unavailable">Es konnte keine Verknüpfung hinzugefügt werden. Überprüfen Sie, ob der Ordner zugänglich ist und Ihr Launcher angeheftete Verknüpfungen unterstützt.</string>

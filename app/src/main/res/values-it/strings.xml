@@ -154,7 +154,7 @@
     <string name="theme_rose_pine">Pino Rosé</string>
     <string name="theme_tokyo_night">Notte a Tokyo</string>
     <string name="theme_high_contrast">Contrasto elevato</string>
-    <string name="theme_custom">Costume</string>
+    <string name="theme_custom">Personalizzato</string>
     <string name="create_new_folder">Nuova cartella</string>
     <string name="create_new_file">Nuovo file</string>
     <string name="create_upload_files">Carica file</string>
@@ -264,10 +264,10 @@
     <string name="details_name">Nome</string>
     <string name="details_type">Tipo</string>
     <string name="details_folder">Cartella</string>
-    <string name="details_size">Misurare</string>
+    <string name="details_size">Dimensione</string>
     <string name="details_modified">Modificato</string>
     <string name="details_source">Fonte</string>
-    <string name="details_path">Sentiero</string>
+    <string name="details_path">Percorso</string>
     <string name="details_owner">Proprietario</string>
     <string name="details_permissions">Autorizzazioni</string>
     <string name="details_source_local">Archiviazione locale</string>
@@ -393,7 +393,7 @@
     <string name="content_desc_delete">Delete</string>
     <string name="content_desc_create">Creare</string>
     <string name="content_desc_clear_search">Ricerca chiara</string>
-    <string name="content_desc_close_session">Sessione chiusa</string>
+    <string name="content_desc_close_session">Chiudi sessione</string>
     <string name="localized_integer">%1$,d</string>
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">

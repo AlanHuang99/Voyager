@@ -10,7 +10,7 @@
     <string name="operation_delete">borrar</string>
     <string name="operation_rename">rebautizar</string>
     <string name="operation_compress">comprimir</string>
-    <string name="operation_extract">extracto</string>
+    <string name="operation_extract">extraer</string>
     <string name="operation_copy">Copiar</string>
     <string name="operation_move">mover</string>
     <string name="operation_paste">pasta</string>
@@ -154,7 +154,7 @@
     <string name="theme_rose_pine">Pino rosado</string>
     <string name="theme_tokyo_night">Noche de Tokio</string>
     <string name="theme_high_contrast">Alto contraste</string>
-    <string name="theme_custom">Costumbre</string>
+    <string name="theme_custom">Personalizado</string>
     <string name="create_new_folder">Nueva carpeta</string>
     <string name="create_new_file">Nuevo archivo</string>
     <string name="create_upload_files">Subir archivos</string>
@@ -267,7 +267,7 @@
     <string name="details_size">Tamaño</string>
     <string name="details_modified">Modificado</string>
     <string name="details_source">Fuente</string>
-    <string name="details_path">Camino</string>
+    <string name="details_path">Ruta</string>
     <string name="details_owner">Dueño</string>
     <string name="details_permissions">Permisos</string>
     <string name="details_source_local">Almacenamiento local</string>
@@ -366,7 +366,7 @@
     <string name="browser_clear_search_filters">Borrar búsqueda y filtros</string>
     <string name="browser_extract_archive_title">¿Extraer archivo?</string>
     <string name="browser_extract_archive_message">¿Extraer %1$s en una nueva carpeta en esta ubicación?</string>
-    <string name="browser_extract">Extracto</string>
+    <string name="browser_extract">Extraer</string>
     <string name="playback_direct_unavailable_title">Apertura directa no disponible</string>
     <string name="playback_direct_unavailable_message">No se pudo abrir este archivo de forma remota. ¿Desea descargarlo?</string>
     <string name="browser_search_placeholder">Buscar en esta carpeta</string>
@@ -393,7 +393,7 @@
     <string name="content_desc_delete">Delete</string>
     <string name="content_desc_create">Crear</string>
     <string name="content_desc_clear_search">Borrar búsqueda</string>
-    <string name="content_desc_close_session">Sesión de clausura</string>
+    <string name="content_desc_close_session">Cerrar sesión</string>
     <string name="localized_integer">%1$,d</string>
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">

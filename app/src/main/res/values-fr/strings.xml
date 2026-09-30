@@ -318,7 +318,7 @@
     <string name="settings_about">À propos</string>
     <string name="translation_help">Contribuez à améliorer les traductions</string>
     <string name="translation_notice">Cette traduction est en cours d\'élaboration.</string>
-    <string name="translation_dismiss">Avis de rejet de traduction</string>
+    <string name="translation_dismiss">Fermer l\'avis de traduction</string>
     <string name="translation_link_unavailable">Impossible d\'ouvrir Crowdin. Rendez-vous sur crowdin.com/project/voyagerandroid pour contribuer à la traduction.</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_app_description">Voyager - Un explorateur de fichiers Material Design 3 prenant en charge SFTP, FTP, SMB et WebDAV.</string>

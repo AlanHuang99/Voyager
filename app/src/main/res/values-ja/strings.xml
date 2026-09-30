@@ -10,7 +10,7 @@
     <string name="operation_delete">消去</string>
     <string name="operation_rename">名前を変更する</string>
     <string name="operation_compress">圧縮</string>
-    <string name="operation_extract">抽出する</string>
+    <string name="operation_extract">展開する</string>
     <string name="operation_copy">コピー</string>
     <string name="operation_move">動く</string>
     <string name="operation_paste">ペースト</string>
@@ -357,8 +357,8 @@
     <string name="browser_clear_search_filters">クリア検索とフィルター</string>
     <string name="browser_extract_archive_title">アーカイブを展開しますか？</string>
     <string name="browser_extract_archive_message">%1$s をこの場所に新しいフォルダに展開しますか？</string>
-    <string name="browser_extract">抽出する</string>
-    <string name="playback_direct_unavailable_title">直接開店できません</string>
+    <string name="browser_extract">展開</string>
+    <string name="playback_direct_unavailable_title">直接開くことができません</string>
     <string name="playback_direct_unavailable_message">このファイルはリモートで開けませんでした。代わりにファイルをダウンロードしますか？</string>
     <string name="browser_search_placeholder">このフォルダを検索</string>
     <string name="browser_sessions">セッション</string>
@@ -373,7 +373,7 @@
     </plurals>
     <string name="content_desc_sessions">セッション</string>
     <string name="content_desc_refresh">更新</string>
-    <string name="content_desc_sort">選別</string>
+    <string name="content_desc_sort">並べ替え</string>
     <string name="content_desc_more">もっと</string>
     <string name="content_desc_more_selection_actions">その他の選択アクション</string>
     <string name="content_desc_copy">コピー</string>
@@ -407,13 +407,13 @@
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
     <string name="transfer_channel">ファイル転送</string>
-    <string name="transfer_cancelling">送金のキャンセル</string>
+    <string name="transfer_cancelling">転送をキャンセル中</string>
     <string name="transfer_cancelled">転送がキャンセルされました</string>
     <string name="action_remove_bookmark">ブックマークから削除</string>
     <string name="transfer_items_completed">%1$d / %2$d 完了</string>
     <string name="transfer_completed">完了</string>
     <string name="transfer_finished_with_errors">エラーが発生して終了しました</string>
-    <string name="transfer_dismiss_result">手術結果の却下</string>
+    <string name="transfer_dismiss_result">操作結果を閉じる</string>
     <string name="shortcut_pin_folder">ホーム画面にフォルダを追加する</string>
     <string name="shortcut_requested">ランチャーでショートカットを確認してください。</string>
     <string name="shortcut_unavailable">ショートカットを追加できませんでした。フォルダにアクセスできることを確認し、ランチャーがショートカットの固定に対応していることを確認してください。</string>

@@ -306,7 +306,7 @@
     <string name="settings_about">关于</string>
     <string name="translation_help">帮助改进翻译</string>
     <string name="translation_notice">此译文仍在修改完善中。</string>
-    <string name="translation_dismiss">驳回翻译通知</string>
+    <string name="translation_dismiss">关闭翻译提示</string>
     <string name="translation_link_unavailable">无法打开 Crowdin。请访问 crowdin.com/project/voyagerandroid 帮助翻译。</string>
     <string name="settings_version">版本 %1$s</string>
     <string name="settings_app_description">Voyager —— 一款采用 Material Design 3 的文件浏览器，支持 SFTP、FTP、SMB 与 WebDAV。</string>
@@ -392,7 +392,7 @@
     <string name="storage_internal">内部存储</string>
     <string name="storage_external_numbered">外部存储 %1$d</string>
     <string name="storage_unavailable">不可用</string>
-    <string name="storage_read_only">仅阅读</string>
+    <string name="storage_read_only">只读</string>
     <string name="home_camera_folder">相机</string>
     <string name="sftp_host_keys_title">Saved host keys</string>
     <string name="sftp_host_keys_loading">Loading saved host keys…</string>
@@ -404,13 +404,13 @@
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
     <string name="transfer_channel">文件传输</string>
-    <string name="transfer_cancelling">取消转账</string>
-    <string name="transfer_cancelled">转账已取消</string>
+    <string name="transfer_cancelling">正在取消传输</string>
+    <string name="transfer_cancelled">传输已取消</string>
     <string name="action_remove_bookmark">从书签中移除</string>
-    <string name="transfer_items_completed">%1$d 中的 %2$d 已完成</string>
-    <string name="transfer_completed">完全的</string>
+    <string name="transfer_items_completed">已完成 %1$d 项，共 %2$d 项</string>
+    <string name="transfer_completed">已完成</string>
     <string name="transfer_finished_with_errors">完成时出现错误</string>
-    <string name="transfer_dismiss_result">驳回手术结果</string>
+    <string name="transfer_dismiss_result">关闭操作结果</string>
     <string name="shortcut_pin_folder">将文件夹添加到主屏幕</string>
     <string name="shortcut_requested">在启动器中确认快捷方式。</string>
     <string name="shortcut_unavailable">无法添加快捷方式。请检查文件夹是否可访问，以及您的启动器是否支持固定快捷方式。</string>
@@ -428,8 +428,8 @@
     <string name="audio_set_notification">设置为通知音</string>
     <string name="audio_tone_permission">允许 Voyager 修改系统设置，然后重试。</string>
     <string name="audio_setting_tone">设置系统音调</string>
-    <string name="audio_ringtone_set">铃声设置</string>
-    <string name="audio_notification_set">设置通知音</string>
+    <string name="audio_ringtone_set">已设置铃声</string>
+    <string name="audio_notification_set">已设置通知音</string>
     <string name="upload_completed_skipped">%1$d 已上传， %2$d 已跳过</string>
     <string name="duplicates_title">Find duplicates</string>
     <string name="duplicates_description">Compare file contents in this folder and its subfolders, including hidden files. Links and Trash are excluded. Select files to remove after the scan.</string>

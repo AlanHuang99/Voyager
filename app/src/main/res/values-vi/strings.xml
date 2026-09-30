@@ -10,7 +10,7 @@
     <string name="operation_delete">xóa bỏ</string>
     <string name="operation_rename">đổi tên</string>
     <string name="operation_compress">nén</string>
-    <string name="operation_extract">chiết xuất</string>
+    <string name="operation_extract">giải nén</string>
     <string name="operation_copy">bản sao</string>
     <string name="operation_move">di chuyển</string>
     <string name="operation_paste">dán</string>
@@ -145,7 +145,7 @@
     <string name="theme_rose_pine">Thông hồng</string>
     <string name="theme_tokyo_night">Đêm Tokyo</string>
     <string name="theme_high_contrast">Độ tương phản cao</string>
-    <string name="theme_custom">Phong tục</string>
+    <string name="theme_custom">Tùy chỉnh</string>
     <string name="create_new_folder">Thư mục mới</string>
     <string name="create_new_file">Tệp mới</string>
     <string name="create_upload_files">Tải lên tệp</string>
@@ -258,7 +258,7 @@
     <string name="details_size">Kích cỡ</string>
     <string name="details_modified">Đã sửa đổi</string>
     <string name="details_source">Nguồn</string>
-    <string name="details_path">Con đường</string>
+    <string name="details_path">Đường dẫn</string>
     <string name="details_owner">Người sở hữu</string>
     <string name="details_permissions">Quyền hạn</string>
     <string name="details_source_local">Lưu trữ cục bộ</string>
@@ -357,8 +357,8 @@
     <string name="browser_clear_search_filters">Xóa tìm kiếm và bộ lọc</string>
     <string name="browser_extract_archive_title">Giải nén tệp lưu trữ?</string>
     <string name="browser_extract_archive_message">Giải nén %1$s vào một thư mục mới tại vị trí này?</string>
-    <string name="browser_extract">Chiết xuất</string>
-    <string name="playback_direct_unavailable_title">Không thể mở cửa trực tiếp</string>
+    <string name="browser_extract">Giải nén</string>
+    <string name="playback_direct_unavailable_title">Không thể mở trực tiếp</string>
     <string name="playback_direct_unavailable_message">Không thể mở tệp này từ xa. Vui lòng tải xuống tệp.</string>
     <string name="browser_search_placeholder">Tìm kiếm trong thư mục này</string>
     <string name="browser_sessions">Phiên họp</string>
@@ -373,7 +373,7 @@
     </plurals>
     <string name="content_desc_sessions">Phiên họp</string>
     <string name="content_desc_refresh">Làm cho khỏe lại</string>
-    <string name="content_desc_sort">Loại</string>
+    <string name="content_desc_sort">Sắp xếp</string>
     <string name="content_desc_more">Hơn</string>
     <string name="content_desc_more_selection_actions">Thêm các hành động lựa chọn</string>
     <string name="content_desc_copy">Sao chép</string>
@@ -383,7 +383,7 @@
     <string name="content_desc_delete">Delete</string>
     <string name="content_desc_create">Tạo nên</string>
     <string name="content_desc_clear_search">Xóa tìm kiếm</string>
-    <string name="content_desc_close_session">Phiên họp kết thúc</string>
+    <string name="content_desc_close_session">Đóng phiên</string>
     <string name="localized_integer">%1$,d</string>
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
@@ -407,8 +407,8 @@
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
     <string name="transfer_channel">Chuyển tập tin</string>
-    <string name="transfer_cancelling">Hủy chuyển khoản</string>
-    <string name="transfer_cancelled">Giao dịch bị hủy</string>
+    <string name="transfer_cancelling">Đang hủy truyền tệp</string>
+    <string name="transfer_cancelled">Đã hủy truyền tệp</string>
     <string name="action_remove_bookmark">Xóa khỏi mục yêu thích</string>
     <string name="transfer_items_completed">%1$d trong số %2$d đã hoàn thành</string>
     <string name="transfer_completed">Hoàn thành</string>

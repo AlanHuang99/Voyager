@@ -10,7 +10,7 @@
     <string name="operation_delete">삭제</string>
     <string name="operation_rename">이름 바꾸기</string>
     <string name="operation_compress">압박 붕대</string>
-    <string name="operation_extract">발췌</string>
+    <string name="operation_extract">압축 해제</string>
     <string name="operation_copy">복사</string>
     <string name="operation_move">이동하다</string>
     <string name="operation_paste">반죽</string>
@@ -145,7 +145,7 @@
     <string name="theme_rose_pine">로제 파인</string>
     <string name="theme_tokyo_night">도쿄의 밤</string>
     <string name="theme_high_contrast">고대비</string>
-    <string name="theme_custom">관습</string>
+    <string name="theme_custom">사용자 지정</string>
     <string name="create_new_folder">새 폴더</string>
     <string name="create_new_file">새 파일</string>
     <string name="create_upload_files">파일 업로드</string>
@@ -258,7 +258,7 @@
     <string name="details_size">크기</string>
     <string name="details_modified">수정됨</string>
     <string name="details_source">원천</string>
-    <string name="details_path">길</string>
+    <string name="details_path">경로</string>
     <string name="details_owner">소유자</string>
     <string name="details_permissions">권한</string>
     <string name="details_source_local">로컬 저장소</string>
@@ -357,8 +357,8 @@
     <string name="browser_clear_search_filters">검색 및 필터 지우기</string>
     <string name="browser_extract_archive_title">압축 파일을 해제하시겠습니까?</string>
     <string name="browser_extract_archive_message">%1$s 를 이 위치의 새 폴더에 압축 해제하시겠습니까?</string>
-    <string name="browser_extract">발췌</string>
-    <string name="playback_direct_unavailable_title">직접 채용 불가</string>
+    <string name="browser_extract">압축 해제</string>
+    <string name="playback_direct_unavailable_title">직접 열 수 없음</string>
     <string name="playback_direct_unavailable_message">이 파일을 원격으로 열 수 없습니다. 파일을 다운로드하시겠습니까?</string>
     <string name="browser_search_placeholder">이 폴더를 검색하세요</string>
     <string name="browser_sessions">세션</string>
@@ -373,7 +373,7 @@
     </plurals>
     <string name="content_desc_sessions">세션</string>
     <string name="content_desc_refresh">새로 고치다</string>
-    <string name="content_desc_sort">종류</string>
+    <string name="content_desc_sort">정렬</string>
     <string name="content_desc_more">더</string>
     <string name="content_desc_more_selection_actions">추가 선택 조치</string>
     <string name="content_desc_copy">복사</string>
@@ -407,11 +407,11 @@
     <string name="sftp_host_keys_forget_warning">This removes all saved host keys for %1$s. The next connection will save a new host key. Verify the replacement key with the server administrator through a trusted channel before reconnecting. A changed key can indicate someone impersonating the server. Existing sessions stay connected.</string>
     <string name="sftp_host_keys_forget">Forget</string>
     <string name="transfer_channel">파일 전송</string>
-    <string name="transfer_cancelling">송금 취소</string>
-    <string name="transfer_cancelled">이적 취소됨</string>
+    <string name="transfer_cancelling">전송 취소 중</string>
+    <string name="transfer_cancelled">전송 취소됨</string>
     <string name="action_remove_bookmark">즐겨찾기에서 삭제</string>
-    <string name="transfer_items_completed">%1$d &gt; %2$d 완료됨</string>
-    <string name="transfer_completed">완전한</string>
+    <string name="transfer_items_completed">%2$d개 중 %1$d개 완료</string>
+    <string name="transfer_completed">완료됨</string>
     <string name="transfer_finished_with_errors">오류와 함께 종료됨</string>
     <string name="transfer_dismiss_result">작업 결과를 무시합니다</string>
     <string name="shortcut_pin_folder">홈 화면에 폴더 추가</string>
