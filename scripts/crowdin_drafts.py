@@ -39,11 +39,14 @@ def list_items(api, path):
         offset += len(items)
 
 
-def draft_body(engine_id, file_id):
+def draft_body(engine_id, file_id, *, languages=None):
     if engine_id <= 0:
         raise ValueError("A positive MT engine ID is required")
+    languages = LANGUAGES.copy() if languages is None else languages
+    if not languages or not set(languages).issubset(LANGUAGES):
+        raise ValueError("Draft targets must be Italian or Vietnamese")
     return {
-        "languageIds": LANGUAGES.copy(), "fileIds": [file_id],
+        "languageIds": languages, "fileIds": [file_id],
         "method": "mt", "engineId": engine_id,
         "scope": "untranslated", "replaceTranslationsOption": "none",
         "autoApproveOption": "none", "skipApprovedTranslations": True,
@@ -66,11 +69,17 @@ def run(api, mode, engine_id=None, *, sleep=time.sleep):
     project = api("GET", project_path)["data"]
     if project["sourceLanguageId"] != "en" or not set(LANGUAGES).issubset(project["targetLanguageIds"]):
         raise ValueError("Expected English source and enabled Italian and Vietnamese targets")
-    api("GET", f"/mts/{engine_id}")
+    engine = api("GET", f"/mts/{engine_id}")["data"]
+    languages = [language for language in LANGUAGES if language in engine["supportedLanguageIds"]]
+    missing = sorted(set(LANGUAGES) - set(languages))
+    if missing:
+        print(f"Engine does not support these targets; drafts remain pending: {', '.join(missing)}", flush=True)
+    if not languages:
+        raise ValueError("Engine does not support either draft language")
     files = [item for item in list_items(api, project_path + "/files") if item["name"] == "strings.xml"]
     if len(files) != 1:
         raise ValueError("Expected exactly one strings.xml source file")
-    job = api("POST", project_path + "/pre-translations", draft_body(engine_id, files[0]["id"]))["data"]
+    job = api("POST", project_path + "/pre-translations", draft_body(engine_id, files[0]["id"], languages=languages))["data"]
     job_path = project_path + "/pre-translations/" + quote(str(job["identifier"]), safe="")
     print(f"Pre-translation started: {job['identifier']}", flush=True)
     deadline = time.monotonic() + 900
