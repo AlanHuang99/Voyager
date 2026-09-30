@@ -305,13 +305,13 @@
     <string name="settings_manage_access">Gestisci l\'accesso</string>
     <string name="settings_grant_full_access">Concedi l\'accesso completo</string>
     <string name="settings_home_layout">planimetria della casa</string>
-    <string name="settings_reset">Reset</string>
+    <string name="settings_reset">Reimposta</string>
     <string name="settings_home_layout_description">Scegli quali sezioni visualizzare e disponi il loro ordine</string>
     <string name="settings_sessions">Sessioni</string>
     <string name="settings_close_inactive_sessions">Chiudi le sessioni inattive</string>
     <string name="settings_close_sessions_description">Chiudi tutte le sessioni dopo che Voyager è rimasto in background.</string>
     <string name="settings_close_after">Chiudere dopo</string>
-    <string name="settings_display">Display</string>
+    <string name="settings_display">Visualizzazione</string>
     <string name="settings_show_hidden_files">Mostra i file nascosti</string>
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
