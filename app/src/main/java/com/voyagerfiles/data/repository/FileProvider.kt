@@ -14,6 +14,18 @@ interface FileProvider {
     suspend fun move(sourcePath: String, destPath: String): Result<Unit>
     suspend fun getInputStream(path: String): Result<InputStream>
     suspend fun getOutputStream(path: String): Result<OutputStream>
+    /**
+     * Creates [name] in [path] and opens it for writing, failing instead of replacing an existing item.
+     * A provider that picks a free name reports it in [NewFile.name]; callers needing [name] check it.
+     */
+    suspend fun openNewFile(path: String, name: String): Result<NewFile> = runCatching {
+        val created = createFile(path, name).getOrThrow()
+        val output = getOutputStream(created.path).getOrElse { error ->
+            runCatching { delete(created.path).getOrThrow() }.onFailure(error::addSuppressed)
+            throw error
+        }
+        NewFile(created.name, created.path, output)
+    }
     suspend fun writeStream(
         path: String,
         input: InputStream,
@@ -69,3 +81,6 @@ interface FileProvider {
     fun getParentPath(path: String): String?
     suspend fun disconnect() {}
 }
+
+/** A file created by [FileProvider.openNewFile]; the caller closes [output]. */
+class NewFile(val name: String, val path: String, val output: OutputStream)

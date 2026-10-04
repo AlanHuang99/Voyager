@@ -116,6 +116,20 @@ class LocalFileProvider : FileProvider {
     /** Shared storage and removable volumes under /storage ignore case and refuse an existing name. */
     override fun ignoresNameCase(path: String): Boolean? = if (path.startsWith("/storage/")) true else null
 
+    /** One exclusive open: on shared storage each extra call (create, stat, reopen) is a FUSE round trip. */
+    override suspend fun openNewFile(path: String, name: String): Result<NewFile> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val file = File(path, name)
+                val output = java.nio.file.Files.newOutputStream(
+                    file.toPath(),
+                    java.nio.file.StandardOpenOption.CREATE_NEW,
+                    java.nio.file.StandardOpenOption.WRITE,
+                )
+                NewFile(name, file.absolutePath, output)
+            }
+        }
+
     override suspend fun exists(path: String): Boolean =
         withContext(Dispatchers.IO) { File(path).exists() }
 

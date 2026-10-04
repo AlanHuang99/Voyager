@@ -1,5 +1,6 @@
 package com.voyagerfiles.data.archive
 
+import com.voyagerfiles.data.repository.LocalFileProvider
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
@@ -13,11 +14,17 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 class ArchiveServiceTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     @Test
     fun createsZipWithExplicitDirectoriesFilesAndProgress() = runBlocking {
@@ -326,6 +333,34 @@ class ArchiveServiceTest {
 
         assertTrue(corruptResult.exceptionOrNull() is CorruptArchiveException)
         assertFalse(corruptProvider.exists("/workspace/corrupt_extracted"))
+    }
+
+    @Test
+    fun extractsIntoLocalStorageThroughSingleOpenFiles() = runBlocking {
+        val workspace = temporaryFolder.newFolder("workspace")
+        val archiveFile = File(workspace, "local.zip").apply {
+            writeBytes(
+                zipBytes(
+                    ZipFixture("docs/"),
+                    ZipFixture("docs/a.txt", "alpha".encodeToByteArray()),
+                    ZipFixture("docs/deep/b.txt", "beta".encodeToByteArray()),
+                    ZipFixture("top.txt", "top".encodeToByteArray()),
+                ),
+            )
+        }
+        val provider = LocalFileProvider()
+
+        val root = ArchiveService.extract(
+            provider,
+            provider.getFileInfo(archiveFile.path).getOrThrow(),
+            workspace.path,
+        ).getOrThrow()
+
+        val extracted = File(root.path)
+        assertEquals(File(workspace, "local_extracted"), extracted)
+        val files = extracted.walk().filter { it.isFile }
+            .associate { it.relativeTo(extracted).invariantSeparatorsPath to it.readText() }
+        assertEquals(mapOf("docs/a.txt" to "alpha", "docs/deep/b.txt" to "beta", "top.txt" to "top"), files)
     }
 
     private fun readZip(bytes: ByteArray): Map<String, ByteArray> {

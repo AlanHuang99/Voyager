@@ -2,6 +2,7 @@ package com.voyagerfiles.data.archive
 
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.NewFile
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.TransferCancellation
@@ -492,6 +493,21 @@ object ArchiveService {
         name: String,
     ): FileItem = requireExactName(provider, provider.createDirectory(parentPath, name).getOrThrow(), name)
 
+    /** Like [createExactFile], but already open for writing, which saves local storage a second open. */
+    private suspend fun openExactFile(
+        provider: FileProvider,
+        parentPath: String,
+        name: String,
+    ): NewFile {
+        val created = provider.openNewFile(parentPath, name).getOrThrow()
+        if (created.name != name) {
+            runCatching { created.output.close() }
+            runCatching { provider.delete(created.path).getOrThrow() }
+            throw ArchiveConflictException(created.path)
+        }
+        return created
+    }
+
     /** Some providers pick a free name such as "name (1)" instead of failing on a conflict. */
     private suspend fun requireExactName(
         provider: FileProvider,
@@ -740,11 +756,11 @@ object ArchiveService {
             val source = ReadFailureTrackingInputStream(input)
             var fileBytes = 0L
             try {
-                val created = createExactFile(provider, parentPath, name)
+                val created = openExactFile(provider, parentPath, name)
                 createdPaths += created.path
                 providerPaths[key] = created.path
                 try {
-                    val output = provider.getOutputStream(created.path).getOrThrow()
+                    val output = created.output
                     TransferCancellation.registerAbort {
                         (output as? TransferAbortable)?.abortTransfer()
                     }.use {
