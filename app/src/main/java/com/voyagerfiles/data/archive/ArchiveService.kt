@@ -2,6 +2,7 @@ package com.voyagerfiles.data.archive
 
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.LocalFileProvider
 import com.voyagerfiles.data.repository.NewFile
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.TransferAbortable
@@ -145,7 +146,9 @@ object ArchiveService {
                     extractionTree.withParallelWrites(provider.parallelWrites) {
                         if (format == ArchiveFormat.ZIP) {
                             extractionTree.sourceErrorsSkippable = true
-                            extractZip(input, sourceSize, extractionTree)
+                            // A readable local ZIP is opened in place; anything else is copied first.
+                            val localArchive = File(archive.path).takeIf { provider is LocalFileProvider && it.canRead() }
+                            extractZip(input, localArchive, sourceSize, extractionTree)
                         } else {
                             // Stream formats have no index, so progress follows the compressed input.
                             val source = CountingInputStream(input)
@@ -298,10 +301,16 @@ object ArchiveService {
 
     private suspend fun extractZip(
         input: InputStream,
+        localArchive: File?,
         sourceSize: Long?,
         tree: ExtractionTree,
-    ) = withSpooledArchive(input, ".zip", sourceSize, tree::reportReadingSource) { spooledZip ->
-        ZipFile.builder().setFile(spooledZip).get().use { zip ->
+    ) {
+        if (localArchive != null) return extractZipFile(localArchive, tree)
+        withSpooledArchive(input, ".zip", sourceSize, tree::reportReadingSource) { extractZipFile(it, tree) }
+    }
+
+    private suspend fun extractZipFile(file: File, tree: ExtractionTree) {
+        ZipFile.builder().setFile(file).get().use { zip ->
             val entries = zip.entries.toList()
             entries.forEach { entry -> validateZipEntry(entry, zip.canReadEntryData(entry)) }
             val fileSizes = entries.filterNot(::isZipDirectory).map { it.size }

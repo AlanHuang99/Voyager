@@ -336,7 +336,7 @@ class ArchiveServiceTest {
     }
 
     @Test
-    fun extractsIntoLocalStorageThroughSingleOpenFiles() = runBlocking {
+    fun extractsIntoLocalStorageInPlaceThroughSingleOpenFiles() = runBlocking {
         val workspace = temporaryFolder.newFolder("workspace")
         val archiveFile = File(workspace, "local.zip").apply {
             writeBytes(
@@ -349,18 +349,21 @@ class ArchiveServiceTest {
             )
         }
         val provider = LocalFileProvider()
+        val phases = mutableSetOf<ArchivePhase>()
 
         val root = ArchiveService.extract(
             provider,
             provider.getFileInfo(archiveFile.path).getOrThrow(),
             workspace.path,
-        ).getOrThrow()
+        ) { phases += it.phase }.getOrThrow()
 
         val extracted = File(root.path)
         assertEquals(File(workspace, "local_extracted"), extracted)
         val files = extracted.walk().filter { it.isFile }
             .associate { it.relativeTo(extracted).invariantSeparatorsPath to it.readText() }
         assertEquals(mapOf("docs/a.txt" to "alpha", "docs/deep/b.txt" to "beta", "top.txt" to "top"), files)
+        // A local ZIP is read where it is, without a temporary copy.
+        assertEquals(setOf(ArchivePhase.WRITING), phases)
     }
 
     @Test
