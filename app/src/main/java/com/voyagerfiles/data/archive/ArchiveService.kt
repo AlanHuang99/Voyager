@@ -23,6 +23,7 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
@@ -31,6 +32,9 @@ import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.SequenceInputStream
 import java.util.Locale
+import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
+import java.util.zip.ZipEntry
 
 object ArchiveService {
     private const val BUFFER_SIZE = 64 * 1024
@@ -304,7 +308,7 @@ object ArchiveService {
             tree.totalEntries = entries.size
             tree.totalBytes = fileSizes.takeIf { sizes -> sizes.all { it >= 0 } }?.sum()
             entries.forEach { entry ->
-                extractZipEntry(entry, tree) { zip.getInputStream(entry) }
+                extractZipEntry(entry, tree) { openZipEntry(zip, entry) }
             }
         }
     }
@@ -319,6 +323,29 @@ object ArchiveService {
         } else {
             openEntry().use { entryInput ->
                 tree.writeFile(rawName = entry.name, input = entryInput)
+            }
+        }
+    }
+
+    /**
+     * Commons Compress inflates through InflaterInputStream's default 512-byte buffer, which makes a
+     * large entry cost one native inflate call per 512 bytes; deflated entries get a larger buffer here.
+     */
+    private fun openZipEntry(zip: ZipFile, entry: ZipArchiveEntry): InputStream {
+        if (entry.method != ZipEntry.DEFLATED) return zip.getInputStream(entry)
+        val inflater = Inflater(true)
+        // Inflater without the zlib wrapper expects one byte of padding after the data.
+        val compressed = SequenceInputStream(
+            BufferedInputStream(zip.getRawInputStream(entry), BUFFER_SIZE),
+            ByteArrayInputStream(byteArrayOf(0)),
+        )
+        return object : InflaterInputStream(compressed, inflater, BUFFER_SIZE) {
+            override fun close() {
+                try {
+                    super.close()
+                } finally {
+                    inflater.end()
+                }
             }
         }
     }
