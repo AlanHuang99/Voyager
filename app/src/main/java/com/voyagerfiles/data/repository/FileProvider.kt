@@ -26,6 +26,11 @@ interface FileProvider {
         }
         NewFile(created.name, created.path, output)
     }
+    /**
+     * How many files may be written at the same time, for example by an extraction. Providers that
+     * share one connection or session between streams keep the default of one.
+     */
+    val parallelWrites: Int get() = 1
     suspend fun writeStream(
         path: String,
         input: InputStream,

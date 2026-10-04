@@ -12,7 +12,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
-class LocalFileProvider : FileProvider {
+/** [parallelWrites] is only lowered by tests and benchmarks. */
+class LocalFileProvider(override val parallelWrites: Int = 4) : FileProvider {
     override fun isSameStorage(other: FileProvider): Boolean = other is LocalFileProvider
     override fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean =
         if (other is RootFileProvider) other.isSamePath(otherPath, path)
