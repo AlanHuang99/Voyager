@@ -179,6 +179,25 @@ class ArchiveParallelExtractionTest {
         assertEquals("after", provider.readFile("${root.path}/after.txt").decodeToString())
     }
 
+    @Test
+    fun aLargeFileOfUnknownSizeIsWrittenCompletelyAfterTheBufferedStart() = runBlocking {
+        // A .gz states no size, so the first MiB is read before it is clear the file is too large to buffer.
+        val contents = ByteArray(2_500_000) { (it % 253).toByte() }
+        val gzipped = ByteArrayOutputStream().also { GzipCompressorOutputStream(it).use { gzip -> gzip.write(contents) } }
+        val provider = ArchiveTestFileProvider(parallelWrites = 4).apply {
+            putDirectory("/workspace")
+            putFile("/workspace/data.bin.gz", gzipped.toByteArray())
+        }
+
+        val root = ArchiveService.extract(
+            provider,
+            provider.getFileInfo("/workspace/data.bin.gz").getOrThrow(),
+            "/workspace",
+        ).getOrThrow()
+
+        assertTrue(contents.contentEquals(provider.readFile("${root.path}/data.bin")))
+    }
+
     private class Extraction(val files: Map<String, String>, val report: ArchiveExtractionReport)
 
     private suspend fun extract(provider: ArchiveTestFileProvider, archive: ByteArray): Extraction {

@@ -331,7 +331,7 @@ object ArchiveService {
             tree.createDirectory(entry.name)
         } else {
             openEntry().use { entryInput ->
-                tree.writeFile(rawName = entry.name, input = entryInput)
+                tree.writeFile(rawName = entry.name, input = entryInput, declaredSize = entry.size)
             }
         }
     }
@@ -478,7 +478,7 @@ object ArchiveService {
                 if (entry.isDirectory) {
                     tree.createDirectory(entry.name)
                 } else {
-                    tree.writeFile(rawName = entry.name, input = tar)
+                    tree.writeFile(rawName = entry.name, input = tar, declaredSize = entry.size)
                 }
             }
         }
@@ -791,9 +791,11 @@ object ArchiveService {
             report(segments.joinToString("/"))
         }
 
+        /** [declaredSize] is the size the archive states, or -1; it only decides how the entry is written. */
         suspend fun writeFile(
             rawName: String,
             input: InputStream,
+            declaredSize: Long = -1,
         ) {
             TransferCancellation.check()
             val segments = registerEntry(rawName)
@@ -809,7 +811,8 @@ object ArchiveService {
             val source = ReadFailureTrackingInputStream(input)
             // What was read already, for an entry too large for a parallel write.
             var head = ByteArray(0)
-            parallelWrites?.let { writes ->
+            // An entry the archive says is large is written here right away, without reading it into memory first.
+            parallelWrites?.takeIf { declaredSize <= PARALLEL_ENTRY_BYTES }?.let { writes ->
                 val buffered = try {
                     source.readUpTo(PARALLEL_ENTRY_BYTES + 1)
                 } catch (error: Throwable) {
