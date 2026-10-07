@@ -2,10 +2,14 @@ package com.voyagerfiles.data.remote.webdav
 
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.StreamTransferProgress
+import com.voyagerfiles.data.repository.TransferCancellation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -31,6 +35,9 @@ import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class WebDavFileProviderTest {
 
@@ -104,6 +111,73 @@ class WebDavFileProviderTest {
 
         assertTrue(Files.exists(server.root.resolve("uploaded.txt")))
         assertEquals("uploaded", String(Files.readAllBytes(server.root.resolve("uploaded.txt"))))
+    }
+
+    @Test
+    fun cancelledOutputStreamDoesNotUploadItsTemporaryFile() = runBlocking {
+        val server = startServer()
+        val provider = createProvider(server.port)
+        val token = TransferCancellation()
+
+        val failure = runCatching {
+            withContext(token.contextElement()) {
+                provider.getOutputStream("/cancelled.txt").getOrThrow().use { stream ->
+                    stream.write("partial".toByteArray())
+                    token.cancel()
+                }
+            }
+        }.exceptionOrNull()
+
+        assertTrue(failure is CancellationException)
+        assertFalse(Files.exists(server.root.resolve("cancelled.txt")))
+        assertTrue(temp.root.listFiles().orEmpty().none { it.name.startsWith("voyager-webdav-") })
+    }
+
+    @Test
+    fun cancellingCompressionAbortsTheFinalUploadAndRemovesTheArchive() {
+        val uploadReceived = CountDownLatch(1)
+        val releaseResponse = CountDownLatch(1)
+        val server = startServer(afterPut = { path ->
+            if (path.fileName.toString() == "bundle.zip" && Files.size(path) > 0) {
+                uploadReceived.countDown()
+                check(releaseResponse.await(10, TimeUnit.SECONDS)) { "Upload response was not released" }
+            }
+        })
+        Files.write(server.root.resolve("source.txt"), "source".toByteArray())
+        val provider = createProvider(server.port)
+        val token = TransferCancellation()
+        val worker = Executors.newSingleThreadExecutor()
+        val finished = CountDownLatch(1)
+        var failure: Throwable? = null
+        try {
+            worker.submit {
+                try {
+                    runBlocking(token.contextElement()) {
+                        ArchiveService.createZip(
+                            provider,
+                            listOf(provider.getFileInfo("/source.txt").getOrThrow()),
+                            "/",
+                            "bundle.zip",
+                        ).getOrThrow()
+                    }
+                } catch (error: Throwable) {
+                    failure = error
+                } finally {
+                    finished.countDown()
+                }
+            }
+            assertTrue("Final upload did not start", uploadReceived.await(5, TimeUnit.SECONDS))
+            token.cancel()
+            assertTrue("Cancel did not interrupt the final upload", finished.await(2, TimeUnit.SECONDS))
+            assertTrue("Expected cancellation, got $failure", failure is CancellationException)
+            assertFalse(Files.exists(server.root.resolve("bundle.zip")))
+            assertEquals("source", String(Files.readAllBytes(server.root.resolve("source.txt"))))
+            assertTrue(temp.root.listFiles().orEmpty().none { it.name.startsWith("voyager-webdav-") })
+        } finally {
+            releaseResponse.countDown()
+            worker.shutdown()
+            assertTrue(worker.awaitTermination(5, TimeUnit.SECONDS))
+        }
     }
 
     @Test
@@ -251,10 +325,12 @@ class WebDavFileProviderTest {
 
     private fun startServer(
         omitCollectionResourceType: Boolean = false,
+        afterPut: (Path) -> Unit = {},
     ): LocalWebDavServer {
         val server = LocalWebDavServer(
             root = temp.newFolder("webdav-root-${servers.size}").toPath(),
             omitCollectionResourceType = omitCollectionResourceType,
+            afterPut = afterPut,
         )
         server.start()
         servers += server
@@ -280,6 +356,7 @@ class WebDavFileProviderTest {
     private class LocalWebDavServer(
         val root: Path,
         private val omitCollectionResourceType: Boolean,
+        private val afterPut: (Path) -> Unit,
     ) {
         private val server = MockWebServer()
         val port: Int get() = server.port
@@ -345,6 +422,7 @@ class WebDavFileProviderTest {
             val path = resolve(request.requestUrl!!.encodedPath)
             Files.createDirectories(path.parent)
             Files.write(path, request.body.readByteArray())
+            afterPut(path)
             return MockResponse().setResponseCode(201)
         }
 

@@ -5,14 +5,17 @@ import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.TransferCancellation
+import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.thegrizzlylabs.sardineandroid.DavResource
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
+import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -26,6 +29,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
+import java.util.concurrent.atomic.AtomicBoolean
 
 class WebDavFileProvider(
     private val connection: RemoteConnection,
@@ -193,24 +197,62 @@ class WebDavFileProvider(
                     ".upload",
                     temporaryDirectory,
                 )
-                object : ForwardingOutputStream(FileOutputStream(temporaryFile)) {
-                    private var closed = false
+                object : ForwardingOutputStream(FileOutputStream(temporaryFile)), TransferAbortable {
+                    private val closed = AtomicBoolean(false)
+                    private val aborted = AtomicBoolean(false)
+                    @Volatile
+                    private var upload: Call? = null
+                    private val abort = TransferCancellation.registerAbort(::abortTransfer)
+
+                    override fun write(value: Int) {
+                        checkCancellation()
+                        super.write(value)
+                    }
+
+                    override fun write(buffer: ByteArray, offset: Int, length: Int) {
+                        checkCancellation()
+                        super.write(buffer, offset, length)
+                    }
+
+                    override fun abortTransfer() {
+                        aborted.set(true)
+                        upload?.cancel()
+                        runCatching { out.close() }
+                        temporaryFile.delete()
+                    }
+
+                    private fun checkCancellation() {
+                        TransferCancellation.check()
+                        if (aborted.get()) throw CancellationException("Transfer cancelled")
+                    }
 
                     override fun close() {
-                        if (closed) return
-                        closed = true
+                        if (!closed.compareAndSet(false, true)) {
+                            checkCancellation()
+                            return
+                        }
                         try {
                             super.close()
+                            checkCancellation()
                             val request = Request.Builder()
                                 .url(toUrl(path))
                                 .put(temporaryFile.asRequestBody("application/octet-stream".toMediaType()))
                                 .build()
-                            client.newCall(request).execute().use { response ->
+                            val call = client.newCall(request)
+                            upload = call
+                            checkCancellation()
+                            call.execute().use { response ->
                                 if (!response.isSuccessful) {
                                     throw IOException("WebDAV upload failed: HTTP ${response.code}")
                                 }
                             }
+                            checkCancellation()
+                        } catch (error: Throwable) {
+                            checkCancellation()
+                            throw error
                         } finally {
+                            upload = null
+                            abort.close()
                             temporaryFile.delete()
                         }
                     }

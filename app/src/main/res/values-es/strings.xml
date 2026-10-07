@@ -42,6 +42,8 @@
     <string name="progress_renaming">Cambiar el nombre</string>
     <string name="progress_compressing">Apresamiento</string>
     <string name="progress_extracting">Extracción</string>
+    <string name="progress_reading_archive">Reading archive</string>
+    <string name="progress_preparing_archive">Preparing</string>
     <string name="progress_copying">Proceso de copiar</string>
     <string name="progress_moving">Emocionante</string>
     <string name="progress_pasting">Paliza</string>
@@ -66,6 +68,8 @@
     <string name="selected_archive_unavailable">El archivo seleccionado ya no está disponible. Actualice la carpeta e inténtelo de nuevo.</string>
     <string name="archive_unavailable">El archivo ya no está disponible. Actualice la carpeta e inténtelo de nuevo.</string>
     <string name="archive_extracted_to">Extraído a %1$s</string>
+    <string name="archive_extraction_cancelled">Extraction cancelled</string>
+    <string name="archive_compression_cancelled">Compression cancelled</string>
     <string name="paste_success">Pegado correctamente</string>
     <string name="file_already_on_device">Este archivo ya se encuentra en este dispositivo.</string>
     <string name="choose_inside_location">Seleccione archivos o carpetas dentro de esta ubicación.</string>
@@ -315,6 +319,8 @@
     <string name="settings_show_hidden_files">Mostrar archivos ocultos</string>
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
+    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
+    <string name="download_confirm_title">Download to this device?</string>
     <string name="settings_about">Acerca de</string>
     <string name="translation_help">Ayuda a mejorar las traducciones</string>
     <string name="translation_notice">Esta traducción está en proceso.</string>
@@ -449,6 +455,10 @@
     <string name="duplicates_title">Find duplicates</string>
     <string name="duplicates_description">Compare file contents in this folder and its subfolders, including hidden files. Links and Trash are excluded. Select files to remove after the scan.</string>
     <string name="duplicates_scan">Scan folder</string>
+    <string name="duplicates_exclude_folders">Exclude folders</string>
+    <string name="duplicates_exclusion_keywords">Folder names containing (comma-separated)</string>
+    <string name="duplicates_exclusion_save_failed">Could not save excluded folders.</string>
+    <string name="duplicates_scan_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d excluded folders.</string>
     <string name="duplicates_cancelled">Scan cancelled</string>
     <string name="duplicates_keep_one">Keep at least one copy in each group. Nothing is selected automatically.</string>
     <string name="duplicates_remove">Remove selected (%1$d)</string>

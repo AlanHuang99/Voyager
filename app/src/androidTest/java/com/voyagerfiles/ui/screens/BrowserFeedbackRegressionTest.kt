@@ -3,6 +3,9 @@ package com.voyagerfiles.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelStore
@@ -34,6 +37,7 @@ class BrowserFeedbackRegressionTest {
     private lateinit var viewModel: FileBrowserViewModel
     private lateinit var originalSearch: SearchBarMode
     private lateinit var originalView: ViewMode
+    private var hostView: android.view.View? = null
 
     @Before fun setUp() {
         root = File(application.cacheDir, "september-feedback").apply {
@@ -69,7 +73,10 @@ class BrowserFeedbackRegressionTest {
             store.put("browser", viewModel)
             viewModel.openLocalRoot(root.path)
         }
-        compose.setContent { MaterialTheme { BrowserScreen(viewModel, {}, onFindDuplicates = onFindDuplicates) } }
+        compose.setContent {
+            hostView = LocalView.current
+            MaterialTheme { BrowserScreen(viewModel, {}, onFindDuplicates = onFindDuplicates) }
+        }
         awaitDirectory(root)
     }
 
@@ -171,6 +178,21 @@ class BrowserFeedbackRegressionTest {
         search.performTextInput("folder-079")
         compose.waitUntil { viewModel.browseState.value.visibleFiles.size == 1 }
         assertEquals(SearchBarMode.BOTTOM, runBlocking { PreferencesManager(application).searchBarMode.first() })
+    }
+
+    @Test fun bottomSearchKeepsFileListVisibleWhileKeyboardIsOpen() {
+        runBlocking { prefs.setSearchBarMode(SearchBarMode.BOTTOM) }
+        showBrowser()
+        val search = compose.onNodeWithTag(BROWSER_SEARCH_TEST_TAG)
+        search.performClick()
+        compose.waitUntil(10_000) {
+            hostView?.let { ViewCompat.getRootWindowInsets(it)?.isVisible(WindowInsetsCompat.Type.ime()) } == true
+        }
+        val filesBounds = compose.onNodeWithTag("browser-files").fetchSemanticsNode().boundsInRoot
+        val searchBounds = search.fetchSemanticsNode().boundsInRoot
+        assertTrue("The keyboard must leave room to browse files", filesBounds.height > searchBounds.height * 2)
+        assertTrue("Search must stay below the file list", searchBounds.top >= filesBounds.bottom)
+        compose.onNode(hasText("folder-000") and hasClickAction()).assertIsDisplayed()
     }
 
     @Test fun selectedFolderHasBookmarkShortcutAndDuplicateActionsForThatFolder() {

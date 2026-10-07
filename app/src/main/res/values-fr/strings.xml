@@ -42,6 +42,8 @@
     <string name="progress_renaming">Changement de nom</string>
     <string name="progress_compressing">Compression</string>
     <string name="progress_extracting">Extraction</string>
+    <string name="progress_reading_archive">Lecture de l\'archive</string>
+    <string name="progress_preparing_archive">Préparation</string>
     <string name="progress_copying">Copie</string>
     <string name="progress_moving">Déplacement</string>
     <string name="progress_pasting">Collage</string>
@@ -66,6 +68,8 @@
     <string name="selected_archive_unavailable">L\'archive sélectionnée n\'est plus disponible. Actualisez le dossier et réessayez.</string>
     <string name="archive_unavailable">L\'archive n\'est plus disponible. Actualisez le dossier et réessayez.</string>
     <string name="archive_extracted_to">Extrait dans %1$s</string>
+    <string name="archive_extraction_cancelled">Extraction annulée</string>
+    <string name="archive_compression_cancelled">Compression annulée</string>
     <string name="paste_success">Collé avec succès</string>
     <string name="file_already_on_device">Ce fichier est déjà sur cet appareil</string>
     <string name="choose_inside_location">Choisissez des fichiers ou des dossiers dans cet emplacement</string>
@@ -315,6 +319,8 @@
     <string name="settings_show_hidden_files">Afficher les fichiers cachés</string>
     <string name="settings_use_trash">Utiliser la Corbeille pour les fichiers locaux</string>
     <string name="settings_use_trash_description">Désactivez uniquement si les suppressions locales doivent être définitives</string>
+    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
+    <string name="download_confirm_title">Download to this device?</string>
     <string name="settings_about">À propos</string>
     <string name="translation_help">Contribuez à améliorer les traductions</string>
     <string name="translation_notice">Cette traduction est en cours d\'élaboration.</string>
@@ -449,6 +455,10 @@
     <string name="duplicates_title">Rechercher les doublons</string>
     <string name="duplicates_description">Compare le contenu des fichiers dans ce dossier et ses sous-dossiers, y compris les fichiers cachés. Les liens et la Corbeille sont exclus. Sélectionne les fichiers à supprimer après l’analyse.</string>
     <string name="duplicates_scan">Analyser le dossier</string>
+    <string name="duplicates_exclude_folders">Exclude folders</string>
+    <string name="duplicates_exclusion_keywords">Folder names containing (comma-separated)</string>
+    <string name="duplicates_exclusion_save_failed">Could not save excluded folders.</string>
+    <string name="duplicates_scan_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d excluded folders.</string>
     <string name="duplicates_cancelled">Analyse annulée</string>
     <string name="duplicates_keep_one">Conserve au moins une copie dans chaque groupe. Rien n\'est sélectionné automatiquement.</string>
     <string name="duplicates_remove">Supprimer la sélection (%1$d)</string>

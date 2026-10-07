@@ -31,7 +31,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder. Keep search at the top, move it to the bottom, or use compact toolbar search.
 - Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
 - Browse Home categories for APKs, videos, audio, images and documents across mounted shared storage, with cancellable scanning and explicit coverage information.
-- Find duplicate files in a local folder by content, choose copies to remove, and recheck a copy to keep before removal.
+- Find duplicate files in a local folder by content, exclude folders by name, choose copies to remove, and recheck a copy to keep before removal. Recycle folders are excluded by default.
 - Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
 - Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
 - Keep file transfers running through Activity recreation and backgrounding, cancel supported transfers from the app or notification, and retain their final completed-item count.
@@ -45,7 +45,7 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 - Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
 - Set a local or document-tree audio file as the ringtone or notification tone after granting Android's system-settings permission.
 - Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
-- Connect to SFTP, FTP, SMB, and WebDAV servers, discover disk shares when an SMB connection omits the share name, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress.
+- Connect to SFTP, FTP, SMB, and WebDAV servers, discover disk shares when an SMB connection omits the share name, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress. Remote file taps ask before downloading; Settings can restore immediate downloads.
 - Open WebDAV documents, audio, and video in registered Android applications without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.
 - Navigate file lists and grids with focus-aware Android TV remote controls, including select and long-press actions and keyboard-operable protocol selection.
 - Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
@@ -78,6 +78,14 @@ Direct WebDAV opening exposes an opaque, expiring `content` URI to the selected 
 
 - **F-Droid:** install from [f-droid.org/packages/com.voyagerfiles](https://f-droid.org/packages/com.voyagerfiles/).
 - **GitHub:** download the latest `voyager-v<version>-universal.apk` or a matching per-ABI APK from the [Releases page](https://github.com/AlanHuang99/Voyager/releases/latest).
+
+The GitHub release signing certificate has this SHA-256 fingerprint:
+
+```text
+db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
+```
+
+APK file checksums are listed in `SHA256SUMS.txt` on the Releases page.
 
 ## Build from source
 

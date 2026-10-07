@@ -9,17 +9,22 @@ import com.voyagerfiles.data.duplicates.DuplicateScan
 import com.voyagerfiles.data.duplicates.DuplicateScanProgress
 import com.voyagerfiles.data.duplicates.DuplicateScanner
 import com.voyagerfiles.data.duplicates.removeVerifiedDuplicates
+import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileUtils
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,15 +44,36 @@ class DuplicateViewModel @JvmOverloads constructor(
     private val mutableState = MutableStateFlow(DuplicateState())
     val state = mutableState.asStateFlow()
     private var job: Job? = null
+    private var exclusionSave: Job? = null
     private val scanner = DuplicateScanner()
+    private val prefs = PreferencesManager(application)
+    val excludedDirectoryKeywords = prefs.duplicateExclusionKeywords.stateIn(
+        viewModelScope, SharingStarted.Eagerly, DuplicateScanner.DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS,
+    )
+
+    fun setExcludedDirectoryKeywords(keywords: Set<String>) {
+        if (state.value.scanning || state.value.removing) return
+        mutableState.update { it.copy(result = null, selected = emptySet(), message = null) }
+        exclusionSave = viewModelScope.launch {
+            withContext(NonCancellable) {
+                try {
+                    prefs.setDuplicateExclusionKeywords(keywords)
+                } catch (_: IOException) {
+                    mutableState.update { it.copy(message = UiText.Resource(R.string.duplicates_exclusion_save_failed)) }
+                }
+            }
+        }
+    }
 
     fun scan(path: String) {
         if (job?.isActive == true) return
+        val pendingSave = exclusionSave
         mutableState.value = DuplicateState(scanning = true)
         job = viewModelScope.launch {
             try {
+                pendingSave?.join()
                 var lastUpdate = 0L
-                val result = scanner.scan(File(path)) { progress ->
+                val result = scanner.scan(File(path), prefs.readDuplicateExclusionKeywords()) { progress ->
                     val now = System.nanoTime()
                     if (now - lastUpdate > 100_000_000L) {
                         lastUpdate = now
