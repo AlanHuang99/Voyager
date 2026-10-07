@@ -14,9 +14,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+internal fun rootSuCommand(script: String): List<String> = listOf("su", "--mount-master", "-c", script)
+
 /** Privileged supervision owns descendant termination; closing the su client is not cancellation. */
 class RootShell internal constructor(
-    private val startProcess: (String) -> Process = { ProcessBuilder("su", "-c", it).start() },
+    private val startProcess: (String) -> Process = { ProcessBuilder(rootSuCommand(it)).start() },
     private val requireRoot: Boolean = true,
     private val timeoutMillis: Long = 30_000,
     private val temporaryDirectory: String = System.getProperty("java.io.tmpdir") ?: "/data/local/tmp",
