@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +30,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,12 +44,17 @@ import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.DuplicateViewModel
 import java.io.File
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: DuplicateViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    val excludedKeywords by viewModel.excludedDirectoryKeywords.collectAsState()
+    val scope = rememberCoroutineScope()
     var confirmRemoval by remember { mutableStateOf(false) }
+    var showExclusions by rememberSaveable { mutableStateOf(false) }
+    var exclusionText by rememberSaveable { mutableStateOf("") }
     BackHandler { if (!state.removing) onNavigateBack() }
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.duplicates_title)) }, navigationIcon = {
@@ -58,6 +67,12 @@ fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: Duplic
             item {
                 Text(path, style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.duplicates_description))
+                TextButton(onClick = {
+                    exclusionText = excludedKeywords.sorted().joinToString(", ")
+                    showExclusions = true
+                }, enabled = !state.scanning && !state.removing) {
+                    Text(stringResource(R.string.duplicates_exclude_folders))
+                }
                 Row {
                     TextButton(onClick = { viewModel.scan(path) }, enabled = !state.scanning && !state.removing) {
                         Text(stringResource(R.string.duplicates_scan))
@@ -77,7 +92,7 @@ fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: Duplic
             state.result?.let { scan ->
                 item {
                     Text(stringResource(R.string.duplicates_summary, scan.groups.size, scan.filesExamined))
-                    Text(stringResource(R.string.duplicates_coverage, scan.unreadable, scan.missing, scan.changed, scan.linksSkipped, scan.excludedDirectories),
+                    Text(stringResource(R.string.duplicates_scan_coverage, scan.unreadable, scan.missing, scan.changed, scan.linksSkipped, scan.excludedDirectories),
                         style = MaterialTheme.typography.bodySmall)
                     if (scan.limited) Text(stringResource(R.string.duplicates_limited), color = MaterialTheme.colorScheme.error)
                     Text(stringResource(R.string.duplicates_keep_one), style = MaterialTheme.typography.bodySmall)
@@ -98,6 +113,32 @@ fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: Duplic
                 }
             }
         }
+    }
+    if (showExclusions) {
+        AlertDialog(
+            onDismissRequest = { showExclusions = false },
+            title = { Text(stringResource(R.string.duplicates_exclude_folders)) },
+            text = {
+                OutlinedTextField(
+                    value = exclusionText,
+                    onValueChange = { exclusionText = it },
+                    label = { Text(stringResource(R.string.duplicates_exclusion_keywords)) },
+                    placeholder = { Text(stringResource(R.string.duplicates_exclusion_example)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        viewModel.setExcludedDirectoryKeywords(exclusionText.split(',').toSet())
+                        showExclusions = false
+                    }
+                }) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExclusions = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
     if (confirmRemoval && !state.removing) {
         DeleteChoiceDialog(DeleteChoiceDialogModel.local(state.selected.size, state.selected.firstOrNull()?.let { File(it).name }.orEmpty()),

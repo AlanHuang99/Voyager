@@ -162,6 +162,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     val theme = prefs.theme.stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.SYSTEM)
     val searchBarMode = prefs.searchBarMode.stateIn(viewModelScope, SharingStarted.Eagerly, SearchBarMode.TOP)
+    val confirmRemoteDownloads = prefs.confirmRemoteDownloads.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setConfirmRemoteDownloads(confirm: Boolean) {
+        viewModelScope.launch { prefs.setConfirmRemoteDownloads(confirm) }
+    }
 
     fun setSearchBarMode(mode: SearchBarMode) {
         viewModelScope.launch { prefs.setSearchBarMode(mode) }

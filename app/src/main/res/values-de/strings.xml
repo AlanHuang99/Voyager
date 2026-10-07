@@ -315,6 +315,8 @@
     <string name="settings_show_hidden_files">Versteckte Dateien anzeigen</string>
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
+    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
+    <string name="download_confirm_title">Download to this device?</string>
     <string name="settings_about">Um</string>
     <string name="translation_help">Hilf mit, die Übersetzungen zu verbessern</string>
     <string name="translation_notice">Diese Übersetzung ist noch in Arbeit.</string>
@@ -449,6 +451,9 @@
     <string name="duplicates_title">Find duplicates</string>
     <string name="duplicates_description">Compare file contents in this folder and its subfolders, including hidden files. Links and Trash are excluded. Select files to remove after the scan.</string>
     <string name="duplicates_scan">Scan folder</string>
+    <string name="duplicates_exclude_folders">Exclude folders</string>
+    <string name="duplicates_exclusion_keywords">Folder names containing (comma-separated)</string>
+    <string name="duplicates_scan_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d excluded folders.</string>
     <string name="duplicates_cancelled">Scan cancelled</string>
     <string name="duplicates_keep_one">Keep at least one copy in each group. Nothing is selected automatically.</string>
     <string name="duplicates_remove">Remove selected (%1$d)</string>

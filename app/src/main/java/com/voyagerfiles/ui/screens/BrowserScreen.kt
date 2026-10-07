@@ -203,6 +203,7 @@ fun BrowserScreen(
     val resolvedSnackbarMessage = snackbarMessage?.let { it.asString() }
     val useTrash by viewModel.useTrash.collectAsState()
     val searchBarMode by viewModel.searchBarMode.collectAsState()
+    val confirmRemoteDownloads by viewModel.confirmRemoteDownloads.collectAsState()
     var compactSearchExpanded by rememberSaveable(searchBarMode, activeSession?.id, state.currentPath) { mutableStateOf(false) }
     val operationState by viewModel.operationState.collectAsState()
     val transferConflict by viewModel.transferConflict.collectAsState()
@@ -254,6 +255,7 @@ fun BrowserScreen(
     var archiveNameDialogDefault by remember { mutableStateOf<String?>(null) }
     var archiveToExtract by remember { mutableStateOf<FileItem?>(null) }
     var playbackFallbackFor by remember { mutableStateOf<FileItem?>(null) }
+    var downloadConfirmationFor by remember { mutableStateOf<FileItem?>(null) }
 
     val isSelectionMode = state.selectedFiles.isNotEmpty()
     val isNetwork = state.source.isNetwork
@@ -422,9 +424,10 @@ fun BrowserScreen(
     }
 
     fun handleRemoteFileTap(file: FileItem) {
-        when (remoteFileTapAction(file)) {
+        when (remoteFileTapAction(file, confirmRemoteDownloads)) {
             RemoteFileTapAction.NAVIGATE -> navigateTo(file.path)
             RemoteFileTapAction.DOWNLOAD -> viewModel.downloadFile(file.path)
+            RemoteFileTapAction.CONFIRM_DOWNLOAD -> downloadConfirmationFor = file
             RemoteFileTapAction.STREAM_WEBDAV -> openWebDavFile(file)
         }
     }
@@ -1256,6 +1259,25 @@ fun BrowserScreen(
             },
             dismissButton = {
                 TextButton(onClick = { archiveToExtract = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    downloadConfirmationFor?.let { file ->
+        AlertDialog(
+            onDismissRequest = { downloadConfirmationFor = null },
+            title = { Text(stringResource(R.string.download_confirm_title)) },
+            text = { Text(file.name) },
+            confirmButton = {
+                TextButton(onClick = {
+                    downloadConfirmationFor = null
+                    viewModel.downloadFile(file.path)
+                }) { Text(stringResource(R.string.action_download)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { downloadConfirmationFor = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },

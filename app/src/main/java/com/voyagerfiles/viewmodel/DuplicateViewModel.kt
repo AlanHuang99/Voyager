@@ -9,6 +9,7 @@ import com.voyagerfiles.data.duplicates.DuplicateScan
 import com.voyagerfiles.data.duplicates.DuplicateScanProgress
 import com.voyagerfiles.data.duplicates.DuplicateScanner
 import com.voyagerfiles.data.duplicates.removeVerifiedDuplicates
+import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileUtils
@@ -20,6 +21,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -40,6 +44,16 @@ class DuplicateViewModel @JvmOverloads constructor(
     val state = mutableState.asStateFlow()
     private var job: Job? = null
     private val scanner = DuplicateScanner()
+    private val prefs = PreferencesManager(application)
+    val excludedDirectoryKeywords = prefs.duplicateExclusionKeywords.stateIn(
+        viewModelScope, SharingStarted.Eagerly, DuplicateScanner.DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS,
+    )
+
+    suspend fun setExcludedDirectoryKeywords(keywords: Set<String>) {
+        if (state.value.scanning || state.value.removing) return
+        prefs.setDuplicateExclusionKeywords(keywords)
+        mutableState.update { it.copy(result = null, selected = emptySet(), message = null) }
+    }
 
     fun scan(path: String) {
         if (job?.isActive == true) return
@@ -47,7 +61,7 @@ class DuplicateViewModel @JvmOverloads constructor(
         job = viewModelScope.launch {
             try {
                 var lastUpdate = 0L
-                val result = scanner.scan(File(path)) { progress ->
+                val result = scanner.scan(File(path), prefs.duplicateExclusionKeywords.first()) { progress ->
                     val now = System.nanoTime()
                     if (now - lastUpdate > 100_000_000L) {
                         lastUpdate = now

@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.voyagerfiles.data.model.SortBy
+import com.voyagerfiles.data.duplicates.DuplicateScanner
 import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.HomeLayout
 import com.voyagerfiles.data.model.HomeSection
@@ -30,6 +31,8 @@ class PreferencesManager(private val context: Context) {
         val THEME = stringPreferencesKey("theme")
         val SHOW_HIDDEN = booleanPreferencesKey("show_hidden")
         val USE_TRASH = booleanPreferencesKey("use_trash")
+        val CONFIRM_REMOTE_DOWNLOADS = booleanPreferencesKey("confirm_remote_downloads")
+        val DUPLICATE_EXCLUSION_KEYWORDS = stringSetPreferencesKey("duplicate_exclusion_keywords")
         val LIMITED_ACCESS_ACCEPTED = booleanPreferencesKey("limited_access_accepted")
         val DISMISSED_TRANSLATION_NOTICES = stringSetPreferencesKey("dismissed_translation_notices")
         val SORT_BY = stringPreferencesKey("sort_by")
@@ -55,6 +58,24 @@ class PreferencesManager(private val context: Context) {
 
     val useTrash: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.USE_TRASH] ?: true
+    }
+
+    val confirmRemoteDownloads: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.CONFIRM_REMOTE_DOWNLOADS] ?: true
+    }
+
+    suspend fun setConfirmRemoteDownloads(confirm: Boolean) {
+        context.dataStore.edit { it[Keys.CONFIRM_REMOTE_DOWNLOADS] = confirm }
+    }
+
+    val duplicateExclusionKeywords: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DUPLICATE_EXCLUSION_KEYWORDS] ?: DuplicateScanner.DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS
+    }
+
+    suspend fun setDuplicateExclusionKeywords(keywords: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DUPLICATE_EXCLUSION_KEYWORDS] = keywords.map(String::trim).filter(String::isNotEmpty).toSet()
+        }
     }
 
     val limitedAccessAccepted: Flow<Boolean> = context.dataStore.data.map { prefs ->

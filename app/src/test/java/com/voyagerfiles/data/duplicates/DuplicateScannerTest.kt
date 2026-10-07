@@ -28,6 +28,40 @@ class DuplicateScannerTest {
         assertEquals(setOf(setOf("a", "b"), setOf("empty1", "empty2")), scan.groups.map { group -> group.files.map { File(it.path).name }.toSet() }.toSet())
     }
 
+    @Test fun recycleFoldersAreExcludedBeforeTheirFilesAreHashed() = runBlocking {
+        val root = temp.newFolder()
+        root.resolve("original").writeText("same")
+        root.resolve("copy").writeText("same")
+        root.resolve(".Trash-1000").apply { mkdir(); resolve("deleted").writeText("same") }
+        root.resolve(".recycle").apply { mkdir(); resolve("deleted").writeText("same") }
+        val scan = DuplicateScanner().scan(root)
+        assertEquals(2, scan.filesExamined)
+        assertEquals(2, scan.excludedDirectories)
+        assertEquals(setOf("original", "copy"), scan.groups.single().files.map { File(it.path).name }.toSet())
+    }
+
+    @Test fun customFolderKeywordsSkipDescendantsButNeverFileNames() = runBlocking {
+        val root = temp.newFolder()
+        root.resolve("backup.txt").writeText("same")
+        root.resolve("copy.txt").writeText("same")
+        root.resolve("Old-BACKUP-2026").apply { mkdir(); resolve("nested").mkdir(); resolve("nested/ignored").writeText("same") }
+        val scan = DuplicateScanner().scan(root, setOf(" backup ", ""))
+        assertEquals(2, scan.filesExamined)
+        assertEquals(1, scan.excludedDirectories)
+        assertEquals(setOf("backup.txt", "copy.txt"), scan.groups.single().files.map { File(it.path).name }.toSet())
+    }
+
+    @Test fun clearingOptionalExclusionsStillProtectsVoyagerTrash() = runBlocking {
+        val root = temp.newFolder()
+        root.resolve("original").writeText("same")
+        root.resolve(".trash").apply { mkdir(); resolve("copy").writeText("same") }
+        root.resolve(".VoyagerTrash").apply { mkdir(); resolve("protected").writeText("same") }
+        val scan = DuplicateScanner().scan(root, emptySet())
+        assertEquals(2, scan.filesExamined)
+        assertEquals(1, scan.excludedDirectories)
+        assertEquals(2, scan.groups.single().files.size)
+    }
+
     @Test fun sourceAndKeeperAreRehashedBeforeRemovalAndAllCopiesCannotBeSelected() = runBlocking {
         val root = temp.newFolder()
         val a = root.resolve("a").apply { writeText("same") }

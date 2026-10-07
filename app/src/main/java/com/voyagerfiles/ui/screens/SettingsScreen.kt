@@ -95,6 +95,7 @@ fun SettingsScreen(
     val openTranslationLink = rememberTranslationLinkOpener()
     val browseState by viewModel.browseState.collectAsState()
     val useTrash by viewModel.useTrash.collectAsState()
+    val confirmRemoteDownloads by viewModel.confirmRemoteDownloads.collectAsState()
     val autoCloseSessions by viewModel.autoCloseSessions.collectAsState()
     val sessionAutoCloseTimeout by viewModel.sessionAutoCloseTimeout.collectAsState()
     val homeLayout by viewModel.homeLayout.collectAsState()
@@ -431,6 +432,20 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.settings_confirm_remote_downloads),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(checked = confirmRemoteDownloads, onCheckedChange = viewModel::setConfirmRemoteDownloads)
+            }
 
             // About section
             Text(

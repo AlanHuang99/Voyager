@@ -34,10 +34,17 @@ data class DuplicateScanProgress(val examined: Int, val hashingPath: String? = n
 class DuplicateScanner(private val maximumFiles: Int = 100_000) {
     init { require(maximumFiles > 0) }
 
-    suspend fun scan(root: File, onProgress: (DuplicateScanProgress) -> Unit = {}): DuplicateScan = withContext(Dispatchers.IO) {
+    suspend fun scan(
+        root: File,
+        excludedDirectoryKeywords: Set<String> = DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS,
+        onProgress: (DuplicateScanProgress) -> Unit = {},
+    ): DuplicateScan = withContext(Dispatchers.IO) {
         require(root.isDirectory && root.canRead()) { "The selected folder is no longer readable." }
         val canonicalRoot = root.canonicalFile.toPath()
         require(canonicalRoot.none { it.toString() == ".VoyagerTrash" }) { "Restore files from Trash before scanning them." }
+        val exclusions = excludedDirectoryKeywords.map(String::trim).filter(String::isNotEmpty)
+        fun excluded(name: String) = exclusions.any { name.contains(it, ignoreCase = true) }
+        if (excluded(root.name)) return@withContext DuplicateScan(excludedDirectories = 1)
         val pending = ArrayDeque<java.nio.file.Path>().apply { add(canonicalRoot) }
         val candidates = mutableListOf<DuplicateFile>()
         val seenKeys = mutableSetOf<String>()
@@ -63,7 +70,7 @@ class DuplicateScanner(private val maximumFiles: Int = 100_000) {
                             when {
                                 attrs.isSymbolicLink -> result = result.copy(linksSkipped = result.linksSkipped + 1)
                                 attrs.isDirectory -> {
-                                    if (path.fileName.toString() == ".VoyagerTrash") {
+                                    if (path.fileName.toString() == ".VoyagerTrash" || excluded(path.fileName.toString())) {
                                         result = result.copy(excludedDirectories = result.excludedDirectories + 1)
                                     } else pending.add(path)
                                 }
@@ -179,4 +186,8 @@ class DuplicateScanner(private val maximumFiles: Int = 100_000) {
     }
 
     private class ChangedFileException : IOException("The file changed during the scan. Scan again before removing it.")
+
+    companion object {
+        val DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS: Set<String> = setOf(".trash", ".recycle")
+    }
 }

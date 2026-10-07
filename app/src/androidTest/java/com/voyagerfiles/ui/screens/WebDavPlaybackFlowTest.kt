@@ -87,14 +87,31 @@ class WebDavPlaybackFlowTest {
     }
 
     @Test
-    fun sftpMediaDownloadsImmediately() {
+    fun sftpMediaDownloadsOnlyAfterConfirmation() {
         val sftpAudio = remoteFile("sftp-${System.nanoTime()}.mp3", FileSource.SFTP)
         downloadedNames += sftpAudio.name
         val sftpProvider = FakeProvider(listOf(sftpAudio))
         val sftpViewModel = launch(ConnectionProtocol.SFTP, sftpProvider, Result.failure(AssertionError("unused")))
         waitForFiles(sftpViewModel, listOf(sftpAudio.name))
         composeTestRule.onNode(hasText(sftpAudio.name) and hasClickAction()).performClick()
+        assertEquals(0, sftpProvider.readCount)
+        composeTestRule.onNodeWithText("Download to this device?").assertExists()
+        composeTestRule.onNodeWithText("Download").performClick()
         composeTestRule.waitUntil(5_000) { sftpProvider.readCount == 1 }
+    }
+
+    @Test
+    fun cancellingRemoteDownloadDoesNotReadOrCreateAFile() {
+        val file = remoteFile("cancel-${System.nanoTime()}.pdf", FileSource.SFTP)
+        downloadedNames += file.name
+        val provider = FakeProvider(listOf(file))
+        val viewModel = launch(ConnectionProtocol.SFTP, provider, Result.failure(AssertionError("unused")))
+        waitForFiles(viewModel, listOf(file.name))
+        composeTestRule.onNode(hasText(file.name) and hasClickAction()).performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(0, provider.readCount)
+        assertTrue(!Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).resolve(file.name).exists())
     }
 
     @Test

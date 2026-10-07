@@ -303,6 +303,8 @@
     <string name="settings_show_hidden_files">显示隐藏文件</string>
     <string name="settings_use_trash">对本地文件使用回收站</string>
     <string name="settings_use_trash_description">仅当本地删除应设为永久时关闭此选项</string>
+    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
+    <string name="download_confirm_title">Download to this device?</string>
     <string name="settings_about">关于</string>
     <string name="translation_help">帮助改进翻译</string>
     <string name="translation_notice">此译文仍在修改完善中。</string>
@@ -434,6 +436,9 @@
     <string name="duplicates_title">Find duplicates</string>
     <string name="duplicates_description">Compare file contents in this folder and its subfolders, including hidden files. Links and Trash are excluded. Select files to remove after the scan.</string>
     <string name="duplicates_scan">Scan folder</string>
+    <string name="duplicates_exclude_folders">Exclude folders</string>
+    <string name="duplicates_exclusion_keywords">Folder names containing (comma-separated)</string>
+    <string name="duplicates_scan_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d excluded folders.</string>
     <string name="duplicates_cancelled">Scan cancelled</string>
     <string name="duplicates_keep_one">Keep at least one copy in each group. Nothing is selected automatically.</string>
     <string name="duplicates_remove">Remove selected (%1$d)</string>
