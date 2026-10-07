@@ -42,6 +42,8 @@
     <string name="progress_renaming">Rinominare</string>
     <string name="progress_compressing">Compressione</string>
     <string name="progress_extracting">Estrazione</string>
+    <string name="progress_reading_archive">Reading archive</string>
+    <string name="progress_preparing_archive">Preparing</string>
     <string name="progress_copying">Copiare</string>
     <string name="progress_moving">Trasloco</string>
     <string name="progress_pasting">Passaggio</string>
@@ -66,6 +68,8 @@
     <string name="selected_archive_unavailable">L\'archivio selezionato non è più disponibile. Aggiorna la cartella e riprova.</string>
     <string name="archive_unavailable">L\'archivio non è più disponibile. Aggiorna la cartella e riprova.</string>
     <string name="archive_extracted_to">Estratto in %1$s</string>
+    <string name="archive_extraction_cancelled">Extraction cancelled</string>
+    <string name="archive_compression_cancelled">Compression cancelled</string>
     <string name="paste_success">Incollato correttamente</string>
     <string name="file_already_on_device">Questo file è già presente su questo dispositivo</string>
     <string name="choose_inside_location">Seleziona i file o le cartelle all\'interno di questa posizione</string>

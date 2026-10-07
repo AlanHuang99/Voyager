@@ -41,6 +41,8 @@
     <string name="progress_renaming">名前変更</string>
     <string name="progress_compressing">圧縮</string>
     <string name="progress_extracting">抽出</string>
+    <string name="progress_reading_archive">Reading archive</string>
+    <string name="progress_preparing_archive">Preparing</string>
     <string name="progress_copying">コピー</string>
     <string name="progress_moving">引っ越し</string>
     <string name="progress_pasting">貼り付け</string>
@@ -65,6 +67,8 @@
     <string name="selected_archive_unavailable">選択したアーカイブは現在利用できません。フォルダを更新してもう一度お試しください。</string>
     <string name="archive_unavailable">アーカイブは利用できなくなりました。フォルダを更新してもう一度お試しください。</string>
     <string name="archive_extracted_to">%1$s に抽出されました</string>
+    <string name="archive_extraction_cancelled">Extraction cancelled</string>
+    <string name="archive_compression_cancelled">Compression cancelled</string>
     <string name="paste_success">貼り付けに成功しました</string>
     <string name="file_already_on_device">このファイルは既にこのデバイスに保存されています</string>
     <string name="choose_inside_location">この場所にあるファイルまたはフォルダを選択してください</string>
