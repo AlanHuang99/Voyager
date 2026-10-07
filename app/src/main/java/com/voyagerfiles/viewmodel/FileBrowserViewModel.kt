@@ -13,6 +13,7 @@ import com.voyagerfiles.audio.AudioTone
 import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.ArchivePhase
 import com.voyagerfiles.data.archive.ArchiveProgress
 import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.local.AppDatabase
@@ -753,7 +754,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val destinationDirectory = state.currentPath
         val publishProgress = archiveProgressPublisher(R.string.progress_compressing)
 
-        launchOperation(R.string.progress_compressing, R.string.operation_compress) {
+        launchOperation(
+            R.string.progress_compressing,
+            R.string.operation_compress,
+            cancelledMessage = R.string.archive_compression_cancelled,
+        ) {
             ArchiveService.createZip(
                 provider = provider,
                 selectedItems = selectedItems,
@@ -816,7 +821,11 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val provider = fileProvider
         val publishProgress = archiveProgressPublisher(R.string.progress_extracting)
 
-        launchOperation(R.string.progress_extracting, R.string.operation_extract) {
+        launchOperation(
+            R.string.progress_extracting,
+            R.string.operation_extract,
+            cancelledMessage = R.string.archive_extraction_cancelled,
+        ) {
             ArchiveService.extract(
                 provider = provider,
                 archive = archive,
@@ -1308,14 +1317,15 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private fun launchOperation(
         @StringRes progressLabel: Int,
         @StringRes operationName: Int,
+        @StringRes cancelledMessage: Int = R.string.transfer_cancelled,
         block: suspend () -> Unit,
     ) {
         val started = operationController.launch(
             label = UiText.Resource(progressLabel),
-            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone),
+            cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone, R.string.operation_extract, R.string.operation_compress),
             onFailure = { error ->
                 showSnackbar(
-                    if (error is CancellationException) UiText.Resource(R.string.transfer_cancelled)
+                    if (error is CancellationException) UiText.Resource(cancelledMessage)
                     else OperationMessages.failure(operationName, error),
                 )
             },
@@ -1338,42 +1348,27 @@ class FileBrowserViewModel @JvmOverloads constructor(
         initialNavigationJob = null
     }
 
-    private fun archiveProgressPublisher(@StringRes labelRes: Int): (ArchiveProgress) -> Unit {
-        val label = UiText.Resource(labelRes)
-        var lastEntryName: String? = null
-        var lastCompletedEntries = -1
-        var lastPublishedBytes = 0L
-        return { progress ->
-            val entryChanged = progress.currentEntryName != lastEntryName
-            val completedEntriesChanged = progress.completedEntries != lastCompletedEntries
-            val reachedKnownTotal = progress.totalBytes
-                ?.takeIf { it > 0 }
-                ?.let { total ->
-                    progress.processedBytes >= total &&
-                        (entryChanged || lastPublishedBytes < total)
-                }
-                ?: false
-            val crossedPublicationThreshold = !entryChanged &&
-                progress.processedBytes - lastPublishedBytes >= PROGRESS_PUBLICATION_BYTES
-            if (
-                entryChanged ||
-                completedEntriesChanged ||
-                reachedKnownTotal ||
-                crossedPublicationThreshold
-            ) {
-                lastEntryName = progress.currentEntryName
-                lastCompletedEntries = progress.completedEntries
-                lastPublishedBytes = progress.processedBytes
-                updateOperationProgress(
-                    TransferProgress(
-                        label = label,
-                        completedItems = progress.completedEntries,
-                        currentItemName = progress.currentEntryName?.substringAfterLast('/'),
-                        copiedBytes = progress.processedBytes,
-                        totalBytes = progress.totalBytes,
-                    )
-                )
+    private fun archiveProgressPublisher(
+        @StringRes labelRes: Int,
+        throttle: ArchiveProgressThrottle = ArchiveProgressThrottle(),
+    ): (ArchiveProgress) -> Unit = { progress ->
+        throttle.accept(progress)?.let { elapsedNanos ->
+            val label = when (progress.phase) {
+                ArchivePhase.READING_SOURCE -> R.string.progress_reading_archive
+                ArchivePhase.PREPARING -> R.string.progress_preparing_archive
+                ArchivePhase.WRITING -> labelRes
             }
+            updateOperationProgress(
+                TransferProgress(
+                    label = UiText.Resource(label),
+                    completedItems = progress.completedEntries,
+                    totalItems = progress.totalEntries,
+                    currentItemName = progress.currentEntryName?.substringAfterLast('/'),
+                    copiedBytes = progress.processedBytes,
+                    totalBytes = progress.totalBytes,
+                    elapsedNanos = elapsedNanos,
+                )
+            )
         }
     }
 
