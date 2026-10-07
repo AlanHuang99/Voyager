@@ -14,7 +14,16 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
 
 </div>
 
-**Help translate Voyager:** [Join the translation project on Crowdin](https://crowdin.com/project/voyagerandroid). You can translate a few strings or review existing wording without building the app.
+**Help translate Voyager:** [Join the Crowdin project](https://crowdin.com/project/voyagerandroid). Translate a few strings or review wording in your browser. No coding or local build is required.
+
+## Install
+
+Requires **Android 8.0 or later**.
+
+- **F-Droid:** install from [Voyager on F-Droid](https://f-droid.org/packages/com.voyagerfiles/).
+- **GitHub:** download `voyager-v<version>-universal.apk` from the [latest release](https://github.com/AlanHuang99/Voyager/releases/latest). Smaller APKs for individual CPU architectures are also available.
+
+F-Droid verifies releases through its own build process, so a new GitHub release can appear there later. Both distribution paths use the same developer signing key. APK checksums are included in each GitHub release as `SHA256SUMS.txt`; see [Verify your download](#verify-your-download) for the signing fingerprint.
 
 ## Screenshots
 
@@ -24,72 +33,58 @@ An open-source Android file manager for local storage, document trees, SFTP, FTP
   <img src="docs/screenshots/trash.png" width="30%" alt="Trash screen with restore and permanent-delete actions">
 </p>
 
+## Get started
+
+1. Open a storage location from Home. Grant Android's all-files access to browse shared storage, or continue in limited mode and choose a folder through Android's folder picker.
+2. Tap a folder to browse or a file to open it. Search filters the current folder; type filters and sorting help narrow the list.
+3. Long-press an item to select it, then use the available actions to copy, move, share, rename, or delete. Direct-local deletions can go to Trash for later restoration.
+4. Add a connection for a remote server. SFTP, FTP, and SMB file taps ask before downloading by default. WebDAV can open files in another app directly when the server supports the required byte ranges.
+
+Settings lets you choose the search position, theme, Home sections, and remote download behavior. Use the browser's view controls to switch between list and grid layouts, and its Sessions sheet to switch between open locations without returning to Home.
+
 ## Features
 
-- Browse internal storage and mounted external volumes such as SD cards and USB/OTG media.
-- Continue without broad storage access and use Storage Access Framework document trees or remote servers in limited mode.
-- Switch among list, compact list, and grid layouts, view image, video-frame, first-page PDF, embedded Office preview, and readable local APK application-icon thumbnails, show hidden files, sort by name, size, date, or type, and search the current folder. Keep search at the top, move it to the bottom, or use compact toolbar search.
-- Pull down to refresh list and grid listings, including empty folders and failed loads, while preserving valid selections.
-- Browse Home categories for APKs, videos, audio, images and documents across mounted shared storage, with cancellable scanning and explicit coverage information.
-- Find duplicate files in a local folder by content, exclude folders by name, choose copies to remove, and recheck a copy to keep before removal. Recycle folders are excluded by default.
-- Filter a folder by directories, images, videos, audio, documents, archives, or Android packages.
-- Select visible results, share local or document-tree files, inspect file details, copy, move, rename, delete, and create files and folders, including cross-provider transfers with filenames, bytes, percentage, and speed.
-- Keep file transfers running through Activity recreation and backgrounding, cancel supported transfers from the app or notification, and retain their final completed-item count.
-- Resolve destination conflicts with Replace, Skip, or Cancel, including an apply-to-all choice and staged replacement that preserves the existing file until copying succeeds.
-- Long-press and drag to select ranges across list and grid views, including scrolling at the edge of the screen.
-- Create ZIP archives and safely extract ZIP, TAR, TGZ, TAR.GZ, TBZ2, TAR.BZ2, GZ, and BZ2 files on local, document-tree, or remote providers. RAR files are recognized and reported as unsupported.
-- Open local and document-tree files through Android's registered handlers so Android's default-app choices are honored, or explicitly choose a handler with Open with. Writable local files receive temporary write permission so an external editor can save changes; Share grants read access only. APK files open in Android's package installer.
-- Choose Trash or permanent deletion for each direct-local operation, restore recoverable per-volume Trash items, or disable Trash in Settings.
-- Keep directory scroll positions when returning to a parent, switching sessions, or refreshing a listing.
-- Bookmark local folders from either the browser or a selected folder, open common media locations, customize the visibility and order of Home sections, and keep several local, document-tree, or remote browser sessions open. The Sessions sheet in the browser switches between them and opens saved connections, bookmarks, or storage volumes in place, without returning Home.
-- Pin a local folder to a supporting launcher’s Home screen, with destination and storage-access validation on launch.
-- Set a local or document-tree audio file as the ringtone or notification tone after granting Android's system-settings permission.
-- Automatically close inactive browser sessions after Voyager remains in the background for a chosen duration.
-- Connect to SFTP, FTP, SMB, and WebDAV servers, discover disk shares when an SMB connection omits the share name, create remote files and folders, upload Android documents, and download remote files or directories to Android's Downloads folder with visible transfer progress. Remote file taps ask before downloading; Settings can restore immediate downloads.
-- Open WebDAV documents, audio, and video in registered Android applications without staging a complete local copy when the server supports byte ranges. If the server cannot provide the ranges required for seeking, Voyager offers an explicit Download or Cancel choice. Other remote protocols continue to download files before opening them.
-- Navigate file lists and grids with focus-aware Android TV remote controls, including select and long-press actions and keyboard-operable protocol selection.
-- Authenticate to SFTP with a password, keyboard-interactive authentication, a private key file, or an in-app generated key pair whose public key can be copied or saved.
-- Choose from 20 included color schemes, including AMOLED black and high-contrast options, with Material You dynamic colors on Android 12 and later.
+- Browse internal storage, SD cards, USB/OTG volumes, and folders granted through Android's folder picker.
+- Copy, move, rename, create, and delete files across local, document-tree, and remote locations, with transfer progress and cancellation. Share local and document-tree files through Android's share sheet.
+- Use list, compact list, or grid views, thumbnails, sorting, current-folder search, and file-type filters.
+- Browse Home media categories, bookmark local folders, and keep multiple browser sessions open.
+- Restore direct-local files from Trash and find duplicate files by content, with configurable folder exclusions.
+- Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 archives with progress and cancellation.
+- Connect to SFTP, FTP, SMB, and WebDAV. SFTP supports passwords, private keys, and generated key pairs; SMB can discover disk shares.
+- Open files with Android's registered apps, including direct WebDAV playback when the server supports seeking.
+- Choose among 20 included color schemes, custom themes, and Material You dynamic colors on Android 12 or later.
+- Navigate with Android TV remote controls, or use an explicitly authorized root session on a compatible rooted device.
 
-Network connections are user-initiated. The app contains no analytics or tracking, and local browsing needs no network access.
+## Privacy and access
 
-## Storage and security
+Voyager contains no analytics or tracking. Local browsing works without internet access; network connections are user-initiated. Remote passwords are encrypted with a device-bound Android Keystore key, and saved connections and SSH keys are excluded from Android backup and device transfer.
 
-Settings offers an explicitly confirmed root session for devices with a compatible, authorized `su` manager. Root sessions can browse `/` and perform file operations; tapping a regular file opens a UTF-8 text editor limited to 256 KiB. Saves recheck the original before replacement, and root deletions require permanent-delete confirmation. Ordinary local browsing never requests root. Successful superuser operations have been tested in an isolated Linux fixture; rooted Android operation remains unverified. See [root verification coverage](docs/TESTING.md#protocol-integration-tests).
+SFTP remembers server host keys and rejects unexpected changes. HTTPS WebDAV validates certificates through Android's trusted authorities. FTP and HTTP WebDAV are unencrypted. Ordinary local browsing never requests root; root sessions require confirmation and authorization through your device's `su` manager.
 
-Full local browsing uses Android's all-files special access. If that access is denied, Voyager remains usable for document trees and remote servers. The Home and Settings screens explain the active access mode and provide a route back to Android's permission settings.
+See [Architecture and security](docs/ARCHITECTURE.md) for storage, authentication, and file-operation details.
 
-Saved remote passwords are encrypted with AES-GCM using a device-bound Android Keystore key. The connection database, settings, generated SSH keys, and SFTP known-host data are excluded from Android cloud backup and device transfer. SFTP uses trust on first use and rejects a server whose saved host key changes. The connection editor displays saved fingerprints and lets you forget the key for that exact host and port after confirmation; verify a replacement fingerprint through a trusted channel before reconnecting.
+## Help translate
 
-Generated SFTP private keys remain in app-private storage. Voyager displays the corresponding OpenSSH public key and provides Copy and Save actions so it can be installed on a server without exposing the private key.
+1. [Open Voyager on Crowdin](https://crowdin.com/project/voyagerandroid), sign in, and choose your language.
+2. Open `strings.xml` and translate an untranslated string or improve an existing translation.
+3. Keep placeholders such as `%1$s` and plural forms intact. Leave a comment on the string if its context is unclear.
 
-SFTP and HTTPS WebDAV provide transport encryption. FTP is unencrypted, HTTP WebDAV is unencrypted, and Voyager negotiates SMB encryption, including with servers that require it, while retaining SMB2 compatibility; the connection editor warns before saving cleartext FTP or HTTP WebDAV. Use unencrypted protocols only on an isolated trusted network.
+You can also reach Crowdin through **Settings > About > Help improve translations**. Some languages contain provisional wording and show a dismissible notice in the app. Reviewed corrections reach installed apps through subsequent releases.
 
-HTTPS WebDAV follows Android's system and user-installed certificate authorities. A private authority must be installed by the device owner, and normal certificate-chain and hostname validation still apply.
+The [translation guide](docs/TRANSLATING.md) explains terminology, formatting, review, and synchronization. Request another language or offer language review in [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions).
 
-Direct WebDAV opening exposes an opaque, expiring `content` URI to the selected application. The URI contains no server address, remote path, username, or password. Voyager's playback provider is not exported and grants read access only to the launched handler.
+## Help and contribute
 
-## Requirements
+- **Questions and usage tips:** [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions).
+- **Bug reports:** [GitHub Issues](https://github.com/AlanHuang99/Voyager/issues). Include the app and Android versions, steps to reproduce, and the storage or server type involved. Remove personal filenames and connection details from screenshots.
+- **Translations and language review:** [Crowdin](https://crowdin.com/project/voyagerandroid).
+- **Code, documentation, and testing:** read [CONTRIBUTING.md](CONTRIBUTING.md). For a substantial feature, discuss the scope in an issue before starting.
 
-- Android 8.0 (API 26) or later.
-- A compatible server for remote browsing features.
-
-## Install
-
-- **F-Droid:** install from [f-droid.org/packages/com.voyagerfiles](https://f-droid.org/packages/com.voyagerfiles/).
-- **GitHub:** download the latest `voyager-v<version>-universal.apk` or a matching per-ABI APK from the [Releases page](https://github.com/AlanHuang99/Voyager/releases/latest).
-
-The GitHub release signing certificate has this SHA-256 fingerprint:
-
-```text
-db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
-```
-
-APK file checksums are listed in `SHA256SUMS.txt` on the Releases page.
+Voyager focuses on file browsing and management. Proposals should keep everyday navigation clear and avoid adding unnecessary setup or controls.
 
 ## Build from source
 
-Prerequisites are JDK 17 and an Android SDK with compile SDK 35.
+Install JDK 17 and an Android SDK with compile SDK 35, then run:
 
 ```bash
 git clone https://github.com/AlanHuang99/Voyager.git
@@ -97,47 +92,26 @@ cd Voyager
 ./gradlew assembleDebug
 ```
 
-Debug APKs are written to `app/build/outputs/apk/debug/`. The debug application ID is `com.voyagerfiles.debug`, so it can coexist with a release installation.
+Debug APKs are written to `app/build/outputs/apk/debug/`. The debug application ID is `com.voyagerfiles.debug`, so it can coexist with the release app.
 
-Run the complete local gate before submitting a change:
+Before submitting code, run:
 
 ```bash
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for device and protocol testing, [docs/TRANSLATING.md](docs/TRANSLATING.md) for the translation workflow and [Crowdin](https://crowdin.com/project/voyagerandroid) to contribute translations, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app structure and security boundaries, and [docs/RELEASE.md](docs/RELEASE.md) for release mechanics.
+See [Testing](docs/TESTING.md) for device and protocol checks, [Architecture](docs/ARCHITECTURE.md) for the Kotlin and Compose app structure, and [Release process](docs/RELEASE.md) for GitHub and F-Droid distribution.
 
-## Tech stack
+## Verify your download
 
-| Area | Library |
-| --- | --- |
-| UI | Jetpack Compose, Material 3 |
-| Navigation | Navigation Compose |
-| Persistence | Room, DataStore Preferences, Android Keystore |
-| SFTP | JSch (mwiede fork) |
-| FTP | Apache Commons Net |
-| SMB | smbj |
-| WebDAV | Sardine-android and OkHttp |
-| Images | Coil |
-| Archives | Apache Commons Compress |
-| Concurrency | Kotlin Coroutines |
+The developer signing certificate has this SHA-256 fingerprint:
 
-All runtime dependencies are open source and license-compatible with GPLv3; the app ships with no proprietary libraries.
+```text
+db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
+```
 
-## Translations
-
-[Translate Voyager on Crowdin](https://crowdin.com/project/voyagerandroid) in your browser. Choose a language, translate a few untranslated strings, or improve existing translations. Coding experience is not required; contributions of any size are welcome.
-
-The app links to Crowdin from **Settings > About > Help improve translations**. Provisional translations show a dismissible notice on Home. The initial rollout covers Simplified Chinese, Traditional Chinese, Spanish, French, German, Brazilian Portuguese, Japanese, Korean, Italian, and Vietnamese; some sensitive messages retain English until reviewed. Corrections arrive in subsequent app releases.
-
-See the [translation guide](docs/TRANSLATING.md) for the meaning of file-manager terms, formatting rules, and how translations reach the app. To request a language or ask about an unclear phrase, use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions). Screenshots of Voyager can help explain where a string appears.
-
-## Contributing
-
-Issues and pull requests are welcome. For substantial changes, open an issue first to discuss the approach. Include automated coverage for changed behavior and describe any device or server setup used for manual verification. Translation contributors should follow [docs/TRANSLATING.md](docs/TRANSLATING.md).
+This identifies the signing certificate. Individual APK file checksums are listed in the release's `SHA256SUMS.txt`.
 
 ## License
 
 Voyager is licensed under the [GNU General Public License v3.0](LICENSE).
-
-Use [GitHub Discussions](https://github.com/AlanHuang99/Voyager/discussions) for questions, usage tips, working configurations, and general feedback. Report reproducible bugs and concrete feature requests in GitHub Issues.

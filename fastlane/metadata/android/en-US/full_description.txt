@@ -7,7 +7,8 @@ Features:
 • Image, first-page PDF, and readable local APK application-icon thumbnails
 • Storage Access Framework document-tree browsing and file management
 • Open files through Android defaults or choose a handler with Open with
-• Create ZIP archives and safely extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files
+• Create ZIP archives and safely extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files with progress and cancellation
+• Find duplicate files by content, with editable folder-name exclusions and recycle folders excluded by default
 • SFTP remote access, with password, keyboard-interactive, private key, or generated key-pair authentication whose public key can be copied or saved
 • FTP remote access
 • SMB/CIFS browsing, including disk-share discovery when a connection omits the share name
@@ -15,7 +16,7 @@ Features:
 • HTTPS WebDAV trust through Android system and user-installed certificate authorities
 • Copy and move files between local storage and a remote server, in both directions
 • Create remote files and folders, and upload documents through Android's system picker
-• Download remote files and folders to the device
+• Download remote files and folders to the device, with confirmation before file-tap downloads on SFTP, FTP, and SMB
 • Upload and download progress with active filenames, item counts, bytes, percentage when known, and speed
 • Multiple browser sessions for local and remote locations, with a session switcher
 • Optional automatic closure of inactive sessions after Voyager remains in the background
@@ -37,3 +38,6 @@ Privacy:
 • No internet access required for local browsing
 • All network connections are user-initiated
 • Fully open source (GPLv3)
+
+Help translate or review wording on Crowdin: https://crowdin.com/project/voyagerandroid
+Contributor guide: https://github.com/AlanHuang99/Voyager/blob/master/CONTRIBUTING.md
