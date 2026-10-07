@@ -4,6 +4,8 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -434,7 +436,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .toggleable(value = confirmRemoteDownloads, role = Role.Switch, onValueChange = viewModel::setConfirmRemoteDownloads)
+                    .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -444,7 +448,7 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Switch(checked = confirmRemoteDownloads, onCheckedChange = viewModel::setConfirmRemoteDownloads)
+                Switch(checked = confirmRemoteDownloads, onCheckedChange = null)
             }
 
             // About section

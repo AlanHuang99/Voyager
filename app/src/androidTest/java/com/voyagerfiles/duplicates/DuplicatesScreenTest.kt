@@ -24,6 +24,11 @@ import com.voyagerfiles.viewmodel.DuplicateViewModel
 import com.voyagerfiles.data.local.PreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 import org.junit.After
@@ -157,5 +162,47 @@ class DuplicatesScreenTest {
         assertEquals(2, restored.state.value.result!!.filesExamined)
         assertEquals(1, restored.state.value.result!!.excludedDirectories)
         assertEquals(setOf("a.txt", "b.txt"), restored.state.value.result!!.groups.single().files.map { File(it.path).name }.toSet())
+    }
+
+    @Test fun exclusionSaveClearsSelectionImmediatelyAndSurvivesCallerCancellation() {
+        root.resolve("a.txt").writeText("same")
+        root.resolve("b.txt").writeText("same")
+        val vm = DuplicateViewModel(app)
+        viewModels.put("duplicates", vm)
+        compose.setContent { MaterialTheme { DuplicatesScreen(root.path, {}, vm) } }
+        compose.onNodeWithText("Scan folder").performClick()
+        compose.waitUntil(10_000) { vm.state.value.result != null }
+        compose.onNodeWithText("b.txt").performClick()
+        assertTrue(vm.state.value.selected.isNotEmpty())
+        compose.runOnIdle {
+            val caller = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            caller.launch { vm.setExcludedDirectoryKeywords(setOf("backup")) }
+            try {
+                assertNull("An exclusion edit must invalidate old results before saving", vm.state.value.result)
+                assertTrue(vm.state.value.selected.isEmpty())
+            } finally {
+                caller.cancel()
+            }
+        }
+        compose.waitUntil(5_000) { vm.excludedDirectoryKeywords.value == setOf("backup") }
+        assertNull(vm.state.value.result)
+        assertTrue(vm.state.value.selected.isEmpty())
+    }
+
+    @Test fun scanStartedImmediatelyAfterSaveUsesTheNewExclusions() {
+        root.resolve("a.txt").writeText("same")
+        root.resolve("b.txt").writeText("same")
+        root.resolve("backup").apply { mkdirs(); resolve("copy.txt").writeText("same") }
+        runBlocking { prefs.setDuplicateExclusionKeywords(emptySet()) }
+        val vm = DuplicateViewModel(app)
+        viewModels.put("duplicates", vm)
+        compose.setContent { MaterialTheme { DuplicatesScreen(root.path, {}, vm) } }
+        compose.runOnIdle {
+            vm.setExcludedDirectoryKeywords(setOf("backup"))
+            vm.scan(root.path)
+        }
+        compose.waitUntil(10_000) { vm.state.value.result != null }
+        assertEquals(2, vm.state.value.result!!.filesExamined)
+        assertEquals(1, vm.state.value.result!!.excludedDirectories)
     }
 }

@@ -30,7 +30,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,14 +43,12 @@ import com.voyagerfiles.ui.components.DeleteChoiceDialogModel
 import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.DuplicateViewModel
 import java.io.File
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: DuplicateViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val excludedKeywords by viewModel.excludedDirectoryKeywords.collectAsState()
-    val scope = rememberCoroutineScope()
     var confirmRemoval by remember { mutableStateOf(false) }
     var showExclusions by rememberSaveable { mutableStateOf(false) }
     var exclusionText by rememberSaveable { mutableStateOf("") }
@@ -129,10 +126,8 @@ fun DuplicatesScreen(path: String, onNavigateBack: () -> Unit, viewModel: Duplic
             },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch {
-                        viewModel.setExcludedDirectoryKeywords(exclusionText.split(',').toSet())
-                        showExclusions = false
-                    }
+                    viewModel.setExcludedDirectoryKeywords(exclusionText.split(',').toSet())
+                    showExclusions = false
                 }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {

@@ -465,6 +465,7 @@
     <string name="duplicates_scan">Scan folder</string>
     <string name="duplicates_exclude_folders">Exclude folders</string>
     <string name="duplicates_exclusion_keywords">Folder names containing (comma-separated)</string>
+    <string name="duplicates_exclusion_save_failed">Could not save excluded folders.</string>
     <string name="duplicates_exclusion_example" translatable="false">.trash, .recycle</string>
     <string name="duplicates_scan_coverage">Skipped: %1$d unreadable, %2$d missing, %3$d changed, %4$d links, %5$d excluded folders.</string>
     <string name="duplicates_cancelled">Scan cancelled</string>

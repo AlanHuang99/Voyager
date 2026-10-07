@@ -14,6 +14,7 @@ import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.ui.text.UiText
 import com.voyagerfiles.util.FileUtils
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -43,23 +44,34 @@ class DuplicateViewModel @JvmOverloads constructor(
     private val mutableState = MutableStateFlow(DuplicateState())
     val state = mutableState.asStateFlow()
     private var job: Job? = null
+    private var exclusionSave: Job? = null
     private val scanner = DuplicateScanner()
     private val prefs = PreferencesManager(application)
     val excludedDirectoryKeywords = prefs.duplicateExclusionKeywords.stateIn(
         viewModelScope, SharingStarted.Eagerly, DuplicateScanner.DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS,
     )
 
-    suspend fun setExcludedDirectoryKeywords(keywords: Set<String>) {
+    fun setExcludedDirectoryKeywords(keywords: Set<String>) {
         if (state.value.scanning || state.value.removing) return
-        prefs.setDuplicateExclusionKeywords(keywords)
         mutableState.update { it.copy(result = null, selected = emptySet(), message = null) }
+        val previousSave = exclusionSave
+        exclusionSave = viewModelScope.launch {
+            previousSave?.join()
+            try {
+                prefs.setDuplicateExclusionKeywords(keywords)
+            } catch (_: IOException) {
+                mutableState.update { it.copy(message = UiText.Resource(R.string.duplicates_exclusion_save_failed)) }
+            }
+        }
     }
 
     fun scan(path: String) {
         if (job?.isActive == true) return
+        val pendingSave = exclusionSave
         mutableState.value = DuplicateState(scanning = true)
         job = viewModelScope.launch {
             try {
+                pendingSave?.join()
                 var lastUpdate = 0L
                 val result = scanner.scan(File(path), prefs.duplicateExclusionKeywords.first()) { progress ->
                     val now = System.nanoTime()
