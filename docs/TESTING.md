@@ -78,6 +78,8 @@ Tone instrumentation has separate granted and denied `WRITE_SETTINGS` cases. Con
 
 `RootMountNamespaceTest` checks the global-namespace request through a local `su` fixture.
 
+The reporter of [issue #117](https://github.com/AlanHuang99/Voyager/issues/117) confirmed the root-browsing fix on October 7, 2026, using Android 16 and KernelSU Next 3.3. This report covers browsing with the global mount namespace; the disposable command and editor fixtures below cover individual file operations.
+
 Root access has JVM coverage for literal quoted and newline-bearing names, bounded output, command timeouts and session closure, error propagation, path aliases, stale saves, mode preservation, symlink and hard-link rejection, and interrupted writes. Adversarial fixtures replace the staging payload, staging directory, or parent directory and verify unrelated files remain intact. Lifecycle tests block readers and writers, use children that ignore TERM, and check that cancellation prevents delayed mutations and removes command runtime files. Its isolated Docker test uses a digest-pinned Alpine container with a root-only disposable directory and a read-only root filesystem. It proves UID 0 can operate where UID 65534 is denied, and that a failed read-only save preserves the original:
 
 ```bash
