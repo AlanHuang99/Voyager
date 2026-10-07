@@ -78,6 +78,12 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
+    /** Read after already-queued edits, including a save accepted by a previous screen. */
+    suspend fun readDuplicateExclusionKeywords(): Set<String> {
+        val snapshot = context.dataStore.updateData { it }
+        return snapshot[Keys.DUPLICATE_EXCLUSION_KEYWORDS] ?: DuplicateScanner.DEFAULT_EXCLUDED_DIRECTORY_KEYWORDS
+    }
+
     val limitedAccessAccepted: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.LIMITED_ACCESS_ACCEPTED] ?: false
     }

@@ -205,4 +205,42 @@ class DuplicatesScreenTest {
         assertEquals(2, vm.state.value.result!!.filesExamined)
         assertEquals(1, vm.state.value.result!!.excludedDirectories)
     }
+
+    @Test fun acceptedExclusionSavesSurviveLeavingTheScreen() {
+        runBlocking { prefs.setDuplicateExclusionKeywords(emptySet()) }
+        val vm = DuplicateViewModel(app)
+        viewModels.put("duplicates", vm)
+        compose.setContent { MaterialTheme { DuplicatesScreen(root.path, {}, vm) } }
+        compose.runOnIdle {
+            vm.setExcludedDirectoryKeywords(setOf("backup"))
+            vm.setExcludedDirectoryKeywords(setOf("archive"))
+            viewModels.clear()
+        }
+        runBlocking {
+            val confirmDownloads = prefs.confirmRemoteDownloads.first()
+            prefs.setConfirmRemoteDownloads(confirmDownloads)
+        }
+        assertEquals(setOf("archive"), runBlocking { prefs.duplicateExclusionKeywords.first() })
+    }
+
+    @Test fun aNewScreenScanReadsAcceptedExclusionsFromThePreviousScreen() {
+        root.resolve("a.txt").writeText("same")
+        root.resolve("b.txt").writeText("same")
+        root.resolve("backup").apply { mkdirs(); resolve("copy.txt").writeText("same") }
+        runBlocking { prefs.setDuplicateExclusionKeywords(emptySet()) }
+        val previous = DuplicateViewModel(app)
+        viewModels.put("previous", previous)
+        compose.setContent { MaterialTheme { DuplicatesScreen(root.path, {}, previous) } }
+        lateinit var restored: DuplicateViewModel
+        compose.runOnIdle {
+            previous.setExcludedDirectoryKeywords(setOf("backup"))
+            viewModels.clear()
+            restored = DuplicateViewModel(app)
+            viewModels.put("restored", restored)
+            restored.scan(root.path)
+        }
+        compose.waitUntil(10_000) { restored.state.value.result != null }
+        assertEquals(2, restored.state.value.result!!.filesExamined)
+        assertEquals(1, restored.state.value.result!!.excludedDirectories)
+    }
 }

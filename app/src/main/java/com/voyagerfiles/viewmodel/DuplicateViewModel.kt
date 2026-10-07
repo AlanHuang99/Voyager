@@ -19,10 +19,10 @@ import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
@@ -54,13 +54,13 @@ class DuplicateViewModel @JvmOverloads constructor(
     fun setExcludedDirectoryKeywords(keywords: Set<String>) {
         if (state.value.scanning || state.value.removing) return
         mutableState.update { it.copy(result = null, selected = emptySet(), message = null) }
-        val previousSave = exclusionSave
         exclusionSave = viewModelScope.launch {
-            previousSave?.join()
-            try {
-                prefs.setDuplicateExclusionKeywords(keywords)
-            } catch (_: IOException) {
-                mutableState.update { it.copy(message = UiText.Resource(R.string.duplicates_exclusion_save_failed)) }
+            withContext(NonCancellable) {
+                try {
+                    prefs.setDuplicateExclusionKeywords(keywords)
+                } catch (_: IOException) {
+                    mutableState.update { it.copy(message = UiText.Resource(R.string.duplicates_exclusion_save_failed)) }
+                }
             }
         }
     }
@@ -73,7 +73,7 @@ class DuplicateViewModel @JvmOverloads constructor(
             try {
                 pendingSave?.join()
                 var lastUpdate = 0L
-                val result = scanner.scan(File(path), prefs.duplicateExclusionKeywords.first()) { progress ->
+                val result = scanner.scan(File(path), prefs.readDuplicateExclusionKeywords()) { progress ->
                     val now = System.nanoTime()
                     if (now - lastUpdate > 100_000_000L) {
                         lastUpdate = now
