@@ -163,8 +163,9 @@ Builds:
         ; done
     gradle:
       - yes
+    output: build/outputs/apk/release/app-universal-release-unsigned.apk
     gradleprops:
-      - voyager.enableAbiSplits=false
+      - voyager.enableAbiSplits=true
 
 AllowedAPKSigningKeys: db496277d456751abe8ca6405026337c81a561a134e38d49c8e21fb8f036badf
 

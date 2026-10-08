@@ -12,10 +12,58 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+/**
+ * darkColorScheme() and lightColorScheme() leave the surface container roles at Material's baseline
+ * purple-grey, but dialogs, menus, sheets and navigation bars draw from them. Derive them from each
+ * theme's own surface instead, keeping Material's tonal spacing between surface and onSurface:
+ * the dark baseline puts surface at tone 6 and onSurface at tone 90, the light one at 98 and 10.
+ */
+private fun ColorScheme.withDarkSurfaceContainers(): ColorScheme = copy(
+    surfaceDim = surface,
+    surfaceBright = darkSurfaceTone(24f),
+    surfaceContainerLowest = darkSurfaceTone(4f),
+    surfaceContainerLow = darkSurfaceTone(10f),
+    surfaceContainer = darkSurfaceTone(12f),
+    surfaceContainerHigh = darkSurfaceTone(17f),
+    surfaceContainerHighest = darkSurfaceTone(22f),
+)
+
+private fun ColorScheme.withLightSurfaceContainers(): ColorScheme = copy(
+    surfaceDim = lightSurfaceTone(87f),
+    surfaceBright = surface,
+    surfaceContainerLowest = lightSurfaceTone(100f),
+    surfaceContainerLow = lightSurfaceTone(96f),
+    surfaceContainer = lightSurfaceTone(94f),
+    surfaceContainerHigh = lightSurfaceTone(92f),
+    surfaceContainerHighest = lightSurfaceTone(90f),
+)
+
+private fun ColorScheme.darkSurfaceTone(tone: Float): Color =
+    surface.toward(onSurface, (tone - 6f) / (90f - 6f))
+
+private fun ColorScheme.lightSurfaceTone(tone: Float): Color =
+    surface.toward(onSurface, (tone - 98f) / (10f - 98f))
+
+/** Interpolates in CIE Lab, whose lightness matches Material's tones; a negative fraction steps away from [target]. */
+private fun Color.toward(target: Color, fraction: Float): Color {
+    val from = convert(ColorSpaces.CieLab)
+    val to = target.convert(ColorSpaces.CieLab)
+    fun channel(start: Float, end: Float, index: Int) = (start + (end - start) * fraction)
+        .coerceIn(ColorSpaces.CieLab.getMinValue(index), ColorSpaces.CieLab.getMaxValue(index))
+    return Color(
+        red = channel(from.red, to.red, 0),
+        green = channel(from.green, to.green, 1),
+        blue = channel(from.blue, to.blue, 2),
+        colorSpace = ColorSpaces.CieLab,
+    ).convert(ColorSpaces.Srgb)
+}
 
 private fun darkColorSchemeFrom(colors: AppColorTokens): ColorScheme = darkColorScheme(
     primary = colors.primary,
@@ -46,7 +94,7 @@ private fun darkColorSchemeFrom(colors: AppColorTokens): ColorScheme = darkColor
     inverseOnSurface = colors.inverseOnSurface,
     inversePrimary = colors.inversePrimary,
     surfaceTint = colors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private fun lightColorSchemeFrom(colors: AppColorTokens): ColorScheme = lightColorScheme(
     primary = colors.primary,
@@ -77,7 +125,7 @@ private fun lightColorSchemeFrom(colors: AppColorTokens): ColorScheme = lightCol
     inverseOnSurface = colors.inverseOnSurface,
     inversePrimary = colors.inversePrimary,
     surfaceTint = colors.surfaceTint,
-)
+).withLightSurfaceContainers()
 
 private val BlackColorScheme = darkColorScheme(
     primary = BlackColors.primary,
@@ -108,7 +156,7 @@ private val BlackColorScheme = darkColorScheme(
     inverseOnSurface = BlackColors.inverseOnSurface,
     inversePrimary = BlackColors.inversePrimary,
     surfaceTint = BlackColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val WhiteColorScheme = lightColorScheme(
     primary = WhiteColors.primary,
@@ -139,7 +187,7 @@ private val WhiteColorScheme = lightColorScheme(
     inverseOnSurface = WhiteColors.inverseOnSurface,
     inversePrimary = WhiteColors.inversePrimary,
     surfaceTint = WhiteColors.surfaceTint,
-)
+).withLightSurfaceContainers()
 
 private val DarkColorScheme = darkColorScheme(
     primary = DarkColors.primary,
@@ -170,7 +218,7 @@ private val DarkColorScheme = darkColorScheme(
     inverseOnSurface = DarkColors.inverseOnSurface,
     inversePrimary = DarkColors.inversePrimary,
     surfaceTint = DarkColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val OceanColorScheme = darkColorScheme(
     primary = OceanColors.primary,
@@ -201,7 +249,7 @@ private val OceanColorScheme = darkColorScheme(
     inverseOnSurface = OceanColors.inverseOnSurface,
     inversePrimary = OceanColors.inversePrimary,
     surfaceTint = OceanColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val PurpleColorScheme = darkColorScheme(
     primary = PurpleColors.primary,
@@ -232,7 +280,7 @@ private val PurpleColorScheme = darkColorScheme(
     inverseOnSurface = PurpleColors.inverseOnSurface,
     inversePrimary = PurpleColors.inversePrimary,
     surfaceTint = PurpleColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val ForestColorScheme = darkColorScheme(
     primary = ForestColors.primary,
@@ -263,7 +311,7 @@ private val ForestColorScheme = darkColorScheme(
     inverseOnSurface = ForestColors.inverseOnSurface,
     inversePrimary = ForestColors.inversePrimary,
     surfaceTint = ForestColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val MochaColorScheme = darkColorScheme(
     primary = MochaColors.primary,
@@ -294,7 +342,7 @@ private val MochaColorScheme = darkColorScheme(
     inverseOnSurface = MochaColors.inverseOnSurface,
     inversePrimary = MochaColors.inversePrimary,
     surfaceTint = MochaColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val MacchiatoColorScheme = darkColorScheme(
     primary = MacchiatoColors.primary,
@@ -325,7 +373,7 @@ private val MacchiatoColorScheme = darkColorScheme(
     inverseOnSurface = MacchiatoColors.inverseOnSurface,
     inversePrimary = MacchiatoColors.inversePrimary,
     surfaceTint = MacchiatoColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val FrappeColorScheme = darkColorScheme(
     primary = FrappeColors.primary,
@@ -356,7 +404,7 @@ private val FrappeColorScheme = darkColorScheme(
     inverseOnSurface = FrappeColors.inverseOnSurface,
     inversePrimary = FrappeColors.inversePrimary,
     surfaceTint = FrappeColors.surfaceTint,
-)
+).withDarkSurfaceContainers()
 
 private val LatteColorScheme = lightColorScheme(
     primary = LatteColors.primary,
@@ -387,7 +435,7 @@ private val LatteColorScheme = lightColorScheme(
     inverseOnSurface = LatteColors.inverseOnSurface,
     inversePrimary = LatteColors.inversePrimary,
     surfaceTint = LatteColors.surfaceTint,
-)
+).withLightSurfaceContainers()
 
 private val NordColorScheme = darkColorSchemeFrom(NordColors)
 private val SolarizedDarkColorScheme = darkColorSchemeFrom(SolarizedDarkColors)

@@ -64,6 +64,8 @@ Important constraints:
 
 - `Builds.commit` should be the full commit hash for the source revision being built.
 - `AutoUpdateMode: Version` with `UpdateCheckMode: Tags` lets F-Droid discover future version tags.
-- The build uses `gradleprops: voyager.enableAbiSplits=false` so F-Droid reproduces the universal upstream APK instead of the ABI split set.
+- From 1.12.0, the build uses `gradleprops: voyager.enableAbiSplits=true` to match the GitHub release configuration, with `output: build/outputs/apk/release/app-universal-release-unsigned.apk` to select the universal APK. Disabling splits changes the generated optimization profiles and prevents signature verification against the upstream APK.
+
+For a local reproducibility check, use a normal Git checkout of the release tag. Android's build tool does not recognize the managed worktree's Git metadata, which changes `META-INF/version-control-info.textproto`. Run `./gradlew clean assembleRelease -Pvoyager.enableAbiSplits=true` and compare the universal unsigned APK with the published universal APK using F-Droid's signature-copy verification.
 
 After a new GitHub release commit is final, update the F-Droid build block to the release commit hash and matching version if the F-Droid metadata is maintained in this repository.
