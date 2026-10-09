@@ -403,6 +403,7 @@
     <string name="content_desc_sort">並べ替え</string>
     <string name="content_desc_more">もっと</string>
     <string name="content_desc_more_selection_actions">その他の選択アクション</string>
+    <string name="content_desc_more_options_named">More options for %1$s</string>
     <string name="content_desc_copy">コピー</string>
     <string name="content_desc_cut">カット</string>
     <string name="content_desc_rename">名前を変更する</string>

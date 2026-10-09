@@ -421,6 +421,7 @@
     <string name="content_desc_sort">Sort</string>
     <string name="content_desc_more">More</string>
     <string name="content_desc_more_selection_actions">More selection actions</string>
+    <string name="content_desc_more_options_named">More options for %1$s</string>
     <string name="content_desc_copy">Copy</string>
     <string name="content_desc_cut">Cut</string>
     <string name="content_desc_rename">Rename</string>
