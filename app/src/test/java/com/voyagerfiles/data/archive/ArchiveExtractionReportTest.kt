@@ -82,6 +82,57 @@ class ArchiveExtractionReportTest {
     }
 
     @Test
+    fun aDestinationThatFindsTheRootInAnyCaseGetsNumberedNames() = runBlocking {
+        val provider = workspaceWith(
+            "clash.zip",
+            zipBytes("Ms.png" to "first", "mS.png" to "second", "docs/a.txt" to "a", "Docs/b.txt" to "b"),
+            ignoresNameCase = null,
+            lookupIgnoresCase = true,
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val root = extract(provider, "clash.zip") { report = it }.getOrThrow()
+
+        assertEquals("first", provider.readText("${root.path}/Ms.png"))
+        assertEquals("second", provider.readText("${root.path}/mS (1).png"))
+        assertEquals(listOf("Ms.png", "docs", "mS (1).png"), provider.childNames(root.path))
+        assertEquals(listOf("a.txt", "b.txt"), provider.childNames("${root.path}/docs"))
+        assertEquals(listOf(RenamedEntry("mS.png", "mS (1).png")), report!!.renamed)
+    }
+
+    @Test
+    fun aDestinationThatFindsTheRootOnlyByItsExactNameKeepsEveryName() = runBlocking {
+        val provider = workspaceWith(
+            "clash.zip",
+            zipBytes("Ms.png" to "first", "mS.png" to "second"),
+            ignoresNameCase = null,
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val root = extract(provider, "clash.zip") { report = it }.getOrThrow()
+
+        assertEquals(listOf("Ms.png", "mS.png"), provider.childNames(root.path))
+        assertEquals(emptyList<RenamedEntry>(), report!!.renamed)
+    }
+
+    @Test
+    fun aRootThatCannotBeFoundAfterItsCreationStopsTheExtraction() = runBlocking {
+        val provider = workspaceWith(
+            "clash.zip",
+            zipBytes("Ms.png" to "first", "mS.png" to "second"),
+            ignoresNameCase = null,
+            failLookupPath = "/workspace/clash_extracted",
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val error = extract(provider, "clash.zip") { report = it }.exceptionOrNull()
+
+        assertEquals("The new folder clash_extracted cannot be found on the destination", error!!.message)
+        assertNull(report)
+        assertFalse(provider.exists("/workspace/clash_extracted"))
+    }
+
+    @Test
     fun theReportListsAtMostTwoHundredEntriesButCountsThemAll() = runBlocking {
         val names = (1..250).map { "bad-$it.txt" } + "good.txt"
         val provider = object : ArchiveTestFileProvider() {
@@ -256,12 +307,16 @@ class ArchiveExtractionReportTest {
         bytes: ByteArray,
         failOutputPath: String? = null,
         failDeletePath: String? = null,
-        ignoresNameCase: Boolean = false,
+        ignoresNameCase: Boolean? = false,
+        lookupIgnoresCase: Boolean = false,
+        failLookupPath: String? = null,
     ) =
         ArchiveTestFileProvider(
             failOutputPath = failOutputPath,
             failDeletePath = failDeletePath,
             ignoresNameCase = ignoresNameCase,
+            lookupIgnoresCase = lookupIgnoresCase,
+            failLookupPath = failLookupPath,
         ).apply {
             putDirectory("/workspace")
             putFile("/workspace/$name", bytes)

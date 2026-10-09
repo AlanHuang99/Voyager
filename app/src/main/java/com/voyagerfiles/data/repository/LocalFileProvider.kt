@@ -114,7 +114,7 @@ class LocalFileProvider : FileProvider {
         }
 
     /** Shared storage and removable volumes under /storage ignore case and refuse an existing name. */
-    override fun ignoresNameCase(path: String): Boolean = path.startsWith("/storage/")
+    override fun ignoresNameCase(path: String): Boolean? = if (path.startsWith("/storage/")) true else null
 
     override suspend fun exists(path: String): Boolean =
         withContext(Dispatchers.IO) { File(path).exists() }

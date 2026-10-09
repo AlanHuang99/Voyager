@@ -574,13 +574,13 @@ object ArchiveService {
     }
 
     /**
-     * [ignoresNameCase] is true only for destinations known to treat names that differ in letter case
-     * as one item; elsewhere every entry keeps its exact name.
+     * [ignoresNameCase] is true for destinations known to treat names that differ in letter case as one
+     * item, false where every entry keeps its exact name, and null when the root has to show which.
      */
     private class ExtractionTree(
         private val provider: FileProvider,
         private val onProgress: (ArchiveProgress) -> Unit,
-        private val ignoresNameCase: Boolean,
+        private var ignoresNameCase: Boolean?,
         private val createRoot: suspend () -> FileItem,
     ) {
         private var createdRoot: FileItem? = null
@@ -638,6 +638,22 @@ object ArchiveService {
             createdRoot = root
             nodeTypes[""] = NodeType.DIRECTORY
             providerPaths[""] = root.path
+            if (ignoresNameCase == null) ignoresNameCase = lookupIgnoresCase(root)
+        }
+
+        /**
+         * Asks for the root just created with the case of every letter flipped, as `git init` does with
+         * `.git/CoNfIg`. Files and folders share one name lookup, and the folders created below the root
+         * inherit how it treats case, so the answer holds for the whole extraction. The root's own name
+         * is looked up first, so a failed lookup cannot pass for a case-sensitive destination.
+         */
+        private suspend fun lookupIgnoresCase(root: FileItem): Boolean {
+            require(root.path.endsWith("/${root.name}")) { "Cannot look up ${root.path} by name" }
+            if (!provider.exists(root.path)) {
+                throw ArchiveException("The new folder ${root.name} cannot be found on the destination")
+            }
+            val flipped = root.name.map { if (it.isUpperCase()) it.lowercaseChar() else it.uppercaseChar() }
+            return provider.exists(root.path.dropLast(root.name.length) + flipped.joinToString(""))
         }
 
         fun report(complete: Boolean) = ArchiveExtractionReport(
@@ -868,7 +884,7 @@ object ArchiveService {
             return currentProviderPath
         }
 
-        private fun String.foldCase(): String = if (ignoresNameCase) lowercase(Locale.ROOT) else this
+        private fun String.foldCase(): String = if (ignoresNameCase == true) lowercase(Locale.ROOT) else this
 
         private enum class NodeType {
             DIRECTORY,
