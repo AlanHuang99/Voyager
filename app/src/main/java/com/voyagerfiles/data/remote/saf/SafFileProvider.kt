@@ -132,6 +132,12 @@ class SafFileProvider(
             }
         }
 
+    /**
+     * A documents provider picks a free name such as "name (1)" instead of reusing one, which
+     * extraction notices and reports, and its paths are document URIs with no name to look up.
+     */
+    override fun ignoresNameCase(path: String): Boolean? = false
+
     override suspend fun exists(path: String): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
