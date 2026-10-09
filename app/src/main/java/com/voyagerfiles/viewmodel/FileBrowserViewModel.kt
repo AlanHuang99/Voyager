@@ -14,6 +14,8 @@ import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveFormat
 import com.voyagerfiles.data.archive.ArchivePhase
+import com.voyagerfiles.data.archive.PartialExtractionException
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
 import com.voyagerfiles.data.archive.ArchiveProgress
 import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.local.AppDatabase
@@ -154,6 +156,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
     val transferConflict = operationController.conflicts.pending
     fun resolveTransferConflict(request: TransferConflictDecisions.Request, response: ConflictResponse) =
         operationController.conflicts.respond(request, response)
+    /** A kept extraction the user asked to remove, waiting until the listing shows its folder. */
+    private val _pendingExtractionRemoval = MutableStateFlow<String?>(null)
+    val pendingExtractionRemoval: StateFlow<String?> = _pendingExtractionRemoval.asStateFlow()
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -820,6 +825,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     ) {
         val provider = fileProvider
         val publishProgress = archiveProgressPublisher(R.string.progress_extracting)
+        var report: ArchiveExtractionReport? = null
 
         launchOperation(
             R.string.progress_extracting,
@@ -831,23 +837,63 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 archive = archive,
                 destinationDirectory = destinationDirectory,
                 onProgress = publishProgress,
+                onReport = { extracted ->
+                    report = extracted
+                    operationController.attachArchiveReport(extracted)
+                },
             ).fold(
                 onSuccess = { extractionRoot ->
                     if (clearSelectionAfter) clearSelection()
                     refreshFiles()
+                    report?.notExtracted?.firstOrNull()?.let { operationController.recordFailure(it.error) }
                     showSnackbar(
-                        UiText.Resource(
-                            R.string.archive_extracted_to,
-                            listOf(UiText.Dynamic(extractionRoot.name)),
+                        OperationMessages.archiveExtracted(
+                            extractionRoot.name,
+                            renamedEntries = report?.renamedCount ?: 0,
+                            notExtractedEntries = report?.notExtractedCount ?: 0,
                         ),
                     )
                 },
                 onFailure = { error ->
                     operationController.recordFailure(error)
-                    showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
+                    if (error is PartialExtractionException) {
+                        refreshFiles()
+                        showSnackbar(OperationMessages.archivePartiallyExtracted(error))
+                    } else {
+                        showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
+                    }
                 },
             )
         }
+    }
+
+    /**
+     * Removes a kept extraction through the browser's own delete confirmation, Trash included, so the
+     * user sees exactly which folder goes. Opens the folder that contains it first when needed.
+     */
+    fun requestExtractionRemoval(report: ArchiveExtractionReport) {
+        val root = report.root.path
+        _pendingExtractionRemoval.value = root
+        val parent = fileProvider.getParentPath(root) ?: return
+        val state = _browseState.value
+        if (state.files.none { it.path == root } && state.currentPath != parent) navigateTo(parent)
+    }
+
+    /**
+     * Selects the pending extraction once the listing shows it and returns true, so the delete
+     * confirmation can open. A folder that is gone by then is forgotten.
+     */
+    fun takeExtractionRemoval(): Boolean {
+        val root = _pendingExtractionRemoval.value ?: return false
+        val state = _browseState.value
+        if (state.isLoading) return false
+        if (state.files.none { it.path == root }) {
+            if (state.currentPath == fileProvider.getParentPath(root)) _pendingExtractionRemoval.value = null
+            return false
+        }
+        _pendingExtractionRemoval.value = null
+        _browseState.update { it.copy(selectedFiles = setOf(root)) }
+        return true
     }
 
     fun copyToClipboard(paths: List<String>) {
@@ -1352,11 +1398,13 @@ class FileBrowserViewModel @JvmOverloads constructor(
         @StringRes labelRes: Int,
         throttle: ArchiveProgressThrottle = ArchiveProgressThrottle(),
     ): (ArchiveProgress) -> Unit = { progress ->
+        if (progress.phase == ArchivePhase.REMOVING) operationController.disallowCancel()
         throttle.accept(progress)?.let { elapsedNanos ->
             val label = when (progress.phase) {
                 ArchivePhase.READING_SOURCE -> R.string.progress_reading_archive
                 ArchivePhase.PREPARING -> R.string.progress_preparing_archive
                 ArchivePhase.WRITING -> labelRes
+                ArchivePhase.REMOVING -> R.string.progress_removing_extracted
             }
             updateOperationProgress(
                 TransferProgress(
@@ -1367,6 +1415,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
                     copiedBytes = progress.processedBytes,
                     totalBytes = progress.totalBytes,
                     elapsedNanos = elapsedNanos,
+                    skippedItems = progress.skippedEntries,
                 )
             )
         }

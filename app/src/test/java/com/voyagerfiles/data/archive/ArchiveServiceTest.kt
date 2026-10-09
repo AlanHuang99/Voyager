@@ -1,5 +1,6 @@
 package com.voyagerfiles.data.archive
 
+import com.voyagerfiles.data.repository.LocalFileProvider
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
@@ -13,11 +14,17 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 class ArchiveServiceTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     @Test
     fun createsZipWithExplicitDirectoriesFilesAndProgress() = runBlocking {
@@ -326,6 +333,64 @@ class ArchiveServiceTest {
 
         assertTrue(corruptResult.exceptionOrNull() is CorruptArchiveException)
         assertFalse(corruptProvider.exists("/workspace/corrupt_extracted"))
+    }
+
+    @Test
+    fun extractsIntoLocalStorageInPlaceThroughSingleOpenFiles() = runBlocking {
+        val workspace = temporaryFolder.newFolder("workspace")
+        val archiveFile = File(workspace, "local.zip").apply {
+            writeBytes(
+                zipBytes(
+                    ZipFixture("docs/"),
+                    ZipFixture("docs/a.txt", "alpha".encodeToByteArray()),
+                    ZipFixture("docs/deep/b.txt", "beta".encodeToByteArray()),
+                    ZipFixture("top.txt", "top".encodeToByteArray()),
+                ),
+            )
+        }
+        val provider = LocalFileProvider()
+        val phases = mutableSetOf<ArchivePhase>()
+
+        val root = ArchiveService.extract(
+            provider,
+            provider.getFileInfo(archiveFile.path).getOrThrow(),
+            workspace.path,
+        ) { phases += it.phase }.getOrThrow()
+
+        val extracted = File(root.path)
+        assertEquals(File(workspace, "local_extracted"), extracted)
+        val files = extracted.walk().filter { it.isFile }
+            .associate { it.relativeTo(extracted).invariantSeparatorsPath to it.readText() }
+        assertEquals(mapOf("docs/a.txt" to "alpha", "docs/deep/b.txt" to "beta", "top.txt" to "top"), files)
+        // A local ZIP is read where it is, without a temporary copy.
+        assertEquals(setOf(ArchivePhase.WRITING), phases)
+    }
+
+    @Test
+    fun aCorruptDeflatedEntryIsLeftOutAndTheOthersAreExtracted() = runBlocking {
+        val archive = zipBytes(
+            ZipFixture("broken.txt", "compressible text ".repeat(2000).encodeToByteArray()),
+            ZipFixture("intact.txt", "intact".encodeToByteArray()),
+        )
+        // The first entry's data starts after its 30-byte local header and name; 0xFF is an invalid block type.
+        val dataStart = 30 + "broken.txt".length
+        repeat(16) { archive[dataStart + it] = 0xFF.toByte() }
+        val provider = ArchiveTestFileProvider().apply {
+            putDirectory("/workspace")
+            putFile("/workspace/bundle.zip", archive)
+        }
+        var report: ArchiveExtractionReport? = null
+
+        ArchiveService.extract(
+            provider,
+            provider.getFileInfo("/workspace/bundle.zip").getOrThrow(),
+            "/workspace",
+            onReport = { report = it },
+        ).getOrThrow()
+
+        assertEquals("intact", provider.readFile("/workspace/bundle_extracted/intact.txt").decodeToString())
+        assertFalse(provider.exists("/workspace/bundle_extracted/broken.txt"))
+        assertEquals(listOf("broken.txt"), checkNotNull(report).notExtracted.map { it.entryPath })
     }
 
     private fun readZip(bytes: ByteArray): Map<String, ByteArray> {

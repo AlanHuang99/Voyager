@@ -12,7 +12,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
-class LocalFileProvider : FileProvider {
+/** [parallelWrites] is only lowered by tests and benchmarks. */
+class LocalFileProvider(override val parallelWrites: Int = 4) : FileProvider {
     override fun isSameStorage(other: FileProvider): Boolean = other is LocalFileProvider
     override fun isSamePath(path: String, other: FileProvider, otherPath: String): Boolean =
         if (other is RootFileProvider) other.isSamePath(otherPath, path)
@@ -111,6 +112,23 @@ class LocalFileProvider : FileProvider {
     override suspend fun getOutputStream(path: String): Result<OutputStream> =
         withContext(Dispatchers.IO) {
             runCatching { FileOutputStream(File(path)) }
+        }
+
+    /** Shared storage and removable volumes under /storage ignore case and refuse an existing name. */
+    override fun ignoresNameCase(path: String): Boolean? = if (path.startsWith("/storage/")) true else null
+
+    /** One exclusive open: on shared storage each extra call (create, stat, reopen) is a FUSE round trip. */
+    override suspend fun openNewFile(path: String, name: String): Result<NewFile> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val file = File(path, name)
+                val output = java.nio.file.Files.newOutputStream(
+                    file.toPath(),
+                    java.nio.file.StandardOpenOption.CREATE_NEW,
+                    java.nio.file.StandardOpenOption.WRITE,
+                )
+                NewFile(name, file.absolutePath, output)
+            }
         }
 
     override suspend fun exists(path: String): Boolean =
