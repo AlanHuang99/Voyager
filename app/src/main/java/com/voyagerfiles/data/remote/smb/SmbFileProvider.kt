@@ -442,6 +442,9 @@ class SmbFileProvider internal constructor(
         }
     }
 
+    /** SMB shares compare names without case, and FILE_CREATE refuses a name that is already taken. */
+    override fun ignoresNameCase(path: String): Boolean = true
+
     override suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) {
         try {
             if (isDiscoveryMode && path == "/") return@withContext true

@@ -31,6 +31,7 @@ class ArchiveExtractionReportTest {
                 "Docs/b.txt" to "b",
                 "Docs/A.txt" to "A",
             ),
+            ignoresNameCase = true,
         )
         var report: ArchiveExtractionReport? = null
 
@@ -49,7 +50,11 @@ class ArchiveExtractionReportTest {
 
     @Test
     fun aFolderCannotMergeIntoAFileSoItIsRenamed() = runBlocking {
-        val provider = workspaceWith("clash.zip", zipBytes("Readme" to "file", "README/notes.txt" to "notes"))
+        val provider = workspaceWith(
+            "clash.zip",
+            zipBytes("Readme" to "file", "README/notes.txt" to "notes"),
+            ignoresNameCase = true,
+        )
         var report: ArchiveExtractionReport? = null
 
         val root = extract(provider, "clash.zip") { report = it }.getOrThrow()
@@ -57,6 +62,23 @@ class ArchiveExtractionReportTest {
         assertEquals("file", provider.readText("${root.path}/Readme"))
         assertEquals("notes", provider.readText("${root.path}/README (1)/notes.txt"))
         assertEquals(listOf(RenamedEntry("README", "README (1)")), report!!.renamed)
+    }
+
+    @Test
+    fun aCaseSensitiveDestinationKeepsEveryNameAsItIs() = runBlocking {
+        val provider = workspaceWith(
+            "clash.zip",
+            zipBytes("Ms.png" to "first", "mS.png" to "second", "Docs/a.txt" to "a", "docs/b.txt" to "b"),
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val root = extract(provider, "clash.zip") { report = it }.getOrThrow()
+
+        assertEquals(listOf("Docs", "Ms.png", "docs", "mS.png"), provider.childNames(root.path))
+        assertEquals("second", provider.readText("${root.path}/mS.png"))
+        assertEquals("a", provider.readText("${root.path}/Docs/a.txt"))
+        assertEquals("b", provider.readText("${root.path}/docs/b.txt"))
+        assertEquals(emptyList<RenamedEntry>(), report!!.renamed)
     }
 
     @Test
@@ -130,7 +152,44 @@ class ArchiveExtractionReportTest {
     }
 
     @Test
-    fun cancellingKeepsWhatWasExtracted() = runBlocking {
+    fun aFileThatCannotBeCleanedUpStopsTheExtractionAndStaysListed() = runBlocking {
+        val broken = "/workspace/bundle_extracted/b.txt"
+        val provider = workspaceWith(
+            "bundle.zip",
+            zipBytes("a.txt" to "a", "b.txt" to "b", "c.txt" to "c"),
+            failOutputPath = broken,
+            failDeletePath = broken,
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val error = extract(provider, "bundle.zip") { report = it }.exceptionOrNull()
+
+        assertTrue(error is PartialExtractionException)
+        assertTrue(error!!.cause is ArchiveCleanupException)
+        assertFalse(report!!.complete)
+        assertEquals(listOf("b.txt"), report!!.notExtracted.map { it.entryPath })
+        assertEquals(listOf("a.txt", "b.txt"), provider.childNames("/workspace/bundle_extracted"))
+        assertEquals(1, report!!.extractedFiles)
+    }
+
+    @Test
+    fun anEntryBelowAFileIsRejectedEvenWhenThatFileFailed() = runBlocking {
+        val provider = workspaceWith(
+            "conflict.zip",
+            zipBytes("good.txt" to "good", "node" to "a file", "node/child.txt" to "child"),
+            failOutputPath = "/workspace/conflict_extracted/node",
+        )
+        var report: ArchiveExtractionReport? = null
+
+        val error = extract(provider, "conflict.zip") { report = it }.exceptionOrNull()
+
+        assertTrue(error is UnsafeArchiveEntryException)
+        assertNull(report)
+        assertFalse(provider.exists("/workspace/conflict_extracted"))
+    }
+
+    @Test
+    fun cancellingRemovesWhatWasExtracted() = runBlocking {
         val provider = workspaceWith("bundle.zip", zipBytes("a.txt" to "a", "b.txt" to "b", "c.txt" to "c"))
         val token = TransferCancellation()
         var report: ArchiveExtractionReport? = null
@@ -149,9 +208,8 @@ class ArchiveExtractionReportTest {
         } catch (_: CancellationException) {
         }
 
-        assertEquals(listOf("a.txt"), provider.childNames("/workspace/bundle_extracted"))
-        assertFalse(report!!.complete)
-        assertEquals(3, report!!.totalEntries)
+        assertFalse(provider.exists("/workspace/bundle_extracted"))
+        assertNull(report)
     }
 
     @Test
@@ -180,23 +238,6 @@ class ArchiveExtractionReportTest {
         assertFalse(provider.exists("/workspace/unsafe_extracted"))
     }
 
-    @Test
-    fun removingAnExtractionCountsItsFiles() = runBlocking {
-        val provider = workspaceWith(
-            "bundle.zip",
-            zipBytes("folder/a.txt" to "a", "folder/b.txt" to "b", "c.txt" to "c"),
-        )
-        var report: ArchiveExtractionReport? = null
-        extract(provider, "bundle.zip") { report = it }.getOrThrow()
-        val progress = mutableListOf<ArchiveProgress>()
-
-        ArchiveService.removeExtraction(provider, report!!.root, report!!.extractedFiles, progress::add).getOrThrow()
-
-        assertFalse(provider.exists(report!!.root.path))
-        assertEquals(listOf(1, 2, 3), progress.map { it.completedEntries })
-        assertTrue(progress.all { it.phase == ArchivePhase.REMOVING && it.totalEntries == 3 })
-    }
-
     private suspend fun extract(
         provider: ArchiveTestFileProvider,
         name: String,
@@ -210,8 +251,18 @@ class ArchiveExtractionReportTest {
         onReport = onReport,
     )
 
-    private fun workspaceWith(name: String, bytes: ByteArray, failOutputPath: String? = null) =
-        ArchiveTestFileProvider(failOutputPath = failOutputPath).apply {
+    private fun workspaceWith(
+        name: String,
+        bytes: ByteArray,
+        failOutputPath: String? = null,
+        failDeletePath: String? = null,
+        ignoresNameCase: Boolean = false,
+    ) =
+        ArchiveTestFileProvider(
+            failOutputPath = failOutputPath,
+            failDeletePath = failDeletePath,
+            ignoresNameCase = ignoresNameCase,
+        ).apply {
             putDirectory("/workspace")
             putFile("/workspace/$name", bytes)
         }

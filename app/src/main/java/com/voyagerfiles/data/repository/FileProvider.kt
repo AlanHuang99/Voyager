@@ -59,6 +59,11 @@ interface FileProvider {
         return false
     }
     suspend fun exists(path: String): Boolean
+    /**
+     * True only where names that differ just in letter case are known to be one item and creating the
+     * second one fails rather than overwriting. Unknown destinations keep every name exactly as given.
+     */
+    fun ignoresNameCase(path: String): Boolean = false
     suspend fun getFileInfo(path: String): Result<FileItem>
     fun getParentPath(path: String): String?
     suspend fun disconnect() {}

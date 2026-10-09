@@ -76,28 +76,3 @@ private fun Section(title: String) {
 private fun More(hidden: Int) {
     if (hidden > 0) Text(pluralStringResource(R.plurals.archive_details_more, hidden, hidden), style = MaterialTheme.typography.bodySmall)
 }
-
-/** Removing cannot be undone, so the result card asks once before deleting the extracted files. */
-@Composable
-fun RemoveExtractionDialog(report: ArchiveExtractionReport, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.archive_remove_title)) },
-        text = {
-            Text(
-                pluralStringResource(
-                    R.plurals.archive_remove_message,
-                    report.extractedFiles,
-                    report.extractedFiles,
-                    report.root.name,
-                ),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.archive_remove_confirm)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-}

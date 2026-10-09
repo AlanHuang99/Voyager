@@ -244,6 +244,11 @@ fun BrowserScreen(
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val pendingExtractionRemoval by viewModel.pendingExtractionRemoval.collectAsState()
+    // A kept extraction is removed like any folder: selected, then the usual delete confirmation.
+    LaunchedEffect(pendingExtractionRemoval, state.files, state.isLoading) {
+        if (pendingExtractionRemoval != null && viewModel.takeExtractionRemoval()) showDeleteDialog = true
+    }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -978,7 +983,7 @@ fun BrowserScreen(
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
             if (runningOperation == null) {
-                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult, onRemoveExtraction = viewModel::removeExtraction) }
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult, onRemoveExtraction = viewModel::requestExtractionRemoval) }
             }
             PullToRefreshBox(
                 isRefreshing = pullRefreshing && state.isLoading,

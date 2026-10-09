@@ -69,7 +69,6 @@
     <string name="archive_extracted_to">%1$s に抽出されました</string>
     <string name="archive_extraction_cancelled">Extraction cancelled</string>
     <string name="archive_compression_cancelled">Compression cancelled</string>
-    <string name="archive_extraction_cancelled_kept">Extraction cancelled. Kept the extracted files in %1$s</string>
     <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
     <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
     <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
@@ -90,14 +89,6 @@
         <item quantity="other">and %d more</item>
     </plurals>
     <string name="archive_remove_extracted">Remove extracted files</string>
-    <string name="archive_remove_title">Remove extracted files?</string>
-    <plurals name="archive_remove_message">
-        <item quantity="one">This permanently deletes the %1$d extracted file in %2$s.</item>
-        <item quantity="other">This permanently deletes the %1$d extracted files in %2$s.</item>
-    </plurals>
-    <string name="archive_remove_confirm">Remove</string>
-    <string name="archive_removed">Removed %1$s</string>
-    <string name="operation_remove_extracted">remove the extracted files</string>
     <string name="progress_removing_extracted">Removing extracted files</string>
     <string name="paste_success">貼り付けに成功しました</string>
     <string name="file_already_on_device">このファイルは既にこのデバイスに保存されています</string>

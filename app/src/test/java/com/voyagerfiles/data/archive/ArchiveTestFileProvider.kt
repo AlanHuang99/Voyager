@@ -10,9 +10,15 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
+/**
+ * Case-sensitive unless [ignoresNameCase]; deleting [failDeletePath], or a folder above it, fails as a
+ * stuck file would.
+ */
 internal open class ArchiveTestFileProvider(
     private val failOutputPath: String? = null,
     private val maximumReadRequest: Int? = null,
+    private val failDeletePath: String? = null,
+    private val ignoresNameCase: Boolean = false,
 ) : FileProvider {
     private val entries = mutableMapOf<String, Entry>("/" to Entry.Directory)
     var largestReadRequest: Int = 0
@@ -68,6 +74,11 @@ internal open class ArchiveTestFileProvider(
         val normalized = path.normalized()
         check(normalized != "/") { "Cannot delete root" }
         check(normalized in entries) { "Does not exist: $path" }
+        failDeletePath?.normalized()?.let { stuck ->
+            if (stuck in entries && (stuck == normalized || stuck.startsWith("$normalized/"))) {
+                throw IOException("Injected delete failure for $stuck")
+            }
+        }
         entries.keys
             .filter { it == normalized || it.startsWith("$normalized/") }
             .toList()
@@ -130,6 +141,8 @@ internal open class ArchiveTestFileProvider(
             }
         }
     }
+
+    override fun ignoresNameCase(path: String): Boolean = ignoresNameCase
 
     override suspend fun exists(path: String): Boolean = path.normalized() in entries
 

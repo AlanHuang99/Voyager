@@ -156,8 +156,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
     val transferConflict = operationController.conflicts.pending
     fun resolveTransferConflict(request: TransferConflictDecisions.Request, response: ConflictResponse) =
         operationController.conflicts.respond(request, response)
-    /** The last extraction's report and the provider it wrote to, so Remove deletes from the right place. */
-    private var extractionProvider: Pair<ArchiveExtractionReport, FileProvider>? = null
+    /** A kept extraction the user asked to remove, waiting until the listing shows its folder. */
+    private val _pendingExtractionRemoval = MutableStateFlow<String?>(null)
+    val pendingExtractionRemoval: StateFlow<String?> = _pendingExtractionRemoval.asStateFlow()
 
     private val _sessionClosureGeneration = MutableStateFlow(0L)
     val sessionClosureGeneration: StateFlow<Long> = _sessionClosureGeneration.asStateFlow()
@@ -761,7 +762,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         launchOperation(
             R.string.progress_compressing,
             R.string.operation_compress,
-            cancelledMessage = { UiText.Resource(R.string.archive_compression_cancelled) },
+            cancelledMessage = R.string.archive_compression_cancelled,
         ) {
             ArchiveService.createZip(
                 provider = provider,
@@ -829,71 +830,70 @@ class FileBrowserViewModel @JvmOverloads constructor(
         launchOperation(
             R.string.progress_extracting,
             R.string.operation_extract,
-            cancelledMessage = {
-                report?.let { UiText.Resource(R.string.archive_extraction_cancelled_kept, listOf(UiText.Dynamic(it.root.name))) }
-                    ?: UiText.Resource(R.string.archive_extraction_cancelled)
-            },
+            cancelledMessage = R.string.archive_extraction_cancelled,
         ) {
-            try {
-                ArchiveService.extract(
-                    provider = provider,
-                    archive = archive,
-                    destinationDirectory = destinationDirectory,
-                    onProgress = publishProgress,
-                    onReport = { extracted ->
-                        report = extracted
-                        extractionProvider = extracted to provider
-                        operationController.attachArchiveReport(extracted)
-                    },
-                ).fold(
-                    onSuccess = { extractionRoot ->
-                        if (clearSelectionAfter) clearSelection()
-                        refreshFiles()
-                        report?.notExtracted?.firstOrNull()?.let { operationController.recordFailure(it.error) }
-                        showSnackbar(
-                            OperationMessages.archiveExtracted(
-                                extractionRoot.name,
-                                renamedEntries = report?.renamedCount ?: 0,
-                                notExtractedEntries = report?.notExtractedCount ?: 0,
-                            ),
-                        )
-                    },
-                    onFailure = { error ->
-                        operationController.recordFailure(error)
-                        if (error is PartialExtractionException) {
-                            refreshFiles()
-                            showSnackbar(OperationMessages.archivePartiallyExtracted(error))
-                        } else {
-                            showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
-                        }
-                    },
-                )
-            } catch (cancellation: CancellationException) {
-                if (report != null) refreshFiles()
-                throw cancellation
-            }
-        }
-    }
-
-    /** Deletes a partial extraction the user chose to remove from its result. */
-    fun removeExtraction(report: ArchiveExtractionReport) {
-        val (reported, provider) = extractionProvider ?: return
-        if (reported !== report) return
-        extractionProvider = null
-        val publishProgress = archiveProgressPublisher(R.string.progress_removing_extracted)
-        launchOperation(R.string.progress_removing_extracted, R.string.operation_remove_extracted) {
-            ArchiveService.removeExtraction(provider, report.root, report.extractedFiles, publishProgress).fold(
-                onSuccess = {
+            ArchiveService.extract(
+                provider = provider,
+                archive = archive,
+                destinationDirectory = destinationDirectory,
+                onProgress = publishProgress,
+                onReport = { extracted ->
+                    report = extracted
+                    operationController.attachArchiveReport(extracted)
+                },
+            ).fold(
+                onSuccess = { extractionRoot ->
+                    if (clearSelectionAfter) clearSelection()
                     refreshFiles()
-                    showSnackbar(UiText.Resource(R.string.archive_removed, listOf(UiText.Dynamic(report.root.name))))
+                    report?.notExtracted?.firstOrNull()?.let { operationController.recordFailure(it.error) }
+                    showSnackbar(
+                        OperationMessages.archiveExtracted(
+                            extractionRoot.name,
+                            renamedEntries = report?.renamedCount ?: 0,
+                            notExtractedEntries = report?.notExtractedCount ?: 0,
+                        ),
+                    )
                 },
                 onFailure = { error ->
                     operationController.recordFailure(error)
-                    refreshFiles()
-                    showSnackbar(OperationMessages.failure(R.string.operation_remove_extracted, error))
+                    if (error is PartialExtractionException) {
+                        refreshFiles()
+                        showSnackbar(OperationMessages.archivePartiallyExtracted(error))
+                    } else {
+                        showSnackbar(OperationMessages.failure(R.string.operation_extract, error))
+                    }
                 },
             )
         }
+    }
+
+    /**
+     * Removes a kept extraction through the browser's own delete confirmation, Trash included, so the
+     * user sees exactly which folder goes. Opens the folder that contains it first when needed.
+     */
+    fun requestExtractionRemoval(report: ArchiveExtractionReport) {
+        val root = report.root.path
+        _pendingExtractionRemoval.value = root
+        val parent = fileProvider.getParentPath(root) ?: return
+        val state = _browseState.value
+        if (state.files.none { it.path == root } && state.currentPath != parent) navigateTo(parent)
+    }
+
+    /**
+     * Selects the pending extraction once the listing shows it and returns true, so the delete
+     * confirmation can open. A folder that is gone by then is forgotten.
+     */
+    fun takeExtractionRemoval(): Boolean {
+        val root = _pendingExtractionRemoval.value ?: return false
+        val state = _browseState.value
+        if (state.isLoading) return false
+        if (state.files.none { it.path == root }) {
+            if (state.currentPath == fileProvider.getParentPath(root)) _pendingExtractionRemoval.value = null
+            return false
+        }
+        _pendingExtractionRemoval.value = null
+        _browseState.update { it.copy(selectedFiles = setOf(root)) }
+        return true
     }
 
     fun copyToClipboard(paths: List<String>) {
@@ -1363,7 +1363,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private fun launchOperation(
         @StringRes progressLabel: Int,
         @StringRes operationName: Int,
-        cancelledMessage: () -> UiText = { UiText.Resource(R.string.transfer_cancelled) },
+        @StringRes cancelledMessage: Int = R.string.transfer_cancelled,
         block: suspend () -> Unit,
     ) {
         val started = operationController.launch(
@@ -1371,7 +1371,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
             cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone, R.string.operation_extract, R.string.operation_compress),
             onFailure = { error ->
                 showSnackbar(
-                    if (error is CancellationException) cancelledMessage()
+                    if (error is CancellationException) UiText.Resource(cancelledMessage)
                     else OperationMessages.failure(operationName, error),
                 )
             },

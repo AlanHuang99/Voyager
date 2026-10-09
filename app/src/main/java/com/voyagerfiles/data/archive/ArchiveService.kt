@@ -109,7 +109,11 @@ object ArchiveService {
             val rootName = "${format.stem(archive.name)}_extracted"
             validateChildName(rootName)
             requireChildAbsent(provider, destinationDirectory, rootName)
-            val extractionTree = ExtractionTree(provider, onProgress) {
+            val extractionTree = ExtractionTree(
+                provider = provider,
+                onProgress = onProgress,
+                ignoresNameCase = provider.ignoresNameCase(destinationDirectory),
+            ) {
                 createCheckedDirectory(provider, destinationDirectory, rootName)
             }
             tree = extractionTree
@@ -145,9 +149,11 @@ object ArchiveService {
             Result.success(report.root)
         } catch (error: Throwable) {
             val cancellation = cancellationOf(error)
-            // An unsafe entry means the archive cannot be trusted, so nothing of it is kept.
+            // A failure keeps what was written. Cancel removes it, and so does an unsafe entry, because
+            // the archive cannot be trusted.
+            val keep = cancellation == null && error !is UnsafeArchiveEntryException
             val kept = withContext(NonCancellable + TransferCancellation.detached()) {
-                runCatching { tree?.keepOrRemove(keep = error !is UnsafeArchiveEntryException) }
+                runCatching { tree?.keepOrRemove(keep) }
                     .onFailure(error::addSuppressed)
                     .getOrNull()
             }
@@ -164,41 +170,6 @@ object ArchiveService {
                 )
             }
             Result.failure(kept?.let { PartialExtractionException(it.root, failure) } ?: failure)
-        }
-    }
-
-    /**
-     * Deletes an extraction the user chose to remove, counting files against [extractedFiles]. Each
-     * folder is listed once; it runs to the end, because stopping halfway would leave a torn folder.
-     */
-    suspend fun removeExtraction(
-        provider: FileProvider,
-        root: FileItem,
-        extractedFiles: Int?,
-        onProgress: (ArchiveProgress) -> Unit = {},
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            var removedFiles = 0
-
-            suspend fun remove(item: FileItem) {
-                if (item.isDirectory) {
-                    provider.listFiles(item.path).getOrThrow().forEach { child -> remove(child) }
-                }
-                provider.delete(item.path).getOrThrow()
-                if (!item.isDirectory) {
-                    removedFiles++
-                    onProgress(
-                        ArchiveProgress(
-                            phase = ArchivePhase.REMOVING,
-                            currentEntryName = item.name,
-                            completedEntries = removedFiles,
-                            totalEntries = extractedFiles?.coerceAtLeast(removedFiles),
-                        )
-                    )
-                }
-            }
-
-            remove(root)
         }
     }
 
@@ -602,9 +573,14 @@ object ArchiveService {
         }
     }
 
+    /**
+     * [ignoresNameCase] is true only for destinations known to treat names that differ in letter case
+     * as one item; elsewhere every entry keeps its exact name.
+     */
     private class ExtractionTree(
         private val provider: FileProvider,
         private val onProgress: (ArchiveProgress) -> Unit,
+        private val ignoresNameCase: Boolean,
         private val createRoot: suspend () -> FileItem,
     ) {
         private var createdRoot: FileItem? = null
@@ -613,8 +589,9 @@ object ArchiveService {
         private val providerPaths = mutableMapOf<String, String>()
 
         /**
-         * Children of each created folder by case-folded name, with the path of a child folder or null
-         * for a file. This tree is the only writer there, so it never has to list them.
+         * Children of each created folder by name (case-folded where the destination ignores case), with
+         * the path of a child folder or null for a file. This tree is the only writer there, so it never
+         * has to list them.
          */
         private val children = mutableMapOf<String, MutableMap<String, String?>>()
 
@@ -676,8 +653,8 @@ object ArchiveService {
         )
 
         /**
-         * After a failure or cancel, keeps what was written and returns its report. When nothing was
-         * extracted, or [keep] is false, removes it instead and restores the last counts for the result.
+         * After a failure, keeps what was written and returns its report. When nothing was extracted, or
+         * [keep] is false, removes it instead and restores the last counts for the result.
          */
         suspend fun keepOrRemove(keep: Boolean): ArchiveExtractionReport? {
             createdRoot ?: return null
@@ -724,7 +701,8 @@ object ArchiveService {
         suspend fun createDirectory(rawName: String) {
             TransferCancellation.check()
             val segments = registerEntry(rawName)
-            if (ensureDirectory(segments, rawName) != null) completedEntries++
+            ensureDirectory(segments, rawName)
+            completedEntries++
             report(segments.joinToString("/"))
         }
 
@@ -738,8 +716,9 @@ object ArchiveService {
             if (nodeTypes[key] != null) {
                 throw UnsafeArchiveEntryException(rawName, "the path conflicts with another entry type")
             }
-            // A parent is missing only when it was itself a file that could not be extracted.
-            val parentPath = ensureDirectory(segments.dropLast(1), rawName) ?: return skip(key, error = null)
+            // The archive declares a file here whatever happens to its write, so no entry may go below it.
+            nodeTypes[key] = NodeType.FILE
+            val parentPath = ensureDirectory(segments.dropLast(1), rawName)
             val name = claimName(parentPath, segments.last(), key, isDirectory = false)
 
             val source = ReadFailureTrackingInputStream(input)
@@ -747,7 +726,6 @@ object ArchiveService {
             try {
                 val created = createExactFile(provider, parentPath, name)
                 createdPaths += created.path
-                nodeTypes[key] = NodeType.FILE
                 providerPaths[key] = created.path
                 try {
                     val output = provider.getOutputStream(created.path).getOrThrow()
@@ -762,19 +740,27 @@ object ArchiveService {
                         }
                     }
                 } catch (error: Throwable) {
-                    withContext(NonCancellable) {
+                    val cleanup = withContext(NonCancellable) {
                         runCatching {
                             if (provider.exists(created.path)) {
                                 provider.delete(created.path).getOrThrow()
                             }
-                        }.onFailure(error::addSuppressed)
+                        }
+                    }
+                    cleanup.exceptionOrNull()?.let { cleanupError ->
+                        // The incomplete file is still there: it stays tracked so a removal finds it, and the
+                        // extraction stops instead of finishing with a broken file in it.
+                        val failure = ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
+                        leaveOut(key, failure)
+                        throw failure
                     }
                     createdPaths.removeAt(createdPaths.lastIndex)
+                    providerPaths.remove(key)
                     throw error
                 }
             } catch (error: Throwable) {
                 if (!canSkip(error, source)) throw error
-                return skip(key, error)
+                return leaveOut(key, error)
             }
 
             completedEntries++
@@ -785,19 +771,21 @@ object ArchiveService {
 
         private fun canSkip(error: Throwable, source: ReadFailureTrackingInputStream): Boolean =
             error is Exception &&
+                error !is ArchiveCleanupException &&
                 cancellationOf(error) == null &&
                 (sourceErrorsSkippable || !source.failed)
 
-        private fun skip(key: String, error: Throwable?) {
-            nodeTypes[key] = NodeType.SKIPPED
-            if (error != null) {
-                notExtractedCount++
-                if (notExtracted.size < ArchiveExtractionReport.MAX_LISTED) notExtracted += FailedEntry(key, error)
-            }
+        /** Counts and lists an entry that was not extracted; its declared type stays as it was. */
+        private fun leaveOut(key: String, error: Throwable) {
+            notExtractedCount++
+            if (notExtracted.size < ArchiveExtractionReport.MAX_LISTED) notExtracted += FailedEntry(key, error)
             report(key)
         }
 
-        /** Returns the name to create [name] under in [parentPath], numbered when only the case differs. */
+        /**
+         * Returns the name to create [name] under in [parentPath]: numbered when the destination ignores
+         * case and only the case differs, otherwise [name] itself.
+         */
         private fun claimName(
             parentPath: String,
             name: String,
@@ -840,11 +828,11 @@ object ArchiveService {
             return segments
         }
 
-        /** Returns the folder's provider path, or null when a segment is a file that could not be extracted. */
+        /** Returns the folder's provider path, creating what is missing. */
         private suspend fun ensureDirectory(
             segments: List<String>,
             rawName: String,
-        ): String? {
+        ): String {
             var currentKey = ""
             var currentProviderPath = root().path
             for (segment in segments) {
@@ -857,16 +845,14 @@ object ArchiveService {
                         )
                     }
 
-                    NodeType.SKIPPED -> return null
-
                     NodeType.DIRECTORY -> {
                         currentProviderPath = providerPaths.getValue(currentKey)
                     }
 
                     null -> {
                         val parentPath = currentProviderPath
-                        // A folder whose name differs only in case merges into the one created first,
-                        // as it would on a case-insensitive disk; nothing inside it is lost.
+                        // Where the destination ignores case, a folder whose name differs only in case
+                        // merges into the one created first, as the disk would; nothing inside it is lost.
                         currentProviderPath = children[parentPath]?.get(segment.foldCase()) ?: run {
                             val name = claimName(parentPath, segment, currentKey, isDirectory = true)
                             val created = createExactDirectory(provider, parentPath, name)
@@ -882,14 +868,13 @@ object ArchiveService {
             return currentProviderPath
         }
 
+        private fun String.foldCase(): String = if (ignoresNameCase) lowercase(Locale.ROOT) else this
+
         private enum class NodeType {
             DIRECTORY,
             FILE,
-            SKIPPED,
         }
     }
-
-    private fun String.foldCase(): String = lowercase(Locale.ROOT)
 
     /** "photo.png" becomes "photo (1).png"; folders keep dots in their names. */
     private fun numberedName(name: String, number: Int, isDirectory: Boolean): String {

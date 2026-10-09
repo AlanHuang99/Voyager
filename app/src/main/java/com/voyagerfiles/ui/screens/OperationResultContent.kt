@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveExtractionReport
 import com.voyagerfiles.ui.components.ArchiveReportDialog
-import com.voyagerfiles.ui.components.RemoveExtractionDialog
 import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.viewmodel.OperationOutcome
 import com.voyagerfiles.viewmodel.OperationResult
@@ -73,7 +72,6 @@ private fun ArchiveReportSummary(
     onRemoveExtraction: ((ArchiveExtractionReport) -> Unit)?,
 ) {
     var showDetails by remember(report) { mutableStateOf(false) }
-    var confirmRemoval by remember(report) { mutableStateOf(false) }
     if (report.renamedCount > 0) {
         Text(
             pluralStringResource(R.plurals.archive_entries_renamed, report.renamedCount, report.renamedCount),
@@ -94,19 +92,10 @@ private fun ArchiveReportSummary(
                 TextButton(onClick = { showDetails = true }) { Text(stringResource(R.string.archive_details)) }
             }
             if (canRemove) {
-                TextButton(onClick = { confirmRemoval = true }) { Text(stringResource(R.string.archive_remove_extracted)) }
+                // Hands over to the browser's delete confirmation, which shows the folder and offers Trash.
+                TextButton(onClick = { onRemoveExtraction?.invoke(report) }) { Text(stringResource(R.string.archive_remove_extracted)) }
             }
         }
     }
     if (showDetails) ArchiveReportDialog(report, onDismiss = { showDetails = false })
-    if (confirmRemoval && onRemoveExtraction != null) {
-        RemoveExtractionDialog(
-            report,
-            onDismiss = { confirmRemoval = false },
-            onConfirm = {
-                confirmRemoval = false
-                onRemoveExtraction(report)
-            },
-        )
-    }
 }
