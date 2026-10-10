@@ -13,6 +13,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.archivers.zip.UnixStat
 import org.apache.commons.compress.archivers.zip.Zip64Mode
+import org.apache.commons.compress.archivers.zip.Zip64RequiredException
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
@@ -20,6 +21,7 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.File
 import java.io.FilterInputStream
+import java.io.IOException
 import java.io.InputStream
 
 object ArchiveService {
@@ -194,6 +196,9 @@ object ArchiveService {
         return plan
     }
 
+    /** Entries of this size and up need ZIP64; 0xFFFFFFFF itself is ZIP64's marker value. */
+    private const val ZIP64_SIZE = 0xFFFF_FFFFL
+
     private suspend fun writeZip(
         provider: FileProvider,
         plan: List<ZipPlanEntry>,
@@ -219,6 +224,12 @@ object ArchiveService {
             TransferCancellation.check()
             val entry = ZipArchiveEntry(planned.zipName).apply {
                 if (planned.item.lastModified.time > 0) time = planned.item.lastModified.time
+                // A streamed entry of unknown size can't get ZIP64 after its header is written, so
+                // large files declare their size. Smaller ones don't: if a declared small size
+                // turned out wrong, the ZIP would get truncated sizes instead of failing.
+                if (!planned.item.isDirectory && planned.item.size >= ZIP64_SIZE) {
+                    size = planned.item.size
+                }
             }
             zip.putArchiveEntry(entry)
             var entryFailure: Throwable? = null
@@ -237,6 +248,15 @@ object ArchiveService {
                 throw error
             } finally {
                 runCatching { zip.closeArchiveEntry() }
+                    .recoverCatching { closeError ->
+                        if (closeError !is Zip64RequiredException) throw closeError
+                        throw IOException(
+                            "${planned.entryName} is larger than 4 GB, but it was listed with a " +
+                                "smaller or unknown size. If it was still being written, try " +
+                                "again when it is complete.",
+                            closeError,
+                        )
+                    }
                     .onFailure { closeError ->
                         if (entryFailure != null) {
                             entryFailure.addSuppressed(closeError)
