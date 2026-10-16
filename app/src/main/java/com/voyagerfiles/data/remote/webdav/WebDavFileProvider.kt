@@ -9,6 +9,7 @@ import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.StreamTransferProgress
+import com.voyagerfiles.playback.PlaybackResourceIdentity
 import com.thegrizzlylabs.sardineandroid.DavResource
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +73,11 @@ class WebDavFileProvider(
                     source.close()
                     throw error
                 }
-                PreparedWebDavPlayback(source, metadata)
+                PreparedWebDavPlayback(
+                    source,
+                    metadata,
+                    PlaybackResourceIdentity(connection.id, toUrl(path), connection.username),
+                )
             }
         }
 
@@ -357,6 +362,7 @@ class WebDavFileProvider(
 internal data class PreparedWebDavPlayback(
     val source: WebDavRangeSource,
     val metadata: WebDavRangeMetadata,
+    val identity: PlaybackResourceIdentity,
 )
 
 internal fun webDavBaseUrl(connection: RemoteConnection): String {

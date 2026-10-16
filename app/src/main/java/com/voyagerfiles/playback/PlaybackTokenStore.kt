@@ -2,7 +2,6 @@ package com.voyagerfiles.playback
 
 import java.security.SecureRandom
 import java.util.Base64
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class PlaybackEntry(
@@ -17,90 +16,150 @@ internal class PlaybackTokenStore(
     private val random: SecureRandom = SecureRandom(),
     private val inactivityMillis: Long = DEFAULT_INACTIVITY_MILLIS,
 ) {
-    private class StoredEntry(
-        val entry: PlaybackEntry,
-        var lastAccessMillis: Long,
-        var closed: Boolean = false,
-        var readers: Int = 0,
-    )
+    private class Generation(val entry: PlaybackEntry) {
+        var readers = 0
+        var closed = false
+    }
 
-    private val entries = ConcurrentHashMap<String, StoredEntry>()
+    private class StoredToken(var current: Generation, var lastAccessMillis: Long) {
+        val generations = mutableSetOf(current)
+        val readers get() = generations.sumOf { it.readers }
+    }
+
+    private val lock = Any()
+    private val entries = mutableMapOf<String, StoredToken>()
 
     init {
         require(inactivityMillis > 0) { "Playback inactivity timeout must be positive" }
     }
 
-    fun register(entry: PlaybackEntry): String {
+    fun register(entry: PlaybackEntry, stableToken: String? = null): String {
         require(entry.size >= 0) { "Playback size must not be negative" }
-        while (true) {
-            val token = ByteArray(TOKEN_BYTES)
-                .also(random::nextBytes)
-                .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
-            if (entries.putIfAbsent(token, StoredEntry(entry, clock())) == null) return token
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        val token = synchronized(lock) {
+            val token = stableToken ?: generateSequence(::randomToken).first { it !in entries }
+            val stored = entries[token]
+            if (stored == null) {
+                entries[token] = StoredToken(Generation(entry), clock())
+            } else if (stored.current.entry == entry) {
+                stored.lastAccessMillis = clock()
+            } else {
+                val previous = stored.current
+                stored.current = Generation(entry)
+                stored.generations += stored.current
+                stored.lastAccessMillis = clock()
+                if (previous.readers == 0) retire(stored, previous, sourcesToClose)
+            }
+            token
         }
+        closeSources(sourcesToClose)
+        return token
     }
 
     fun lookup(token: String): PlaybackEntry? {
-        val stored = entries[token] ?: return null
-        var expiredSource: PlaybackRandomAccessSource? = null
-        synchronized(stored) {
-            if (stored.closed) return null
-            val now = clock()
-            val elapsed = now - stored.lastAccessMillis
-            if (stored.readers == 0 && elapsed >= inactivityMillis && elapsed >= 0) {
-                stored.closed = true
-                expiredSource = stored.entry.source
-            } else {
-                stored.lastAccessMillis = now
-                return stored.entry
-            }
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        val entry = synchronized(lock) {
+            liveToken(token, sourcesToClose)?.also { it.lastAccessMillis = clock() }?.current?.entry
         }
-        entries.remove(token, stored)
-        runCatching { expiredSource?.close() }
-        return null
+        closeSources(sourcesToClose)
+        return entry
     }
 
     fun acquire(token: String): Lease? {
-        val stored = entries[token] ?: return null
-        synchronized(stored) {
-            if (lookup(token) == null) return null
-            stored.readers++
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        val lease = synchronized(lock) {
+            val stored = liveToken(token, sourcesToClose)
+            stored?.let {
+                val generation = stored.current
+                generation.readers++
+                stored.lastAccessMillis = clock()
+                Lease(
+                    entry = generation.entry,
+                    onTouch = {
+                        synchronized(lock) {
+                            if (generation.closed) false else {
+                                stored.lastAccessMillis = clock()
+                                true
+                            }
+                        }
+                    },
+                    onClose = {
+                        val retiredSources = mutableListOf<PlaybackRandomAccessSource>()
+                        synchronized(lock) {
+                            generation.readers--
+                            stored.lastAccessMillis = clock()
+                            if (!generation.closed && generation !== stored.current && generation.readers == 0) {
+                                retire(stored, generation, retiredSources)
+                            }
+                        }
+                        closeSources(retiredSources)
+                    },
+                )
+            }
         }
-        return Lease(
-            entry = stored.entry,
-            onTouch = {
-                synchronized(stored) {
-                    if (stored.closed) false else {
-                        stored.lastAccessMillis = clock()
-                        true
-                    }
-                }
-            },
-            onClose = {
-                synchronized(stored) {
-                    stored.readers--
-                    stored.lastAccessMillis = clock()
-                }
-            },
-        )
+        closeSources(sourcesToClose)
+        return lease
     }
 
     fun sweepExpired() {
-        val now = clock()
-        entries.entries.toList().forEach { (token, stored) ->
-            val expired = synchronized(stored) {
-                val elapsed = now - stored.lastAccessMillis
-                if (!stored.closed && stored.readers == 0 && elapsed >= inactivityMillis) {
-                    stored.closed = true
-                    true
-                } else false
-            }
-            if (expired) {
-                entries.remove(token, stored)
-                runCatching { stored.entry.source.close() }
-            }
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        synchronized(lock) {
+            entries.keys.toList().forEach { liveToken(it, sourcesToClose) }
+        }
+        closeSources(sourcesToClose)
+    }
+
+    fun remove(token: String) {
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        synchronized(lock) {
+            entries.remove(token)?.let { closeToken(it, sourcesToClose) }
+        }
+        closeSources(sourcesToClose)
+    }
+
+    fun clear() {
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        synchronized(lock) {
+            entries.values.forEach { closeToken(it, sourcesToClose) }
+            entries.clear()
+        }
+        closeSources(sourcesToClose)
+    }
+
+    private fun liveToken(token: String, sourcesToClose: MutableList<PlaybackRandomAccessSource>): StoredToken? {
+        val stored = entries[token] ?: return null
+        val elapsed = clock() - stored.lastAccessMillis
+        if (stored.readers == 0 && elapsed >= inactivityMillis && elapsed >= 0) {
+            entries.remove(token)
+            closeToken(stored, sourcesToClose)
+            return null
+        }
+        return stored
+    }
+
+    private fun retire(
+        stored: StoredToken,
+        generation: Generation,
+        sourcesToClose: MutableList<PlaybackRandomAccessSource>,
+    ) {
+        generation.closed = true
+        stored.generations -= generation
+        if (stored.generations.none { it.entry.source === generation.entry.source }) {
+            sourcesToClose += generation.entry.source
         }
     }
+
+    private fun closeToken(stored: StoredToken, sourcesToClose: MutableList<PlaybackRandomAccessSource>) {
+        stored.generations.toList().forEach { retire(stored, it, sourcesToClose) }
+    }
+
+    private fun closeSources(sources: List<PlaybackRandomAccessSource>) {
+        sources.forEach { runCatching(it::close) }
+    }
+
+    private fun randomToken(): String = ByteArray(TOKEN_BYTES)
+        .also(random::nextBytes)
+        .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
 
     class Lease internal constructor(
         val entry: PlaybackEntry,
@@ -112,25 +171,6 @@ internal class PlaybackTokenStore(
         override fun close() {
             if (released.compareAndSet(false, true)) onClose()
         }
-    }
-
-    fun remove(token: String) {
-        entries.remove(token)?.let(::close)
-    }
-
-    fun clear() {
-        entries.entries.toList().forEach { (token, stored) ->
-            if (entries.remove(token, stored)) close(stored)
-        }
-    }
-
-    private fun close(stored: StoredEntry) {
-        val source = synchronized(stored) {
-            if (stored.closed) return
-            stored.closed = true
-            stored.entry.source
-        }
-        runCatching { source.close() }
     }
 
     private companion object {
