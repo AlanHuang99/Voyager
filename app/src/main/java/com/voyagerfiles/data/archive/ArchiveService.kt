@@ -4,6 +4,7 @@ import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.data.repository.LocalFileProvider
 import com.voyagerfiles.data.repository.NewFile
+import com.voyagerfiles.data.repository.NewFileCleanupException
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.TransferCancellation
@@ -572,7 +573,10 @@ object ArchiveService {
         parentPath: String,
         name: String,
     ): NewFile {
-        val created = provider.openNewFile(parentPath, name).getOrThrow()
+        val created = provider.openNewFile(parentPath, name).getOrElse { error ->
+            if (error is NewFileCleanupException) throw ArchiveCleanupException(error.path, error)
+            throw error
+        }
         if (created.name != name) {
             runCatching { created.output.close() }
             runCatching { provider.delete(created.path).getOrThrow() }
@@ -876,9 +880,7 @@ object ArchiveService {
                     cleanup.exceptionOrNull()?.let { cleanupError ->
                         // The incomplete file is still there: it stays tracked so a removal finds it, and the
                         // extraction stops instead of finishing with a broken file in it.
-                        val failure = ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
-                        leaveOut(key, failure)
-                        throw failure
+                        throw ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
                     }
                     // By path, not the last entry, so a parallel write recorded meanwhile can never be dropped instead.
                     createdPaths.remove(created.path)
@@ -886,6 +888,12 @@ object ArchiveService {
                     throw error
                 }
             } catch (error: Throwable) {
+                if (error is ArchiveCleanupException) {
+                    if (error.path !in createdPaths) createdPaths += error.path
+                    providerPaths[key] = error.path
+                    leaveOut(key, error)
+                    throw error
+                }
                 if (!canSkip(error, source)) throw error
                 return leaveOut(key, error)
             }
