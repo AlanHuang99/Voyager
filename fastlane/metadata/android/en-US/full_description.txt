@@ -4,7 +4,10 @@ Features:
 • Local file browsing with file management (copy, move, rename, Trash, permanent delete, create)
 • Share one or several local and document-tree files through Android's system share sheet
 • File details with selectable metadata
-• Image, first-page PDF, and readable local APK application-icon thumbnails
+• Local and remote image thumbnails, first-page PDF previews, and readable local APK application-icon thumbnails
+• Filename search across accessible mounted shared storage, with an action to open a result's folder
+• Per-file action menus in List and Compact views
+• Optional root and Shizuku sessions with explicit authorization
 • Storage Access Framework document-tree browsing and file management
 • Open files through Android defaults or choose a handler with Open with
 • Create ZIP archives and safely extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 files with progress and cancellation

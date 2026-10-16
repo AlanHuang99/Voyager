@@ -28,8 +28,8 @@ F-Droid verifies releases through its own build process, so a new GitHub release
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="30%" alt="Home screen with storage locations and quick access">
-  <img src="docs/screenshots/browser.png" width="30%" alt="File browser with search and type filters">
+  <img src="docs/screenshots/home.png" width="30%" alt="Home screen with shared-storage search, storage locations, and quick access">
+  <img src="docs/screenshots/browser.png" width="30%" alt="File browser with per-file menus, search, and type filters">
   <img src="docs/screenshots/trash.png" width="30%" alt="Trash screen with restore and permanent-delete actions">
 </p>
 
@@ -46,7 +46,9 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 
 - Browse internal storage, SD cards, USB/OTG volumes, and folders granted through Android's folder picker.
 - Copy, move, rename, create, and delete files across local, document-tree, and remote locations, with transfer progress and cancellation. Share local and document-tree files through Android's share sheet.
-- Use list, compact list, or grid views, thumbnails, sorting, current-folder search, and file-type filters.
+- Use list, compact list, or grid views, local and remote image thumbnails, sorting, current-folder search, and file-type filters.
+- Search filenames across accessible mounted shared storage from Home, and open a result's containing folder.
+- Open per-file action menus in List and Compact views.
 - Browse Home media categories, bookmark local folders, and keep multiple browser sessions open.
 - Restore direct-local files from Trash and find duplicate files by content, with configurable folder exclusions.
 - Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 archives with progress and cancellation.
