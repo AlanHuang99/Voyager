@@ -46,6 +46,8 @@ Extraction never stops to ask. Where the destination treats names that differ on
 
 ## Previews
 
+Visible network image rows use independent per-session providers on IO, with at most two reads/decodes active globally. Images over 8 MiB are skipped before opening when their size is known; streamed reads stop at the same cap. Sampled decoding validates image bounds and allocation size, and limits output to 256 pixels per side. The in-memory preview cache is bounded to 16 MiB and 256 entries, separates sessions, and clears when a session closes. Leaving a row cancels its read; requests also have a 15-second deadline. Remote image bytes and credentials are never written to the thumbnail cache on disk.
+
 Local and SAF video previews decode a scaled frame away from the UI thread, with a pixel cap before legacy decoding on API 26. OOXML previews read only embedded PNG/JPEG thumbnails from bounded ZIP archives; external references, traversal, excessive entries, oversized images, and malformed metadata fall back to the file icon. SAF staging has a byte limit and is removed after use. Trash rows use the original filename for classification and the payload path for decoding.
 
 ## Storage access

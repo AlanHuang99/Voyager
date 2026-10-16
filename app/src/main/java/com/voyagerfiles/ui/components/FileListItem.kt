@@ -58,6 +58,7 @@ fun FileListItem(
     enableDragSelection: Boolean = false,
     trailingContent: (@Composable () -> Unit)? = null,
     isHighlighted: Boolean = false,
+    remoteImages: RemoteImageThumbnailLoader? = null,
 ) {
     val selectionContentDescription = stringResource(
         if (isSelected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
@@ -140,7 +141,7 @@ fun FileListItem(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
 
-                FileThumbnailOrIcon(file = file, iconSize = iconSize)
+                FileThumbnailOrIcon(file = file, iconSize = iconSize, remoteImages = remoteImages)
 
                 Spacer(modifier = Modifier.width(iconSpacing))
 

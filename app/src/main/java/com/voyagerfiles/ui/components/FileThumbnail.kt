@@ -35,8 +35,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.request.CachePolicy
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.model.isNetwork
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,14 +48,52 @@ internal const val APK_THUMBNAIL_TEST_TAG = "apk-thumbnail"
 internal const val VIDEO_THUMBNAIL_TEST_TAG = "video-thumbnail"
 internal const val OFFICE_THUMBNAIL_TEST_TAG = "office-thumbnail"
 internal const val FILE_ICON_TEST_TAG = "file-icon"
+internal const val REMOTE_IMAGE_THUMBNAIL_TEST_TAG = "remote-image-thumbnail"
 
 @Composable
 fun FileThumbnailOrIcon(
     file: FileItem,
     iconSize: Dp,
     modifier: Modifier = Modifier,
+    remoteImages: RemoteImageThumbnailLoader? = null,
 ) {
     val icon = fileIcon(file)
+    if (file.isImage && file.source.isNetwork && remoteImages != null) {
+        val context = LocalContext.current
+        val sizePixels = with(LocalDensity.current) { iconSize.roundToPx().coerceAtLeast(1) }
+        var thumbnail by remember(remoteImages, file, sizePixels) { mutableStateOf<android.graphics.Bitmap?>(null) }
+        LaunchedEffect(remoteImages, file, sizePixels) {
+            thumbnail = remoteImages.load(file, sizePixels)
+        }
+        Surface(
+            modifier = modifier.size(iconSize),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            val bitmap = thumbnail
+            if (bitmap != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(bitmap)
+                        .size(sizePixels)
+                        .memoryCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().testTag(REMOTE_IMAGE_THUMBNAIL_TEST_TAG),
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().padding(4.dp).testTag(FILE_ICON_TEST_TAG),
+                    tint = fileIconTint(file),
+                )
+            }
+        }
+        return
+    }
     if (MediaThumbnailLoader.supports(file)) {
         val context = LocalContext.current
         val sizePixels = with(LocalDensity.current) { iconSize.roundToPx().coerceAtLeast(1) }
