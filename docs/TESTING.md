@@ -192,3 +192,7 @@ adb -s DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT pull /sdcard/window.xml /tmp/voyag
 ```
 
 The opt-in `SmbDockerIntegrationTest` matrix checks optional encryption, required SMB3 encryption, and SMB2-only servers, including wrong-password rejection, discovery, direct shares, and exact read/write bytes. On September 8, 2026, the K60 SMB instrumentation also passed against a disposable Samba 4.12.2 server with `server min protocol = SMB3_00` and `smb encrypt = required`.
+
+## Shizuku access
+
+Start Shizuku on a disposable or connected test device and grant the debug Voyager package through Settings → Storage access → Open Shizuku session. Run `ShizukuFileProviderAndroidTest` with instrumentation argument `shizuku=true`. The opt-in tests verify actual shell/root UID, file byte equality, quoted and newline-bearing names, restricted shared-storage directories, cross-provider streams, independent connection lifetimes, and reopening a closed session. Shell-mode checks also verify that app-private storage remains denied. Test fixtures use unique subdirectories and are removed in teardown. Test denial and a stopped service separately through the connection dialog, and smoke-test the minified release build with the same service. `ShizukuFileIdentityTest` covers source identity and local path aliases on the JVM.

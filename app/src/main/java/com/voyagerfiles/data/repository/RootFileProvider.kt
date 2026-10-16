@@ -19,7 +19,10 @@ import java.util.UUID
 data class RootTextDocument(val path: String, val text: String, internal val fingerprint: String)
 
 /** Separate from local storage: constructing this provider does not request root until used. */
-class RootFileProvider(private val shell: RootShell = RootShell()) : FileProvider, Closeable {
+open class RootFileProvider(
+    private val shell: RootShell = RootShell(),
+    private val source: FileSource = FileSource.ROOT,
+) : FileProvider, Closeable {
     override suspend fun listFiles(path: String) = io {
         val directory = path(path)
         val script = "d=${q(directory)}; [ -d \"\$d\" ] && [ -r \"\$d\" ] && [ -x \"\$d\" ] || { echo 'Folder missing or permission denied' >&2; exit 1; }; " +
@@ -204,7 +207,7 @@ class RootFileProvider(private val shell: RootShell = RootShell()) : FileProvide
             val line = (end + 1 until bytes.size).firstOrNull { bytes[it] == 10.toByte() } ?: throw IOException("Invalid root metadata")
             val fields = bytes.copyOfRange(end + 1, line).toString(Charsets.UTF_8).split(' ')
             val mode = fields[0].toInt(16)
-            result.add(FileItem(File(path).name, path, mode and 0xf000 == 0x4000, fields[1].toLong(), Date(fields[2].toLong() * 1000), File(path).name.startsWith('.'), fields[0], fields[3], FileSource.ROOT))
+            result.add(FileItem(File(path).name, path, mode and 0xf000 == 0x4000, fields[1].toLong(), Date(fields[2].toLong() * 1000), File(path).name.startsWith('.'), fields[0], fields[3], source))
             if (result.size > 20_000) throw IOException("Folder exceeds the root listing limit (20,000 entries)")
             offset = line + 1
         }

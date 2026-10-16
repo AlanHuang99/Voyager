@@ -53,13 +53,13 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 - Connect to SFTP, FTP, SMB, and WebDAV. SFTP supports passwords, private keys, and generated key pairs; SMB can discover disk shares.
 - Open files with Android's registered apps, including direct WebDAV playback when the server supports seeking.
 - Choose among 20 included color schemes, custom themes, and Material You dynamic colors on Android 12 or later.
-- Navigate with Android TV remote controls, or use an explicitly authorized root session on a compatible rooted device.
+- Navigate with Android TV remote controls, use an explicitly authorized root session on a compatible rooted device, or open an optional Shizuku session.
 
 ## Privacy and access
 
 Voyager contains no analytics or tracking. Local browsing works without internet access; network connections are user-initiated. Remote passwords are encrypted with a device-bound Android Keystore key, and saved connections and SSH keys are excluded from Android backup and device transfer.
 
-SFTP remembers server host keys and rejects unexpected changes. HTTPS WebDAV validates certificates through Android's trusted authorities. FTP and HTTP WebDAV are unencrypted. Ordinary local browsing never requests root; root sessions require confirmation and authorization through your device's `su` manager.
+SFTP remembers server host keys and rejects unexpected changes. HTTPS WebDAV validates certificates through Android's trusted authorities. FTP and HTTP WebDAV are unencrypted. Ordinary local browsing never requests root; root sessions require confirmation and authorization through your device's `su` manager. Shizuku sessions require a running Shizuku service and authorization in its permission dialog. Open one from Settings → Storage access → Open Shizuku session.
 
 See [Architecture and security](docs/ARCHITECTURE.md) for storage, authentication, and file-operation details.
 

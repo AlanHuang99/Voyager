@@ -511,4 +511,11 @@
     <string name="search_bar_bottom">항상 맨 아래에 표시됩니다</string>
     <string name="action_search">찾다</string>
     <string name="action_close_search">검색 닫기</string>
+    <string name="shizuku_editor_title">Edit file with Shizuku</string>
+    <string name="shizuku_open">Open Shizuku session</string>
+    <string name="shizuku_description">Browse and manage files using Shizuku. Start Shizuku, then allow Voyager when asked. Access depends on Android and the permissions of the Shizuku service.</string>
+    <string name="shizuku_connect">Connect</string>
+    <string name="shizuku_connecting">Connecting to Shizuku…</string>
+    <string name="shizuku_manager">Open Shizuku</string>
+    <string name="shizuku_unavailable">Install and start Shizuku, then try again.</string>
 </resources>

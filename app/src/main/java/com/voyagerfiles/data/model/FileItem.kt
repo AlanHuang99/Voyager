@@ -103,6 +103,7 @@ data class FileItem(
 enum class FileSource {
     LOCAL,
     ROOT,
+    SHIZUKU,
     SAF,
     SFTP,
     FTP,

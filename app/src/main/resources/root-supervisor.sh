@@ -43,12 +43,12 @@ case "$(stat -c '%u:%a' .)" in
     "$(id -u):700"|"$(id -u):2700") ;;
     *) echo 'Unsafe root command directory' >&2; finish 125;;
 esac
-mkfifo -m 600 ./input || finish 125
+@INPUT_SETUP@
 printf '\n%s:READY\n' "$token" >&2
 frame=$(read_frame) || finish 125
 [ "$frame" = START ] || finish 125
 exec 7<&0
-setsid sh -c @SCRIPT@ 7<&- < ./input &
+setsid sh -c @SCRIPT@ 7<&- < "$input" &
 worker=$!
 (
     abort_command() {
@@ -56,7 +56,7 @@ worker=$!
         kill -USR1 "$supervisor"
         exit 125
     }
-    exec 8> ./input
+    exec 8> "$input"
     printf '%s\n' "$worker" >&8
     printf '\n%s:ACK\n' "$token" >&2
     while :; do
