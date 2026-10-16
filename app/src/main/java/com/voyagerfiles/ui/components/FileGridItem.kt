@@ -32,6 +32,7 @@ fun FileGridItem(
     modifier: Modifier = Modifier,
     enableRemoteSelect: Boolean = false,
     enableDragSelection: Boolean = false,
+    remoteImages: RemoteImageThumbnailLoader? = null,
 ) {
     val selectionContentDescription = stringResource(
         if (isSelected) R.string.content_desc_deselect_named else R.string.content_desc_select_named,
@@ -76,7 +77,7 @@ fun FileGridItem(
                 )
             }
 
-            FileThumbnailOrIcon(file = file, iconSize = 48.dp)
+            FileThumbnailOrIcon(file = file, iconSize = 48.dp, remoteImages = remoteImages)
 
             Text(
                 text = file.name,

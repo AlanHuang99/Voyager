@@ -5,6 +5,7 @@ import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.ForwardingOutputStream
+import com.voyagerfiles.data.preview.RemoteThumbnailSource
 import kotlinx.coroutines.runBlocking
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory
 import org.apache.sshd.common.keyprovider.KeyPairProvider
@@ -36,6 +37,20 @@ import java.math.BigInteger
 import java.util.Base64
 
 class SftpFileProviderTest {
+
+    @Test
+    fun thumbnailReaderUsesAnIndependentAuthenticatedConnection() = runBlocking {
+        val server = startServer(AuthMode.PASSWORD)
+        val payload = byteArrayOf(1, 2, 3, 4)
+        Files.write(server.root.resolve("photo.jpg"), payload)
+        val browser = createProvider(server.port)
+        val file = browser.listFiles("/").getOrThrow().single()
+        val previews = RemoteThumbnailSource { createProvider(server.port) }
+        try {
+            assertTrue(previews.load(file) { it }.contentEquals(payload))
+            assertEquals(listOf("photo.jpg"), browser.listFiles("/").getOrThrow().map { it.name })
+        } finally { previews.close() }
+    }
 
     @get:Rule
     val temp = TemporaryFolder()

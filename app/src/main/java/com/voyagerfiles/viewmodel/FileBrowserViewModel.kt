@@ -55,6 +55,8 @@ import com.voyagerfiles.util.FileNameValidator
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.util.UploadSourceFactory
 import kotlinx.coroutines.Dispatchers
+import com.voyagerfiles.ui.components.RemoteImageThumbnailLoader
+import com.voyagerfiles.ui.components.RemoteImageThumbnailSession
 import com.voyagerfiles.data.model.SearchBarMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -122,6 +124,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private var browserSessionRootPath: String? = null
     private var initialNavigationJob: Job? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
+    private val remoteImageThumbnailSessions = mutableMapOf<String, RemoteImageThumbnailSession>()
     private val loadGuard = DirectoryLoadGuard()
     private val scrollMemory = DirectoryScrollMemory()
     private val sessionAutoCloseTracker = SessionAutoCloseTracker()
@@ -1241,6 +1244,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
                 val normalizedPath = BrowserNavigationBounds.normalizePath(connection.remotePath)
                 val source = sourceForProtocol(connection.protocol)
                 sessionProviders[sessionId] = remoteProviderFactory.create(getApplication(), connection)
+                remoteImageThumbnailSessions[sessionId] = RemoteImageThumbnailSession {
+                    remoteProviderFactory.create(getApplication(), connection)
+                }
                 _sessions.update { sessions ->
                     sessions + BrowserSession(
                         id = sessionId,
@@ -1261,6 +1267,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
     fun disconnectRemote() {
         closeActiveSession()
     }
+
+    fun remoteImageThumbnailLoader(sessionId: String?): RemoteImageThumbnailLoader? =
+        remoteImageThumbnailSessions[sessionId]
 
     fun activateSession(sessionId: String) {
         cancelInitialNavigation()
@@ -1582,6 +1591,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
+        remoteImageThumbnailSessions.values.forEach(RemoteImageThumbnailSession::close)
+        remoteImageThumbnailSessions.clear()
         // viewModelScope is cancelled at this point, so close privileged pipes synchronously.
         sessionProviders.values.filterIsInstance<com.voyagerfiles.data.repository.RootFileProvider>().forEach { it.close() }
         super.onCleared()
@@ -1619,6 +1630,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     private suspend fun closeSessionInternal(sessionId: String) {
         val closedSession = _sessions.value.firstOrNull { it.id == sessionId } ?: return
+        remoteImageThumbnailSessions.remove(sessionId)?.close()
         sessionProviders.remove(sessionId)?.disconnect()
         val wasActive = _activeSession.value?.id == sessionId
         val remainingSessions = _sessions.value.filterNot { it.id == sessionId }
@@ -1658,6 +1670,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val closedSessions = _sessions.value.filter { it.id in sessionIds }
         if (closedSessions.isEmpty()) return
         val closedProviders = closedSessions.mapNotNull { session ->
+            remoteImageThumbnailSessions.remove(session.id)?.close()
             sessionProviders.remove(session.id)
         }.toSet()
         val remainingSessions = _sessions.value.filterNot { it.id in sessionIds }

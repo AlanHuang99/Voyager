@@ -192,6 +192,7 @@ fun BrowserScreen(
     }
     val sessions by viewModel.sessions.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val remoteImages = remember(activeSession?.id) { viewModel.remoteImageThumbnailLoader(activeSession?.id) }
     val connections by viewModel.connections.collectAsState()
     var pullRefreshing by remember(state.currentPath, state.source, activeSession?.id) { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
@@ -1116,6 +1117,7 @@ fun BrowserScreen(
                             items(state.visibleFiles, key = { it.path }) { file ->
                                 FileListItem(
                                     file = file,
+                                    remoteImages = remoteImages,
                                     modifier = if (isTelevision && file.path == firstVisiblePath) {
                                         Modifier.focusRequester(firstItemFocusRequester)
                                     } else {
@@ -1189,6 +1191,7 @@ fun BrowserScreen(
                             items(state.visibleFiles, key = { it.path }) { file ->
                                 FileGridItem(
                                     file = file,
+                                    remoteImages = remoteImages,
                                     modifier = if (isTelevision && file.path == firstVisiblePath) {
                                         Modifier.focusRequester(firstItemFocusRequester)
                                     } else {

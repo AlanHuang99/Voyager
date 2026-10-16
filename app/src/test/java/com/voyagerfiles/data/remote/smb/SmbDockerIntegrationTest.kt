@@ -4,6 +4,7 @@ import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.preview.RemoteThumbnailSource
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
@@ -30,6 +31,22 @@ import org.junit.rules.TemporaryFolder
 class SmbDockerIntegrationTest {
     @get:Rule
     val temp = TemporaryFolder()
+
+    @Test
+    fun thumbnailReaderUsesAnIndependentAuthenticatedShareConnection() = runBlocking {
+        assumeTrue(System.getenv("VOYAGER_RUN_DOCKER_TESTS") == "true")
+        withSamba("smb encrypt = desired") { port ->
+            val browser = waitUntilReady(port)
+            val payload = byteArrayOf(1, 2, 3, 4)
+            browser.getOutputStream("/media/photo.jpg").getOrThrow().use { it.write(payload) }
+            val file = browser.listFiles("/media").getOrThrow().single()
+            val previews = RemoteThumbnailSource { SmbFileProvider(connection(port, shareName = null)) }
+            try {
+                assertArrayEquals(payload, previews.load(file) { it })
+                assertEquals(listOf("photo.jpg"), browser.listFiles("/media").getOrThrow().map { it.name })
+            } finally { previews.close(); browser.disconnect() }
+        }
+    }
 
     @Test
     fun discoversAndUsesAuthenticatedSharesAcrossReconnects() = runBlocking {

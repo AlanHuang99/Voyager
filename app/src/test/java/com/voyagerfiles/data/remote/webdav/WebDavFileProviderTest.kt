@@ -2,6 +2,9 @@ package com.voyagerfiles.data.remote.webdav
 
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.data.model.FileSource
+import com.voyagerfiles.data.preview.RemoteThumbnailSource
 import com.voyagerfiles.data.archive.ArchiveService
 import com.voyagerfiles.data.repository.DownloadProgress
 import com.voyagerfiles.data.repository.FileDownloader
@@ -40,6 +43,19 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class WebDavFileProviderTest {
+
+    @Test
+    fun thumbnailReaderAuthenticatesItsOwnImageStream() = runBlocking {
+        val payload = byteArrayOf(1, 2, 3, 4)
+        val server = MockWebServer().apply { dispatcher = rangeDispatcher(payload); start() }
+        val previews = RemoteThumbnailSource { createProvider(server.port) }
+        try {
+            val file = FileItem("photo.jpg", "/photo.jpg", false, 4, source = FileSource.WEBDAV)
+            assertTrue(previews.load(file) { it }.contentEquals(payload))
+            assertEquals("/photo.jpg", server.takeRequest().path)
+            assertEquals(Credentials.basic(USERNAME, PASSWORD), server.takeRequest().getHeader("Authorization"))
+        } finally { previews.close(); server.shutdown() }
+    }
 
     @get:Rule
     val temp = TemporaryFolder()

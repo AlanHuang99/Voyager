@@ -5,6 +5,7 @@ import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.repository.FileDownloader
 import com.voyagerfiles.data.repository.ForwardingOutputStream
 import com.voyagerfiles.data.repository.LocalFileProvider
+import com.voyagerfiles.data.preview.RemoteThumbnailSource
 import com.voyagerfiles.viewmodel.FileOperationCoordinator
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
@@ -41,6 +42,20 @@ import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 
 class FtpFileProviderTest {
+
+    @Test
+    fun thumbnailReaderUsesAnIndependentAuthenticatedConnection() = runBlocking {
+        val server = startServer()
+        val payload = byteArrayOf(1, 2, 3, 4)
+        Files.write(server.root.resolve("photo.jpg"), payload)
+        val browser = createProvider(server.port)
+        val file = browser.listFiles("/").getOrThrow().single()
+        val previews = RemoteThumbnailSource { createProvider(server.port) }
+        try {
+            assertTrue(previews.load(file) { it }.contentEquals(payload))
+            assertEquals(listOf("photo.jpg"), browser.listFiles("/").getOrThrow().map { it.name })
+        } finally { previews.close() }
+    }
 
     @get:Rule
     val temp = TemporaryFolder()
