@@ -1,6 +1,7 @@
 package com.voyagerfiles.data.repository
 
 import com.voyagerfiles.data.model.FileItem
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -14,6 +15,26 @@ interface FileProvider {
     suspend fun move(sourcePath: String, destPath: String): Result<Unit>
     suspend fun getInputStream(path: String): Result<InputStream>
     suspend fun getOutputStream(path: String): Result<OutputStream>
+    /**
+     * Creates [name] in [path] and opens it for writing, failing instead of replacing an existing item.
+     * A provider that picks a free name reports it in [NewFile.name]; callers needing [name] check it.
+     * If opening and cleanup both fail, [NewFileCleanupException] retains the created path.
+     */
+    suspend fun openNewFile(path: String, name: String): Result<NewFile> = runCatching {
+        val created = createFile(path, name).getOrThrow()
+        val output = getOutputStream(created.path).getOrElse { error ->
+            runCatching { delete(created.path).getOrThrow() }.onFailure { cleanupError ->
+                throw NewFileCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
+            }
+            throw error
+        }
+        NewFile(created.name, created.path, output)
+    }
+    /**
+     * How many files may be written at the same time, for example by an extraction. Providers that
+     * share one connection or session between streams keep the default of one.
+     */
+    val parallelWrites: Int get() = 1
     suspend fun writeStream(
         path: String,
         input: InputStream,
@@ -69,3 +90,10 @@ interface FileProvider {
     fun getParentPath(path: String): String?
     suspend fun disconnect() {}
 }
+
+/** A file created by [FileProvider.openNewFile]; the caller closes [output]. */
+class NewFile(val name: String, val path: String, val output: OutputStream)
+
+/** Opening [path] failed and the newly created file could not be removed. */
+class NewFileCleanupException(val path: String, cause: Throwable) :
+    IOException("Could not remove the incomplete file ${path.substringAfterLast('/')}", cause)

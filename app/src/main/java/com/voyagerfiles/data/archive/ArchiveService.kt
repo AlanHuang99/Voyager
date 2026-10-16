@@ -2,12 +2,19 @@ package com.voyagerfiles.data.archive
 
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.FileProvider
+import com.voyagerfiles.data.repository.LocalFileProvider
+import com.voyagerfiles.data.repository.NewFile
+import com.voyagerfiles.data.repository.NewFileCleanupException
 import com.voyagerfiles.data.repository.StreamTransfer
 import com.voyagerfiles.data.repository.TransferAbortable
 import com.voyagerfiles.data.repository.TransferCancellation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -19,14 +26,29 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.EOFException
 import java.io.File
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.SequenceInputStream
 import java.util.Locale
+import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
+import java.util.zip.ZipEntry
 
 object ArchiveService {
+    private const val BUFFER_SIZE = 64 * 1024
+
+    /** Entries up to this size are read into memory and written in parallel where the provider allows it. */
+    private const val PARALLEL_ENTRY_BYTES = 1024 * 1024
+
+    /** Bounds the memory held by entries waiting for a parallel write. */
+    private const val PARALLEL_BUFFERED_BYTES = 16L * 1024 * 1024
+
     suspend fun createZip(
         provider: FileProvider,
         selectedItems: List<FileItem>,
@@ -124,15 +146,19 @@ object ArchiveService {
             provider.getInputStream(archive.path).getOrThrow().use { input ->
                 val abort = TransferCancellation.registerAbort { abortInput(input) }
                 try {
-                    if (format == ArchiveFormat.ZIP) {
-                        extractionTree.sourceErrorsSkippable = true
-                        extractZip(input, sourceSize, extractionTree)
-                    } else {
-                        // Stream formats have no index, so progress follows the compressed input.
-                        val source = CountingInputStream(input)
-                        extractionTree.sourcePosition = source::count
-                        extractionTree.totalBytes = sourceSize
-                        extractStream(format, archive.name, source, extractionTree)
+                    extractionTree.withParallelWrites(provider.parallelWrites) {
+                        if (format == ArchiveFormat.ZIP) {
+                            extractionTree.sourceErrorsSkippable = true
+                            // A readable local ZIP is opened in place; anything else is copied first.
+                            val localArchive = File(archive.path).takeIf { provider is LocalFileProvider && it.canRead() }
+                            extractZip(input, localArchive, sourceSize, extractionTree)
+                        } else {
+                            // Stream formats have no index, so progress follows the compressed input.
+                            val source = CountingInputStream(input)
+                            extractionTree.sourcePosition = source::count
+                            extractionTree.totalBytes = sourceSize
+                            extractStream(format, archive.name, source, extractionTree)
+                        }
                     }
                 } finally {
                     abort.close()
@@ -296,17 +322,23 @@ object ArchiveService {
 
     private suspend fun extractZip(
         input: InputStream,
+        localArchive: File?,
         sourceSize: Long?,
         tree: ExtractionTree,
-    ) = withSpooledArchive(input, ".zip", sourceSize, tree::reportReadingSource) { spooledZip ->
-        ZipFile.builder().setFile(spooledZip).get().use { zip ->
+    ) {
+        if (localArchive != null) return extractZipFile(localArchive, tree)
+        withSpooledArchive(input, ".zip", sourceSize, tree::reportReadingSource) { extractZipFile(it, tree) }
+    }
+
+    private suspend fun extractZipFile(file: File, tree: ExtractionTree) {
+        ZipFile.builder().setFile(file).get().use { zip ->
             val entries = zip.entries.toList()
             entries.forEach { entry -> validateZipEntry(entry, zip.canReadEntryData(entry)) }
             val fileSizes = entries.filterNot(::isZipDirectory).map { it.size }
             tree.totalEntries = entries.size
             tree.totalBytes = fileSizes.takeIf { sizes -> sizes.all { it >= 0 } }?.sum()
             entries.forEach { entry ->
-                extractZipEntry(entry, tree) { zip.getInputStream(entry) }
+                extractZipEntry(entry, tree) { openZipEntry(zip, entry) }
             }
         }
     }
@@ -320,7 +352,30 @@ object ArchiveService {
             tree.createDirectory(entry.name)
         } else {
             openEntry().use { entryInput ->
-                tree.writeFile(rawName = entry.name, input = entryInput)
+                tree.writeFile(rawName = entry.name, input = entryInput, declaredSize = entry.size)
+            }
+        }
+    }
+
+    /**
+     * Commons Compress inflates through InflaterInputStream's default 512-byte buffer, which makes a
+     * large entry cost one native inflate call per 512 bytes; deflated entries get a larger buffer here.
+     */
+    private fun openZipEntry(zip: ZipFile, entry: ZipArchiveEntry): InputStream {
+        if (entry.method != ZipEntry.DEFLATED) return zip.getInputStream(entry)
+        val inflater = Inflater(true)
+        // Inflater without the zlib wrapper expects one byte of padding after the data.
+        val compressed = SequenceInputStream(
+            BufferedInputStream(zip.getRawInputStream(entry), BUFFER_SIZE),
+            ByteArrayInputStream(byteArrayOf(0)),
+        )
+        return object : InflaterInputStream(compressed, inflater, BUFFER_SIZE) {
+            override fun close() {
+                try {
+                    super.close()
+                } finally {
+                    inflater.end()
+                }
             }
         }
     }
@@ -444,7 +499,7 @@ object ArchiveService {
                 if (entry.isDirectory) {
                     tree.createDirectory(entry.name)
                 } else {
-                    tree.writeFile(rawName = entry.name, input = tar)
+                    tree.writeFile(rawName = entry.name, input = tar, declaredSize = entry.size)
                 }
             }
         }
@@ -511,6 +566,24 @@ object ArchiveService {
         parentPath: String,
         name: String,
     ): FileItem = requireExactName(provider, provider.createDirectory(parentPath, name).getOrThrow(), name)
+
+    /** Like [createExactFile], but already open for writing, which saves local storage a second open. */
+    private suspend fun openExactFile(
+        provider: FileProvider,
+        parentPath: String,
+        name: String,
+    ): NewFile {
+        val created = provider.openNewFile(parentPath, name).getOrElse { error ->
+            if (error is NewFileCleanupException) throw ArchiveCleanupException(error.path, error)
+            throw error
+        }
+        if (created.name != name) {
+            runCatching { created.output.close() }
+            runCatching { provider.delete(created.path).getOrThrow() }
+            throw ArchiveConflictException(created.path)
+        }
+        return created
+    }
 
     /** Some providers pick a free name such as "name (1)" instead of failing on a conflict. */
     private suspend fun requireExactName(
@@ -742,9 +815,11 @@ object ArchiveService {
             report(segments.joinToString("/"))
         }
 
+        /** [declaredSize] is the size the archive states, or -1; it only decides how the entry is written. */
         suspend fun writeFile(
             rawName: String,
             input: InputStream,
+            declaredSize: Long = -1,
         ) {
             TransferCancellation.check()
             val segments = registerEntry(rawName)
@@ -758,19 +833,38 @@ object ArchiveService {
             val name = claimName(parentPath, segments.last(), key, isDirectory = false)
 
             val source = ReadFailureTrackingInputStream(input)
+            // What was read already, for an entry too large for a parallel write.
+            var head = ByteArray(0)
+            // An entry the archive says is large is written here right away, without reading it into memory first.
+            parallelWrites?.takeIf { declaredSize <= PARALLEL_ENTRY_BYTES }?.let { writes ->
+                val buffered = try {
+                    source.readUpTo(PARALLEL_ENTRY_BYTES + 1)
+                } catch (error: Throwable) {
+                    if (!canSkip(error, source)) throw error
+                    return leaveOut(key, error)
+                }
+                if (buffered.size <= PARALLEL_ENTRY_BYTES) {
+                    return writes.write(key, parentPath, name, buffered)
+                }
+                // Too large to hold: written here. Not as a SequenceInputStream, which would close a
+                // TAR's stream at the end of the entry.
+                head = buffered
+            }
             var fileBytes = 0L
             try {
-                val created = createExactFile(provider, parentPath, name)
+                val created = openExactFile(provider, parentPath, name)
                 createdPaths += created.path
                 providerPaths[key] = created.path
                 try {
-                    val output = provider.getOutputStream(created.path).getOrThrow()
+                    val output = created.output
                     TransferCancellation.registerAbort {
                         (output as? TransferAbortable)?.abortTransfer()
                     }.use {
                         output.use {
+                            output.write(head)
+                            fileBytes = head.size.toLong()
                             StreamTransfer.copy(source, output, key, totalBytes = null) { copied ->
-                                fileBytes = copied.bytesTransferred
+                                fileBytes = head.size + copied.bytesTransferred
                                 report(key, fileBytes)
                             }
                         }
@@ -786,15 +880,20 @@ object ArchiveService {
                     cleanup.exceptionOrNull()?.let { cleanupError ->
                         // The incomplete file is still there: it stays tracked so a removal finds it, and the
                         // extraction stops instead of finishing with a broken file in it.
-                        val failure = ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
-                        leaveOut(key, failure)
-                        throw failure
+                        throw ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
                     }
-                    createdPaths.removeAt(createdPaths.lastIndex)
+                    // By path, not the last entry, so a parallel write recorded meanwhile can never be dropped instead.
+                    createdPaths.remove(created.path)
                     providerPaths.remove(key)
                     throw error
                 }
             } catch (error: Throwable) {
+                if (error is ArchiveCleanupException) {
+                    if (error.path !in createdPaths) createdPaths += error.path
+                    providerPaths[key] = error.path
+                    leaveOut(key, error)
+                    throw error
+                }
                 if (!canSkip(error, source)) throw error
                 return leaveOut(key, error)
             }
@@ -906,10 +1005,139 @@ object ArchiveService {
 
         private fun String.foldCase(): String = if (ignoresNameCase == true) lowercase(Locale.ROOT) else this
 
+        private var parallelWrites: ParallelWrites? = null
+
+        /**
+         * Runs [block] with small files written on up to [parallelism] coroutines while the archive is
+         * still read in order, so names, renames and the report come out as in a sequential extraction.
+         * Every write has finished, and been counted, when this returns or throws.
+         */
+        suspend fun <T> withParallelWrites(parallelism: Int, block: suspend () -> T): T {
+            if (parallelism <= 1) return block()
+            return coroutineScope {
+                val writes = ParallelWrites(this, parallelism)
+                parallelWrites = writes
+                try {
+                    block().also { writes.finishAll() }
+                } catch (error: Throwable) {
+                    withContext(NonCancellable) { writes.keepFinished() }
+                    throw error
+                } finally {
+                    parallelWrites = null
+                }
+            }
+        }
+
+        /** Small files queued for writing; their results are applied on the reading coroutine only. */
+        private inner class ParallelWrites(private val scope: CoroutineScope, parallelism: Int) {
+            private val dispatcher = Dispatchers.IO.limitedParallelism(parallelism)
+            private val maxPending = parallelism * 8
+            private val pending = LinkedHashMap<String, PendingWrite>()
+            private var pendingBytes = 0L
+
+            suspend fun write(key: String, parentPath: String, name: String, contents: ByteArray) {
+                while (
+                    pending.isNotEmpty() &&
+                    (pending.size >= maxPending || pendingBytes + contents.size > PARALLEL_BUFFERED_BYTES)
+                ) {
+                    finish(pending.keys.first())
+                }
+                // Each write cleans up after itself, so it is never abandoned halfway.
+                val result = scope.async(dispatcher) {
+                    withContext(NonCancellable) { runCatching { writeContents(parentPath, name, contents) } }
+                }
+                pending[key] = PendingWrite(contents.size, result)
+                pendingBytes += contents.size
+                // Count what has finished, so progress keeps moving.
+                while (pending.values.firstOrNull()?.result?.isCompleted == true) finish(pending.keys.first())
+            }
+
+            /** Waits for the write of [key] and counts it; false when it was not pending. */
+            suspend fun finish(key: String): Boolean {
+                val write = pending.remove(key) ?: return false
+                pendingBytes -= write.size
+                val result = try {
+                    write.result.await()
+                } catch (cancellation: CancellationException) {
+                    Result.failure(cancellation)
+                }
+                result.fold(
+                    onSuccess = { path ->
+                        createdPaths += path
+                        providerPaths[key] = path
+                        completedEntries++
+                        writtenFiles++
+                        writtenBytes += write.size
+                        report(key)
+                    },
+                    onFailure = { error ->
+                        if (error is ArchiveCleanupException) {
+                            // As in a sequential write: the incomplete file stays tracked and the extraction stops.
+                            createdPaths += error.path
+                            providerPaths[key] = error.path
+                            leaveOut(key, error)
+                            throw error
+                        }
+                        if (error !is Exception || cancellationOf(error) != null) throw error
+                        leaveOut(key, error)
+                    },
+                )
+                return true
+            }
+
+            suspend fun finishAll() {
+                while (pending.isNotEmpty()) finish(pending.keys.first())
+            }
+
+            /** After a failure: records the files that were written, or could not be removed, so a removal finds them. */
+            suspend fun keepFinished() {
+                pending.values.forEach { write ->
+                    val result = runCatching { write.result.await() }.getOrElse { Result.failure(it) }
+                    result.onSuccess { path ->
+                        createdPaths += path
+                        completedEntries++
+                        writtenFiles++
+                    }
+                    (result.exceptionOrNull() as? ArchiveCleanupException)?.let { createdPaths += it.path }
+                }
+                pending.clear()
+            }
+
+            private suspend fun writeContents(parentPath: String, name: String, contents: ByteArray): String {
+                TransferCancellation.check()
+                val created = openExactFile(provider, parentPath, name)
+                try {
+                    created.output.use { it.write(contents) }
+                } catch (error: Throwable) {
+                    runCatching {
+                        if (provider.exists(created.path)) provider.delete(created.path).getOrThrow()
+                    }.onFailure { cleanupError ->
+                        throw ArchiveCleanupException(created.path, error).apply { addSuppressed(cleanupError) }
+                    }
+                    throw error
+                }
+                return created.path
+            }
+        }
+
+        private class PendingWrite(val size: Int, val result: Deferred<Result<String>>)
+
         private enum class NodeType {
             DIRECTORY,
             FILE,
         }
+    }
+
+    /** Reads at most [limit] bytes, fewer when the stream ends first. */
+    private fun InputStream.readUpTo(limit: Int): ByteArray {
+        val output = ByteArrayOutputStream(minOf(limit, BUFFER_SIZE))
+        val chunk = ByteArray(minOf(limit, BUFFER_SIZE))
+        while (output.size() < limit) {
+            val read = read(chunk, 0, minOf(chunk.size, limit - output.size()))
+            if (read < 0) break
+            output.write(chunk, 0, read)
+        }
+        return output.toByteArray()
     }
 
     /** "photo.png" becomes "photo (1).png"; folders keep dots in their names. */

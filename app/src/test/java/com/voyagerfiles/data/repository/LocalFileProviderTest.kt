@@ -17,6 +17,22 @@ class LocalFileProviderTest {
     private val provider = LocalFileProvider()
 
     @Test
+    fun openNewFileWritesAFreshFileAndRefusesAnExistingOne() = runBlocking {
+        val folder = temporaryFolder.newFolder("new-files")
+        File(folder, "taken.txt").writeText("existing")
+
+        val created = provider.openNewFile(folder.path, "fresh.txt").getOrThrow()
+        created.output.use { it.write("written".toByteArray()) }
+        val refused = provider.openNewFile(folder.path, "taken.txt")
+
+        assertEquals("fresh.txt", created.name)
+        assertEquals(File(folder, "fresh.txt").absolutePath, created.path)
+        assertEquals("written", File(folder, "fresh.txt").readText())
+        assertTrue(refused.isFailure)
+        assertEquals("existing", File(folder, "taken.txt").readText())
+    }
+
+    @Test
     fun copyDirectoryRefusesExistingDestinationAndPreservesBothTrees() = runBlocking {
         val source = temporaryFolder.newFolder("source")
         File(source, "source-only.txt").writeText("source")

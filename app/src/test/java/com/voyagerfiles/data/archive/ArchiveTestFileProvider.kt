@@ -9,13 +9,15 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Declares [ignoresNameCase], where null leaves it to the extraction's own lookup. With
  * [lookupIgnoresCase], names that differ only in case find the same item and creating a file over one
  * empties it, as an FTP upload to a Windows server does. Deleting [failDeletePath], or a folder above it,
  * fails as a stuck file would, and the first lookup of [failLookupPath] fails as a dropped connection
- * would.
+ * would. [writeDelayMillis] holds each output stream open that long, so parallel writes overlap.
  */
 internal open class ArchiveTestFileProvider(
     private val failOutputPath: String? = null,
@@ -24,10 +26,22 @@ internal open class ArchiveTestFileProvider(
     private val ignoresNameCase: Boolean? = false,
     private val lookupIgnoresCase: Boolean = false,
     private var failLookupPath: String? = null,
+    override val parallelWrites: Int = 1,
+    private val writeDelayMillis: Long = 0,
 ) : FileProvider {
-    private val entries = mutableMapOf<String, Entry>("/" to Entry.Directory)
+    private val entries: MutableMap<String, Entry> = ConcurrentHashMap<String, Entry>().apply { put("/", Entry.Directory) }
+    private val openOutputs = AtomicInteger()
     var largestReadRequest: Int = 0
         private set
+
+    /** The most output streams that were open at the same time. */
+    @Volatile
+    var mostConcurrentWrites: Int = 0
+        private set
+
+    /** Output streams that are open now. */
+    val openOutputCount: Int
+        get() = openOutputs.get()
 
     fun putDirectory(path: String) {
         val normalized = path.normalized()
@@ -70,11 +84,13 @@ internal open class ArchiveTestFileProvider(
     override suspend fun createFile(path: String, name: String): Result<FileItem> = runCatching {
         val fullPath = join(path.stored(), name)
         require(entries[path.stored()] is Entry.Directory) { "Not a directory: $path" }
-        val existing = fullPath.stored()
-        check(entries[existing] == null || (lookupIgnoresCase && entries[existing] is Entry.File)) {
-            "Already exists: $fullPath"
+        synchronized(entries) {
+            val existing = fullPath.stored()
+            check(entries[existing] == null || (lookupIgnoresCase && entries[existing] is Entry.File)) {
+                "Already exists: $fullPath"
+            }
+            entries[existing] = Entry.File(byteArrayOf())
         }
-        entries[existing] = Entry.File(byteArrayOf())
         toFileItem(fullPath)
     }
 
@@ -120,6 +136,8 @@ internal open class ArchiveTestFileProvider(
     override suspend fun getOutputStream(path: String): Result<OutputStream> = runCatching {
         val normalized = path.stored()
         require(entries[normalized] is Entry.File) { "Not a file: $path" }
+        val open = openOutputs.incrementAndGet()
+        synchronized(openOutputs) { mostConcurrentWrites = maxOf(mostConcurrentWrites, open) }
         object : ByteArrayOutputStream() {
             private var failed = false
 
@@ -143,8 +161,14 @@ internal open class ArchiveTestFileProvider(
                 super.write(value)
             }
 
+            private var closed = false
+
             override fun close() {
+                if (closed) return
+                closed = true
+                if (writeDelayMillis > 0) Thread.sleep(writeDelayMillis)
                 if (!failed) entries[normalized] = Entry.File(toByteArray())
+                openOutputs.decrementAndGet()
                 super.close()
             }
         }
