@@ -6,6 +6,9 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -103,6 +106,85 @@ class WebDavRangeSourceTest {
         source.probe().getOrThrow()
 
         assertArrayEquals(byteArrayOf(8, 9), source.read(8, 100).getOrThrow())
+    }
+
+    @Test
+    fun repeatsTheExactRangeAfterAnInterruptedResponseBody() {
+        val payload = "0123456789".repeat(1_000)
+        val response = MockResponse()
+            .setResponseCode(206)
+            .setHeader("Content-Range", "bytes 100-10099/20000")
+            .setBody(payload)
+        val server = enqueue(
+            validProbe().setHeader("Content-Range", "bytes 0-0/20000"),
+            response.clone().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
+            response,
+        )
+        val source = source(server)
+        source.probe().getOrThrow()
+
+        assertArrayEquals(payload.toByteArray(), source.read(100, payload.length).getOrThrow())
+        server.takeRequest()
+        repeat(2) {
+            val request = server.takeRequest()
+            assertEquals("bytes=100-10099", request.getHeader("Range"))
+            assertEquals(AUTHORIZATION, request.getHeader("Authorization"))
+        }
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun stopsAfterThreeInterruptedResponseAttempts() {
+        val interrupted = MockResponse()
+            .setResponseCode(206)
+            .setHeader("Content-Range", "bytes 0-9999/20000")
+            .setBody("x".repeat(10_000))
+            .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
+        val server = enqueue(
+            validProbe().setHeader("Content-Range", "bytes 0-0/20000"),
+            interrupted.clone(), interrupted.clone(), interrupted,
+        )
+        val source = source(server)
+        source.probe().getOrThrow()
+
+        assertTrue(source.read(0, 10_000).isFailure)
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test
+    fun doesNotRetryAuthenticationOrInvalidRangeResponses() {
+        listOf(
+            MockResponse().setResponseCode(401),
+            MockResponse().setResponseCode(206).setHeader("Content-Range", "bytes 2-5/10").setBody("2345"),
+        ).forEach { response ->
+            val server = enqueue(validProbe(), response)
+            val source = source(server)
+            source.probe().getOrThrow()
+
+            assertTrue(source.read(3, 4).isFailure)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test
+    fun closingASourceCancelsTheReadWithoutRetrying() {
+        val server = enqueue(validProbe(), MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val source = source(server)
+        source.probe().getOrThrow()
+        server.takeRequest()
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val read = executor.submit<Result<ByteArray>> { source.read(3, 4) }
+            assertEquals("bytes=3-6", server.takeRequest(5, TimeUnit.SECONDS)!!.getHeader("Range"))
+
+            source.close()
+
+            assertTrue(read.get(5, TimeUnit.SECONDS).isFailure)
+            assertEquals(2, server.requestCount)
+        } finally {
+            source.close()
+            executor.shutdownNow()
+        }
     }
 
     @Test

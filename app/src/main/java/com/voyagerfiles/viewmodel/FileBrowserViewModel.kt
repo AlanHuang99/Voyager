@@ -82,18 +82,21 @@ private val defaultRemoteFileProviderFactory = RemoteFileProviderFactory { conte
 }
 
 private val defaultWebDavPlaybackPreparer = WebDavPlaybackPreparer { context, provider, file ->
-    runCatching {
-        val webDavProvider = provider as? WebDavFileProvider
-            ?: error("The active provider is not WebDAV")
-        val prepared = webDavProvider.createPlaybackSource(file.path).getOrThrow()
-        try {
-            WebDavPlaybackProvider.register(
-                context,
-                PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
-            )
-        } catch (error: Throwable) {
-            prepared.source.close()
-            throw error
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val webDavProvider = provider as? WebDavFileProvider
+                ?: error("The active provider is not WebDAV")
+            val prepared = webDavProvider.createPlaybackSource(file.path).getOrThrow()
+            try {
+                WebDavPlaybackProvider.register(
+                    context,
+                    PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
+                    prepared.identity,
+                )
+            } catch (error: Throwable) {
+                prepared.source.close()
+                throw error
+            }
         }
     }
 }

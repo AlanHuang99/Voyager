@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
+import java.io.IOException
 
 internal data class WebDavRangeMetadata(
     val size: Long,
@@ -79,6 +80,17 @@ internal class WebDavRangeSource(
         .build()
 
     private fun <T> execute(request: Request, block: (Response) -> T): T {
+        repeat(MAX_ATTEMPTS) { attempt ->
+            try {
+                return executeOnce(request, block)
+            } catch (error: IOException) {
+                if (attempt == MAX_ATTEMPTS - 1 || synchronized(lifecycleLock) { closed }) throw error
+            }
+        }
+        error("WebDAV range attempts exhausted")
+    }
+
+    private fun <T> executeOnce(request: Request, block: (Response) -> T): T {
         val call = client.newCall(request)
         synchronized(lifecycleLock) {
             check(!closed) { "WebDAV range source is closed" }
@@ -125,6 +137,7 @@ internal class WebDavRangeSource(
     )
 
     private companion object {
+        const val MAX_ATTEMPTS = 3
         val CONTENT_RANGE = Regex("bytes (\\d+)-(\\d+)/(\\d+)")
         val EMPTY_CONTENT_RANGE = Regex("bytes \\*/0")
     }

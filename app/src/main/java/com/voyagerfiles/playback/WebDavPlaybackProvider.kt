@@ -145,8 +145,9 @@ class WebDavPlaybackProvider : ContentProvider() {
 
         private val SUPPORTED_COLUMNS = listOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
 
-        internal fun register(context: Context, entry: PlaybackEntry): Uri {
-            val token = currentStore().register(entry)
+        internal fun register(context: Context, entry: PlaybackEntry, identity: PlaybackResourceIdentity? = null): Uri {
+            val stableToken = identity?.let { PlaybackIdentityStore(context.noBackupFilesDir).tokenFor(it) }
+            val token = currentStore().register(entry, stableToken)
             return Uri.Builder()
                 .scheme("content")
                 .authority("${context.packageName}.webdavplayback")
