@@ -50,6 +50,7 @@ sealed class Screen(val route: String) {
     data object Category : Screen("category/{category}") {
         fun createRoute(category: StorageCategory): String = "category/${category.name}"
     }
+    data object Search : Screen("search")
     data object Connections : Screen("connections")
     data object Trash : Screen("trash")
     data object Settings : Screen("settings")
@@ -145,6 +146,7 @@ fun AppNavigation(
                 hasAllFilesAccess = hasAllFilesAccess,
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
                 onNavigateToCategory = { navController.navigate(Screen.Category.createRoute(it)) },
+                onNavigateToSearch = { navController.navigate(Screen.Search.route) },
             )
         }
 
@@ -154,7 +156,10 @@ fun AppNavigation(
         ) {
             BrowserScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.navigateHome() },
+                onNavigateBack = {
+                    if (navController.previousBackStackEntry?.destination?.route == Screen.Search.route) navController.popBackStack()
+                    else navController.navigateHome()
+                },
                 onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
                 hasAllFilesAccess = hasAllFilesAccess,
             )
@@ -187,6 +192,20 @@ fun AppNavigation(
                     onNavigateBack = { navController.popBackStack() },
                 )
             }
+        }
+
+        composable(Screen.Search.route) {
+            val browseState by viewModel.browseState.collectAsState()
+            StorageSearchScreen(
+                showHidden = browseState.showHidden,
+                hasAllFilesAccess = hasAllFilesAccess,
+                onRequestAllFilesAccess = onRequestAllFilesAccess,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenFolder = { path ->
+                    viewModel.openLocalRoot(path)
+                    navController.navigate(Screen.Browser.createRoute(path))
+                },
+            )
         }
 
         composable(Screen.Connections.route) {

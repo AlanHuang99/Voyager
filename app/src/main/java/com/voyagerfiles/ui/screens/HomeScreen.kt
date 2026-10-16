@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
@@ -90,6 +91,7 @@ fun HomeScreen(
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit,
     onNavigateToCategory: (StorageCategory) -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
     val dismissedTranslationNotices by viewModel.dismissedTranslationNotices.collectAsState()
@@ -131,6 +133,9 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
                 actions = {
+                    IconButton(onClick = onNavigateToSearch) {
+                        Icon(Icons.Filled.Search, stringResource(R.string.search_storage_title))
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Filled.Settings, stringResource(R.string.content_desc_settings))
                     }

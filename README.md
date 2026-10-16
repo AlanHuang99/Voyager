@@ -36,7 +36,7 @@ F-Droid verifies releases through its own build process, so a new GitHub release
 ## Get started
 
 1. Open a storage location from Home. Grant Android's all-files access to browse shared storage, or continue in limited mode and choose a folder through Android's folder picker.
-2. Tap a folder to browse or a file to open it. Search filters the current folder; type filters and sorting help narrow the list.
+2. Tap a folder to browse or a file to open it. The browser's search filters the current folder; Home's search finds file names across accessible mounted shared storage. Type filters and sorting help narrow the browser list.
 3. Long-press an item to select it, then use the available actions to copy, move, share, rename, or delete. Direct-local deletions can go to Trash for later restoration.
 4. Add a connection for a remote server. SFTP, FTP, and SMB file taps ask before downloading by default. WebDAV can open files in another app directly when the server supports the required byte ranges.
 

@@ -530,4 +530,17 @@
     <string name="shizuku_connecting">Connecting to Shizuku…</string>
     <string name="shizuku_manager">Open Shizuku</string>
     <string name="shizuku_unavailable">Install and start Shizuku, then try again.</string>
+    <string name="search_storage_title">Search shared storage</string>
+    <string name="search_storage_scope">Files across accessible mounted shared storage.</string>
+    <string name="search_file_name">File name</string>
+    <string name="search_ready">Enter a file name and choose Search.</string>
+    <string name="search_results_for">Results for %1$s</string>
+    <string name="search_permission_required">Full storage access is required to search shared storage.</string>
+    <string name="search_stale_file">This file changed or is no longer accessible. Search again.</string>
+    <string name="search_no_matches">No matching files</string>
+    <string name="content_desc_open_location_named">Open folder for %1$s</string>
+    <plurals name="search_result_count">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
 </resources>
