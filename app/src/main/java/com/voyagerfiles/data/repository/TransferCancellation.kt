@@ -4,6 +4,7 @@ import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.asContextElement
 
@@ -57,6 +58,9 @@ class TransferCancellation {
         fun check() {
             if (current.get()?.isRequested == true) throw CancellationException("Transfer cancelled")
         }
+
+        /** Hides the operation's token, for cleanup and questions that must still run after a cancel. */
+        fun detached(): CoroutineContext.Element = current.asContextElement(null)
     }
 }
 

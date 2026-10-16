@@ -69,6 +69,27 @@
     <string name="archive_extracted_to">%1$s に抽出されました</string>
     <string name="archive_extraction_cancelled">Extraction cancelled</string>
     <string name="archive_compression_cancelled">Compression cancelled</string>
+    <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
+    <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
+    <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
+    <plurals name="archive_entries_renamed">
+        <item quantity="one">%d item renamed</item>
+        <item quantity="other">%d items renamed</item>
+    </plurals>
+    <plurals name="archive_entries_not_extracted">
+        <item quantity="one">%d item could not be extracted</item>
+        <item quantity="other">%d items could not be extracted</item>
+    </plurals>
+    <string name="archive_details">Details</string>
+    <string name="archive_details_title">Extraction details</string>
+    <string name="archive_details_not_extracted">Not extracted</string>
+    <string name="archive_details_renamed">Renamed, because this location does not tell upper and lower case apart</string>
+    <plurals name="archive_details_more">
+        <item quantity="one">and %d more</item>
+        <item quantity="other">and %d more</item>
+    </plurals>
+    <string name="archive_remove_extracted">Remove extracted files</string>
+    <string name="progress_removing_extracted">Removing extracted files</string>
     <string name="paste_success">貼り付けに成功しました</string>
     <string name="file_already_on_device">このファイルは既にこのデバイスに保存されています</string>
     <string name="choose_inside_location">この場所にあるファイルまたはフォルダを選択してください</string>

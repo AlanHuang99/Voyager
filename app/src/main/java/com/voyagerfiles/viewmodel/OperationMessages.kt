@@ -3,6 +3,7 @@ package com.voyagerfiles.viewmodel
 import androidx.annotation.StringRes
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveConflictException
+import com.voyagerfiles.data.archive.PartialExtractionException
 import com.voyagerfiles.ui.text.UiText
 import java.io.FileNotFoundException
 import java.net.ConnectException
@@ -25,6 +26,24 @@ object OperationMessages {
         R.plurals.partial_operation_failed,
         total,
         listOf(failed, total, UiText.Resource(action), reason(error)),
+    )
+
+    fun archiveExtracted(rootName: String, renamedEntries: Int, notExtractedEntries: Int): UiText {
+        val notes = listOfNotNull(
+            renamedEntries.takeIf { it > 0 }?.let { UiText.Plural(R.plurals.archive_entries_renamed, it, listOf(it)) },
+            notExtractedEntries.takeIf { it > 0 }?.let { UiText.Plural(R.plurals.archive_entries_not_extracted, it, listOf(it)) },
+        )
+        val id = when (notes.size) {
+            0 -> R.string.archive_extracted_to
+            1 -> R.string.archive_extracted_to_with_note
+            else -> R.string.archive_extracted_to_with_notes
+        }
+        return UiText.Resource(id, listOf(UiText.Dynamic(rootName)) + notes)
+    }
+
+    fun archivePartiallyExtracted(error: PartialExtractionException): UiText = UiText.Resource(
+        R.string.archive_extraction_stopped_kept,
+        listOf(reason(error.cause ?: error), UiText.Dynamic(error.root.name)),
     )
 
     fun reason(error: Throwable): UiText {

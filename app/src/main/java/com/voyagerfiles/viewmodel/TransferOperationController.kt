@@ -1,5 +1,6 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
 import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.ui.text.UiText
 import kotlinx.coroutines.CancellationException
@@ -21,6 +22,8 @@ class TransferOperationController(
     private val mutableResult = MutableStateFlow<OperationResult?>(null)
     val lastResult = mutableResult.asStateFlow()
     val conflicts = TransferConflictDecisions()
+    private var archiveReport: ArchiveExtractionReport? = null
+
     private var reportedFailure: Throwable? = null
     private var nextId = 0L
     private var cancellation: TransferCancellation? = null
@@ -35,6 +38,7 @@ class TransferOperationController(
         if (mutableState.value is OperationState.Running) return false
         mutableResult.value = null
         conflicts.reset()
+        archiveReport = null
         reportedFailure = null
         val token = TransferCancellation()
         cancellation = token
@@ -77,15 +81,24 @@ class TransferOperationController(
         mutableState.value = running.copy(cancellable = false)
     }
 
+    /** Hides Cancel for work that must not stop halfway, such as removing a partial extraction. */
+    fun disallowCancel() {
+        val running = mutableState.value as? OperationState.Running ?: return
+        if (running.cancellable) mutableState.value = running.copy(cancellable = false)
+    }
+
     fun recordFailure(error: Throwable) {
         if (mutableState.value is OperationState.Running && reportedFailure == null) reportedFailure = error
     }
 
     fun dismissResult() { mutableResult.value = null }
 
+    /** What the running extraction wrote, shown with its result. */
+    fun attachArchiveReport(report: ArchiveExtractionReport) { archiveReport = report }
+
     private fun finish(outcome: OperationOutcome) {
         val progress = (mutableState.value as? OperationState.Running)?.progress ?: return
-        mutableResult.value = OperationResult(progress.copy(currentItemName = null), outcome)
+        mutableResult.value = OperationResult(progress.copy(currentItemName = null), outcome, archiveReport)
     }
 
     fun update(progress: TransferProgress) {
