@@ -1,0 +1,1 @@
+Restore SMB browsing after a cached share or connection closes. Add ZIP64 support for files listed at 4 GiB or larger. Fix surface container colors in built-in themes. Update German and Italian labels.

@@ -42,8 +42,8 @@
     <string name="progress_renaming">Umbenennung</string>
     <string name="progress_compressing">Komprimierung</string>
     <string name="progress_extracting">Extraktion</string>
-    <string name="progress_reading_archive">Reading archive</string>
-    <string name="progress_preparing_archive">Preparing</string>
+    <string name="progress_reading_archive">Archiv lesen</string>
+    <string name="progress_preparing_archive">Vorbereiten</string>
     <string name="progress_copying">Kopieren</string>
     <string name="progress_moving">Umzug</string>
     <string name="progress_pasting">Einfügen</string>
@@ -68,8 +68,8 @@
     <string name="selected_archive_unavailable">Das ausgewählte Archiv ist nicht mehr verfügbar. Aktualisieren Sie den Ordner und versuchen Sie es erneut.</string>
     <string name="archive_unavailable">Das Archiv ist nicht mehr verfügbar. Aktualisieren Sie den Ordner und versuchen Sie es erneut.</string>
     <string name="archive_extracted_to">Extrahiert nach %1$s</string>
-    <string name="archive_extraction_cancelled">Extraction cancelled</string>
-    <string name="archive_compression_cancelled">Compression cancelled</string>
+    <string name="archive_extraction_cancelled">Extraktion abgebrochen</string>
+    <string name="archive_compression_cancelled">Kompression abgebrochen</string>
     <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
     <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
     <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
@@ -340,8 +340,8 @@
     <string name="settings_show_hidden_files">Versteckte Dateien anzeigen</string>
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
-    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
-    <string name="download_confirm_title">Download to this device?</string>
+    <string name="settings_confirm_remote_downloads">Vor dem Herunterladen externer Dateien fragen</string>
+    <string name="download_confirm_title">Auf dieses Gerät herunterladen?</string>
     <string name="settings_about">Um</string>
     <string name="translation_help">Hilf mit, die Übersetzungen zu verbessern</string>
     <string name="translation_notice">Diese Übersetzung ist noch in Arbeit.</string>
