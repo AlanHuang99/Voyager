@@ -31,6 +31,7 @@ internal class SmbVirtualRootException(
 ) : IllegalStateException(message)
 
 internal interface SmbSessionHandle {
+    val isConnected: Boolean get() = true
     fun discover(discovery: SmbShareDiscovery): List<SmbDiscoveredShare>
     fun connectShare(name: String): DiskShare
     fun close()
@@ -81,6 +82,8 @@ private class RealSmbSessionHandle(
     private val connection: Connection,
     private val session: Session,
 ) : SmbSessionHandle {
+    override val isConnected: Boolean get() = connection.isConnected
+
     override fun discover(discovery: SmbShareDiscovery): List<SmbDiscoveredShare> = discovery.discover(session)
 
     override fun connectShare(name: String): DiskShare = session.connectShare(name) as DiskShare
@@ -154,16 +157,19 @@ class SmbFileProvider internal constructor(
     private var discoveredShares: List<SmbDiscoveredShare>? = null
     private var virtualRootItemsCache: List<FileItem>? = null
 
-    private fun ensureSession(): SmbSessionHandle = sessionHandle ?: sessionFactory.connect(connection).also {
-        sessionHandle = it
+    private fun ensureSession(): SmbSessionHandle {
+        sessionHandle?.takeIf { it.isConnected }?.let { return it }
+        closeConnection()
+        return sessionFactory.connect(connection).also { sessionHandle = it }
     }
 
     private fun ensureShare(name: String): DiskShare {
-        if (activeShareName == name && share != null) return checkNotNull(share)
+        val session = ensureSession()
+        if (activeShareName == name && share?.isConnected == true) return checkNotNull(share)
         runCatching { share?.close() }
         share = null
         activeShareName = null
-        return ensureSession().connectShare(name).also {
+        return session.connectShare(name).also {
             share = it
             activeShareName = name
         }
@@ -507,17 +513,19 @@ class SmbFileProvider internal constructor(
     }
 
     override suspend fun disconnect() {
-        withContext(Dispatchers.IO) {
-            val currentShare = share
-            val currentSession = sessionHandle
-            share = null
-            activeShareName = null
-            sessionHandle = null
-            discoveredShares = null
-            virtualRootItemsCache = null
-            runCatching { currentShare?.close() }
-            runCatching { currentSession?.close() }
-        }
+        withContext(Dispatchers.IO) { closeConnection() }
+    }
+
+    private fun closeConnection() {
+        val currentShare = share
+        val currentSession = sessionHandle
+        share = null
+        activeShareName = null
+        sessionHandle = null
+        discoveredShares = null
+        virtualRootItemsCache = null
+        runCatching { currentShare?.close() }
+        runCatching { currentSession?.close() }
     }
 
     private fun appendPath(parent: String, name: String): String = if (parent == "/") {

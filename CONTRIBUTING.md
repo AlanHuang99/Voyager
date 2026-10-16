@@ -23,11 +23,14 @@ If an issue already describes your problem, add the missing details there. Discu
 
 1. Fork the repository and create a branch for one focused change.
 2. Follow the [README build instructions](README.md#build-from-source) and read the relevant parts of [Architecture](docs/ARCHITECTURE.md).
-3. Keep user-facing strings in Android resources. Avoid editing translated copies for new English text; the Crowdin workflow synchronizes translations for review.
+3. Add user-facing strings to the English Android resources. Run the command below to fill missing locale entries with English while preserving existing translations. Feature PRs do not need to translate new wording; Crowdin supplies translations for review later.
 4. Verify changed behavior with focused tests or device checks, then run the complete local gate below for code changes. Documentation changes should have working links and accurate commands.
 5. Open a pull request describing the problem, resulting behavior, verification commands, and any device or server setup used. Link the relevant issue and include sanitized screenshots when the interface changes.
 
+Run the resource preparation command from the repository root after adding English strings. It uses the checked-in resources and needs no Crowdin account or token:
+
 ```bash
+uv run --no-project python scripts/prepare_translation_export.py
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
