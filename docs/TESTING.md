@@ -132,6 +132,8 @@ The test starts `dperson/samba@sha256:66088b78a19810dd1457a8f39340e95e663c728083
 ANDROID_SERIAL=DEVICE_ADDRESS:WIRELESS_DEBUGGING_PORT ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.data.remote.smb.SmbAndroidIntegrationTest -Pandroid.testInstrumentationRunnerArguments.smbHost=SERVER_ADDRESS -Pandroid.testInstrumentationRunnerArguments.smbPort=SERVER_PORT --stacktrace
 ```
 
+Run `SmbConnectionRecoveryAndroidTest` with the same `smbHost` and `smbPort` arguments to check directory creation, uploads, and reloads in direct-share and discovery modes, activity background/foreground transitions, and recovery after closing the cached share or browser transport. It uses the same disposable `media` share and test account as `SmbAndroidIntegrationTest`.
+
 ## SAF write regression
 
 Use Android's document-tree picker to create or select a disposable `VoyagerSafTest` folder. From a direct-local browser session, copy a small file and a directory containing a nested file, switch to the document-tree session, and paste them. Repeat with Cut so the source is removed only after the destination completes. Verify exact file bytes at the destination, no existing item is overwritten, a deliberately interrupted transfer leaves no partial destination, and logcat contains neither `rbDocOpen` nor `EPERM`. Remove all disposable fixtures when finished.
