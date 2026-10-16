@@ -68,6 +68,24 @@ class StorageCategoryIndex(
         volumes: List<StorageVolumeInfo>,
         showHidden: Boolean,
         hasPermission: () -> Boolean,
+    ): Flow<CategoryIndexState> = scanMatching(volumes, showHidden, hasPermission, category.filter::matches)
+
+    fun search(
+        query: String,
+        volumes: List<StorageVolumeInfo>,
+        showHidden: Boolean,
+        hasPermission: () -> Boolean,
+    ): Flow<CategoryIndexState> {
+        val name = query.trim()
+        require(name.isNotEmpty()) { "Enter a file name to search" }
+        return scanMatching(volumes, showHidden, hasPermission) { it.name.contains(name, ignoreCase = true) }
+    }
+
+    private fun scanMatching(
+        volumes: List<StorageVolumeInfo>,
+        showHidden: Boolean,
+        hasPermission: () -> Boolean,
+        accepts: (FileItem) -> Boolean,
     ): Flow<CategoryIndexState> = flow {
         val matches = mutableListOf<FileItem>()
         val coverage = volumes.map(::CategoryVolumeCoverage).toMutableList()
@@ -138,7 +156,7 @@ class StorageCategoryIndex(
                         lastModified = Date(attributes.lastModifiedTime().toMillis()),
                         isHidden = path.any { it.toString().startsWith('.') },
                     )
-                    if (category.filter.matches(file)) {
+                    if (accepts(file)) {
                         if (matches.size == maxResults) throw CategoryResultLimit()
                         matches += file
                     }
