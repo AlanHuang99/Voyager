@@ -93,4 +93,5 @@ private val FileSource.displayLabelRes: Int
         FileSource.SMB -> R.string.protocol_smb
         FileSource.WEBDAV -> R.string.protocol_webdav
         FileSource.ROOT -> R.string.root_title
+        FileSource.SHIZUKU -> R.string.shizuku_title
     }

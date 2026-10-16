@@ -331,6 +331,27 @@ class FileBrowserViewModel @JvmOverloads constructor(
         }
     }
 
+    fun openShizukuSession(provider: com.voyagerfiles.data.shizuku.ShizukuFileProvider) {
+        cancelInitialNavigation()
+        viewModelScope.launch {
+            val sessionId = "shizuku:/"
+            val previous = sessionProviders.put(sessionId, provider)
+            if (previous !== provider) previous?.disconnect()
+            if (_sessions.value.none { it.id == sessionId }) {
+                _sessions.update { sessions ->
+                    sessions + BrowserSession(
+                        id = sessionId,
+                        title = getApplication<Application>().getString(R.string.shizuku_title),
+                        source = FileSource.SHIZUKU,
+                        rootPath = "/",
+                        currentPath = "/storage/emulated/0/Android",
+                    )
+                }
+            }
+            activateSessionInternal(sessionId)
+        }
+    }
+
     fun openRootTextEditor(file: FileItem) {
         val provider = fileProvider as? com.voyagerfiles.data.repository.RootFileProvider
             ?: return

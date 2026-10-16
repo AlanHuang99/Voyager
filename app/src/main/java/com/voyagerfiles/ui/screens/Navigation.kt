@@ -68,6 +68,7 @@ fun AppNavigation(
     val context = LocalContext.current
     var shortcutFailed by remember { mutableStateOf(false) }
     var confirmRoot by remember { mutableStateOf(false) }
+    var showShizuku by remember { mutableStateOf(false) }
     val sessionClosureGeneration by viewModel.sessionClosureGeneration.collectAsState()
 
     LaunchedEffect(sessionClosureGeneration) {
@@ -214,8 +215,19 @@ fun AppNavigation(
                 hasAllFilesAccess = hasAllFilesAccess,
                 onRequestAllFilesAccess = onRequestAllFilesAccess,
                 onOpenRoot = { confirmRoot = true },
+                onOpenShizuku = { showShizuku = true },
             )
         }
+    }
+    if (showShizuku) {
+        ShizukuAccessDialog(
+            onDismiss = { showShizuku = false },
+            onConnected = { provider ->
+                viewModel.openShizukuSession(provider)
+                showShizuku = false
+                navController.navigate(Screen.Browser.createRoute("/storage/emulated/0/Android"))
+            },
+        )
     }
     if (confirmRoot) {
         AlertDialog(

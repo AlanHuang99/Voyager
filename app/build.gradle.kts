@@ -87,6 +87,7 @@ android {
     }
 
     buildFeatures {
+        aidl = true
         compose = true
         buildConfig = true
     }
@@ -113,6 +114,8 @@ android {
 }
 
 dependencies {
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     // Core Android
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

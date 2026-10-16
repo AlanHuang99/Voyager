@@ -92,6 +92,7 @@ fun SettingsScreen(
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit,
     onOpenRoot: () -> Unit = {},
+    onOpenShizuku: () -> Unit = {},
 ) {
     val currentTheme by viewModel.theme.collectAsState()
     val openTranslationLink = rememberTranslationLinkOpener()
@@ -171,6 +172,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             TextButton(onClick = onOpenRoot) { Text(stringResource(R.string.root_open)) }
+            TextButton(onClick = onOpenShizuku) { Text(stringResource(R.string.shizuku_open)) }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 stringResource(

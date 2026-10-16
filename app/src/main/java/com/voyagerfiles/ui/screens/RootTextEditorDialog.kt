@@ -23,12 +23,12 @@ import com.voyagerfiles.data.repository.RootFileProvider
 import com.voyagerfiles.viewmodel.RootTextEditorState
 
 @Composable
-internal fun RootTextEditorDialog(state: RootTextEditorState, onChange: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit) {
+internal fun RootTextEditorDialog(state: RootTextEditorState, onChange: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit, shizuku: Boolean = false) {
     var confirmDiscard by rememberSaveable(state.path) { mutableStateOf(false) }
     val dismiss = { if (!state.busy) { if (state.changed) confirmDiscard = true else onClose() } }
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(stringResource(R.string.root_editor_title)) },
+        title = { Text(stringResource(if (shizuku) R.string.shizuku_editor_title else R.string.root_editor_title)) },
         text = {
             Column {
                 Text(state.path, style = MaterialTheme.typography.labelMedium)

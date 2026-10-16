@@ -510,4 +510,12 @@
     <string name="search_bar_bottom">Always visible at bottom</string>
     <string name="action_search">Search</string>
     <string name="action_close_search">Close search</string>
+    <string name="shizuku_title" translatable="false">Shizuku</string>
+    <string name="shizuku_editor_title">Edit file with Shizuku</string>
+    <string name="shizuku_open">Open Shizuku session</string>
+    <string name="shizuku_description">Browse and manage files using Shizuku. Start Shizuku, then allow Voyager when asked. Access depends on Android and the permissions of the Shizuku service.</string>
+    <string name="shizuku_connect">Connect</string>
+    <string name="shizuku_connecting">Connecting to Shizuku…</string>
+    <string name="shizuku_manager">Open Shizuku</string>
+    <string name="shizuku_unavailable">Install and start Shizuku, then try again.</string>
 </resources>

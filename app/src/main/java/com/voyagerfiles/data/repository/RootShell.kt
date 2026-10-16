@@ -20,6 +20,8 @@ internal fun rootSuCommand(script: String): List<String> = listOf("su", "--mount
 class RootShell internal constructor(
     private val startProcess: (String) -> Process = { ProcessBuilder(rootSuCommand(it)).start() },
     private val requireRoot: Boolean = true,
+    private val accessName: String = "Root",
+    private val externalInputPipe: Boolean = false,
     private val timeoutMillis: Long = 30_000,
     private val temporaryDirectory: String = System.getProperty("java.io.tmpdir") ?: "/data/local/tmp",
 ) : Closeable {
@@ -28,13 +30,18 @@ class RootShell internal constructor(
 
     private fun start(script: String): Command {
         val command = synchronized(this) {
-            if (closed) throw IOException("Root session is closed")
+            if (closed) throw IOException("$accessName session is closed")
             if (commands.size >= 8) throw IOException("Too many active root operations")
             val token = UUID.randomUUID().toString()
             val workerScript = "IFS= read -r expected || exit 125; " +
                 "[ \"\$\$\" = \"\$expected\" ] && kill -0 \"-\$\$\" 2>/dev/null || { echo 'Root worker isolation failed' >&2; exit 125; }; " +
                 "printf '\\n%s:WORKER\\n' ${quote(token)} >&2; exec sh -c ${quote(script)}"
             val supervisor = supervisorTemplate.replace("@TOKEN@", quote(token))
+                .replace("@INPUT_SETUP@", if (externalInputPipe) {
+                    "input=@VOYAGER_SHIZUKU_PIPE@; [ -p \"\$input\" ] || finish 125"
+                } else {
+                    "input=./input; mkfifo -m 600 \"\$input\" || finish 125"
+                })
                 .replace("@DURATION@", (timeoutMillis / 1000.0).toString())
                 .replace("@TEMP@", quote(temporaryDirectory))
                 .replace("@SCRIPT@", quote(workerScript))
@@ -44,7 +51,7 @@ class RootShell internal constructor(
                 startProcess(guard + "command -v setsid >/dev/null 2>&1 || { echo 'Root access requires setsid' >&2; exit 125; }; " +
                     "set +m; exec 9<&0; setsid sh -c ${quote(supervisor)} <&9 & launcher=\$!; wait \"\$launcher\"")
             } catch (error: IOException) {
-                throw IOException("Root access unavailable. Install or authorize a compatible su manager.", error)
+                throw IOException(if (accessName == "Root") "Root access unavailable. Install or authorize a compatible su manager." else "$accessName disconnected. Start and authorize $accessName, then open a new session.", error)
             }
             Command(process, token).also { commands.add(it) }
         }

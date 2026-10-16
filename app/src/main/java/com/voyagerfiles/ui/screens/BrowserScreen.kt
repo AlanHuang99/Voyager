@@ -184,7 +184,7 @@ fun BrowserScreen(
     val state by viewModel.browseState.collectAsState()
     val rootEditor by viewModel.rootEditor.collectAsState()
     rootEditor?.let { editor ->
-        RootTextEditorDialog(editor, viewModel::updateRootText, viewModel::saveRootText, viewModel::closeRootTextEditor)
+        RootTextEditorDialog(editor, viewModel::updateRootText, viewModel::saveRootText, viewModel::closeRootTextEditor, shizuku = state.source == FileSource.SHIZUKU)
     }
     val bookmarks by viewModel.bookmarks.collectAsState()
     val isCurrentFolderBookmarked = bookmarks.any {
@@ -1095,7 +1095,7 @@ fun BrowserScreen(
                                             handleRemoteFileTap(file)
                                         } else if (file.isDirectory) {
                                             navigateTo(file.path)
-                                        } else if (state.source == FileSource.ROOT) {
+                                        } else if (state.source == FileSource.ROOT || state.source == FileSource.SHIZUKU) {
                                             viewModel.openRootTextEditor(file)
                                         } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                             handleDeviceFileTap(file)
@@ -1143,7 +1143,7 @@ fun BrowserScreen(
                                             handleRemoteFileTap(file)
                                         } else if (file.isDirectory) {
                                             navigateTo(file.path)
-                                        } else if (state.source == FileSource.ROOT) {
+                                        } else if (state.source == FileSource.ROOT || state.source == FileSource.SHIZUKU) {
                                             viewModel.openRootTextEditor(file)
                                         } else if (state.source == FileSource.LOCAL || state.source == FileSource.SAF) {
                                             handleDeviceFileTap(file)

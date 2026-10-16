@@ -93,3 +93,7 @@ JVM tests cover pure models, sharing plans, validation, opaque provider identifi
 The search-bar preference selects the existing top field, an expandable compact toolbar action, or a bottom field. Closing compact search clears its query before returning to the folder. Local folder bookmark, shortcut, and duplicate-discovery actions use the same menu component for the current folder and a single selected folder.
 
 Directory scroll memory is scoped by session and provider path. Returning to a parent or reactivating a session restores the saved position; refreshing retains the list/grid state outside the loading branch. Scroll callbacks carry their session and path so an old composition cannot overwrite a different active directory. Long-press selection waits for physical pointer movement beyond touch slop before extending the range or scrolling automatically; a toolbar layout change alone keeps the initial item selected.
+
+## Shizuku access
+
+`ShizukuFileProvider` reuses the supervised shell file operations with `FileSource.SHIZUKU`. A non-daemon Shizuku UserService supplies anonymous command pipes and descriptor streams; it verifies the owning app UID on Binder calls. Each connection has its own service lifetime. Starting, stopping, or denying Shizuku does not change local, SAF, root, or remote access. File operations run with the service's actual shell or root privilege; shell access does not grant access to other apps' private `/data/user` directories.
