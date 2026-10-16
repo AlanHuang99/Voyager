@@ -403,6 +403,9 @@
     <string name="browser_extract_archive_message">Extract %1$s into a new folder in this location?</string>
     <string name="browser_extract">Extract</string>
     <string name="playback_direct_unavailable_title">Direct opening unavailable</string>
+    <string name="playback_service_channel">Remote file access</string>
+    <string name="playback_service_media">Remote playback</string>
+    <string name="playback_service_description">Serving a file opened in another app</string>
     <string name="playback_direct_unavailable_message">This file could not be opened remotely. Download the file instead?</string>
     <string name="browser_search_placeholder">Search this folder</string>
     <string name="browser_sessions">Sessions</string>

@@ -543,4 +543,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">Acesso a arquivos remotos</string>
+    <string name="playback_service_media">Reprodução remota</string>
+    <string name="playback_service_description">Fornecendo um arquivo aberto em outro aplicativo</string>
 </resources>

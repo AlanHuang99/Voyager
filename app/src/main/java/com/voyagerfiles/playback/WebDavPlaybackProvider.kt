@@ -3,6 +3,8 @@ package com.voyagerfiles.playback
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
@@ -56,15 +58,20 @@ class WebDavPlaybackProvider : ContentProvider() {
         if (mode != "r") throw FileNotFoundException("WebDAV playback is read-only")
         val token = token(uri) ?: throw FileNotFoundException("Unknown WebDAV playback URI")
         val lease = currentStore().acquire(token) ?: throw FileNotFoundException("Expired WebDAV playback URI")
+        val lifetime = PlaybackLifetimeKeeper.store.acquire(lease.entry) ?: run {
+            lease.close()
+            throw FileNotFoundException("WebDAV playback has not been prepared in the foreground")
+        }
         val storageManager = requireNotNull(context).getSystemService(StorageManager::class.java)
         return try {
             storageManager.openProxyFileDescriptor(
                 ParcelFileDescriptor.MODE_READ_ONLY,
-                PlaybackProxyCallback(lease),
+                PlaybackProxyCallback(lease, lifetime),
                 ensureCallbackThread(),
             )
         } catch (error: Throwable) {
             lease.close()
+            lifetime.close()
             throw error
         }
     }
@@ -109,6 +116,7 @@ class WebDavPlaybackProvider : ContentProvider() {
 
     private class PlaybackProxyCallback(
         private val lease: PlaybackTokenStore.Lease,
+        private val lifetime: AutoCloseable,
     ) : ProxyFileDescriptorCallback() {
         private val entry get() = lease.entry
         override fun onGetSize(): Long = entry.size
@@ -127,7 +135,7 @@ class WebDavPlaybackProvider : ContentProvider() {
         }
 
         override fun onRelease() {
-            lease.close()
+            try { lease.close() } finally { lifetime.close() }
         }
     }
 
@@ -145,21 +153,43 @@ class WebDavPlaybackProvider : ContentProvider() {
 
         private val SUPPORTED_COLUMNS = listOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
 
-        internal fun register(context: Context, entry: PlaybackEntry, identity: PlaybackResourceIdentity? = null): Uri {
-            val stableToken = identity?.let { PlaybackIdentityStore(context.noBackupFilesDir).tokenFor(it) }
-            val token = currentStore().register(entry, stableToken)
-            return Uri.Builder()
-                .scheme("content")
-                .authority("${context.packageName}.webdavplayback")
-                .appendPath(token)
-                .build()
+        internal suspend fun prepare(
+            context: Context,
+            entry: PlaybackEntry,
+            identity: PlaybackResourceIdentity? = null,
+            startupTimeoutMillis: Long = 5_000,
+            start: (Context, Intent) -> Unit = { app, intent -> ContextCompat.startForegroundService(app, intent); Unit },
+        ): PreparedWebDavPlayback {
+            val store = currentStore()
+            var token: String? = null
+            try {
+                val stableToken = identity?.let { PlaybackIdentityStore(context.noBackupFilesDir).tokenFor(it) }
+                val registeredToken = store.register(entry, stableToken)
+                token = registeredToken
+                val pending = PlaybackLifetimeKeeper.prepare(context, entry, registeredToken, startupTimeoutMillis, start) {
+                    store.remove(registeredToken, entry)
+                }
+                val uri = Uri.Builder()
+                    .scheme("content")
+                    .authority("${context.packageName}.webdavplayback")
+                    .appendPath(registeredToken)
+                    .build()
+                return PreparedWebDavPlayback(uri) { PlaybackLifetimeKeeper.store.cancel(pending.id) }
+            } catch (error: Throwable) {
+                if (token != null) store.remove(token, entry) else entry.source.close()
+                throw error
+            }
         }
 
         internal fun revoke(uri: Uri) {
-            uri.pathSegments.singleOrNull()?.let { currentStore().remove(it) }
+            uri.pathSegments.singleOrNull()?.let {
+                PlaybackLifetimeKeeper.store.cancelGroup(it)
+                currentStore().remove(it)
+            }
         }
 
         internal fun setStoreForTest(store: PlaybackTokenStore) {
+            PlaybackLifetimeKeeper.store.clear()
             synchronized(storeLock) {
                 tokenStore.clear()
                 tokenStore = store
@@ -167,6 +197,7 @@ class WebDavPlaybackProvider : ContentProvider() {
         }
 
         internal fun resetForTest() {
+            PlaybackLifetimeKeeper.store.clear()
             synchronized(storeLock) {
                 tokenStore.clear()
                 tokenStore = PlaybackTokenStore()

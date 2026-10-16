@@ -528,4 +528,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">远程文件访问</string>
+    <string name="playback_service_media">远程播放</string>
+    <string name="playback_service_description">正在提供其他应用打开的文件</string>
 </resources>

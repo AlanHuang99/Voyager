@@ -46,6 +46,7 @@ import com.voyagerfiles.data.repository.LocalTrashManager
 import com.voyagerfiles.data.repository.StreamTransferProgress
 import com.voyagerfiles.security.AndroidCredentialCipher
 import com.voyagerfiles.playback.PlaybackEntry
+import com.voyagerfiles.playback.PreparedWebDavPlayback
 import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.theme.AppTheme
 import com.voyagerfiles.ui.text.UiText
@@ -76,7 +77,7 @@ fun interface RemoteFileProviderFactory {
 }
 
 fun interface WebDavPlaybackPreparer {
-    suspend fun prepare(context: Application, provider: FileProvider, file: FileItem): Result<Uri>
+    suspend fun prepare(context: Application, provider: FileProvider, file: FileItem): Result<PreparedWebDavPlayback>
 }
 
 private val defaultRemoteFileProviderFactory = RemoteFileProviderFactory { context, connection ->
@@ -89,16 +90,11 @@ private val defaultWebDavPlaybackPreparer = WebDavPlaybackPreparer { context, pr
             val webDavProvider = provider as? WebDavFileProvider
                 ?: error("The active provider is not WebDAV")
             val prepared = webDavProvider.createPlaybackSource(file.path).getOrThrow()
-            try {
-                WebDavPlaybackProvider.register(
-                    context,
-                    PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
-                    prepared.identity,
-                )
-            } catch (error: Throwable) {
-                prepared.source.close()
-                throw error
-            }
+            WebDavPlaybackProvider.prepare(
+                context,
+                PlaybackEntry(file.name, file.mimeType, prepared.metadata.size, prepared.source),
+                prepared.identity,
+            )
         }
     }
 }
@@ -1127,7 +1123,7 @@ class FileBrowserViewModel @JvmOverloads constructor(
         downloadPaths(listOf(path), clearSelection = false)
     }
 
-    suspend fun prepareWebDavPlayback(file: FileItem): Result<Uri> = runCatching {
+    suspend fun prepareWebDavPlayback(file: FileItem): Result<PreparedWebDavPlayback> = runCatching {
         val state = _browseState.value
         require(state.source == FileSource.WEBDAV && file.source == FileSource.WEBDAV) {
             "Direct playback requires the active WebDAV session"

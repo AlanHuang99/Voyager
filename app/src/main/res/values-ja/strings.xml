@@ -531,4 +531,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">リモートファイルアクセス</string>
+    <string name="playback_service_media">リモート再生</string>
+    <string name="playback_service_description">別のアプリで開いたファイルを提供しています</string>
 </resources>

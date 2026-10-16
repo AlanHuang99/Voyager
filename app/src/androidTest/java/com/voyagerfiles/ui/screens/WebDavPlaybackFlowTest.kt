@@ -23,6 +23,7 @@ import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.RemoteFileProviderFactory
 import com.voyagerfiles.viewmodel.WebDavPlaybackPreparer
+import com.voyagerfiles.playback.PreparedWebDavPlayback
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -204,7 +205,7 @@ class WebDavPlaybackFlowTest {
             remoteProviderFactory = RemoteFileProviderFactory { _, _ -> provider },
             playbackPreparer = WebDavPlaybackPreparer { _, _, _ ->
                 playbackReady?.await()
-                playbackResult
+                playbackResult.map { PreparedWebDavPlayback(it) {} }
             },
         )
         composeTestRule.setContent {

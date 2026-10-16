@@ -154,7 +154,6 @@ import com.voyagerfiles.ui.components.FileGridItem
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.ui.components.PathBreadcrumb
 import com.voyagerfiles.ui.components.RenameDialog
-import com.voyagerfiles.playback.WebDavPlaybackProvider
 import com.voyagerfiles.ui.text.asString
 import com.voyagerfiles.ui.text.resolve
 import com.voyagerfiles.util.FileUtils
@@ -365,19 +364,19 @@ fun BrowserScreen(
     fun openWebDavFile(file: FileItem, chooser: Boolean = false, clearSelectionAfter: Boolean = false) {
         scope.launch {
             viewModel.prepareWebDavPlayback(file).fold(
-                onSuccess = { uri ->
+                onSuccess = { prepared ->
                     try {
-                        val target = FileUtils.createRemotePlaybackIntent(uri, file)
+                        val target = FileUtils.createRemotePlaybackIntent(prepared.uri, file)
                         playbackIntentLauncher(
                             if (chooser) Intent.createChooser(target, context.getString(R.string.action_open_with))
                             else target,
                         )
                         if (clearSelectionAfter) viewModel.clearSelection()
                     } catch (_: ActivityNotFoundException) {
-                        WebDavPlaybackProvider.revoke(uri)
+                        prepared.close()
                         snackbarHostState.showSnackbar(noFileHandlerMessage)
                     } catch (_: Throwable) {
-                        WebDavPlaybackProvider.revoke(uri)
+                        prepared.close()
                         snackbarHostState.showSnackbar(fileOpenFailedMessage)
                     }
                 },
