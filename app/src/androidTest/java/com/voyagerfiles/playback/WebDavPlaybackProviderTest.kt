@@ -106,6 +106,55 @@ class WebDavPlaybackProviderTest {
     }
 
     @Test
+    fun reopeningAResourceKeepsItsUriAndExistingDescriptorsRemainReadable() {
+        val identity = PlaybackResourceIdentity(14, "https://example.test/movie.mp4", "tester")
+        val oldSource = ByteArraySource(byteArrayOf(1, 2, 3), "old")
+        val firstUri = WebDavPlaybackProvider.register(
+            context, PlaybackEntry("movie.mp4", "video/mp4", 3, oldSource), identity,
+        )
+
+        context.contentResolver.openFileDescriptor(firstUri, "r")!!.use { oldDescriptor ->
+            val freshSource = ByteArraySource(byteArrayOf(4, 5, 6), "fresh")
+            val secondUri = WebDavPlaybackProvider.register(
+                context, PlaybackEntry("movie.mp4", "video/mp4", 3, freshSource), identity,
+            )
+            assertEquals(firstUri, secondUri)
+            FileInputStream(oldDescriptor.fileDescriptor).use { input ->
+                assertArrayEquals(byteArrayOf(1, 2, 3), input.readNBytes(3))
+            }
+            context.contentResolver.openFileDescriptor(secondUri, "r")!!.use { descriptor ->
+                FileInputStream(descriptor.fileDescriptor).use { input ->
+                    assertArrayEquals(byteArrayOf(4, 5, 6), input.readNBytes(3))
+                }
+            }
+        }
+
+        WebDavPlaybackProvider.resetForTest()
+        val afterRestart = WebDavPlaybackProvider.register(
+            context, PlaybackEntry("movie.mp4", "video/mp4", 3, ByteArraySource(byteArrayOf(7, 8, 9), "restart")), identity,
+        )
+        assertEquals(firstUri, afterRestart)
+    }
+
+    @Test
+    fun activeDescriptorRemainsReadableBeyondTheIdleTimeout() {
+        val clock = FakeClock()
+        WebDavPlaybackProvider.setStoreForTest(
+            PlaybackTokenStore(clock::now, SecureRandom(), inactivityMillis = 100),
+        )
+        val uri = WebDavPlaybackProvider.register(
+            context, PlaybackEntry("movie.mp4", "video/mp4", 3, ByteArraySource(byteArrayOf(1, 2, 3), "remote")),
+        )
+
+        context.contentResolver.openFileDescriptor(uri, "r")!!.use { descriptor ->
+            clock.advanceBy(1_000)
+            FileInputStream(descriptor.fileDescriptor).use { input ->
+                assertArrayEquals(byteArrayOf(1, 2, 3), input.readNBytes(3))
+            }
+        }
+    }
+
+    @Test
     fun rejectsWritesUnknownTokensAndExpiredEntries() {
         val clock = FakeClock()
         WebDavPlaybackProvider.setStoreForTest(

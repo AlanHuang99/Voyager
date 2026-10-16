@@ -48,6 +48,66 @@ class PlaybackTokenStoreTest {
     }
 
     @Test
+    fun reregisteringAStableTokenRefreshesItsSourceAndKeepsOldReadersAlive() {
+        val store = PlaybackTokenStore()
+        val oldSource = FakeSource("old credentials")
+        val freshSource = FakeSource("fresh credentials")
+        val token = store.register(PlaybackEntry("one", "video/mp4", 10, oldSource), "stable")
+        val oldReader = store.acquire(token)!!
+
+        assertEquals(token, store.register(PlaybackEntry("one", "video/mp4", 20, freshSource), "stable"))
+        assertEquals(20L, store.lookup(token)!!.size)
+        assertSame(freshSource, store.acquire(token)!!.use { it.entry.source })
+        assertTrue(oldReader.touch())
+        assertSame(oldSource, oldReader.entry.source)
+        assertEquals(0, oldSource.closeCount)
+        oldReader.close()
+        assertEquals(1, oldSource.closeCount)
+        assertEquals(0, freshSource.closeCount)
+        store.clear()
+        assertEquals(1, freshSource.closeCount)
+    }
+
+    @Test
+    fun revocationAlsoInvalidatesReadersFromEarlierRegistrations() {
+        val store = PlaybackTokenStore()
+        val first = FakeSource("first")
+        val second = FakeSource("second")
+        val token = store.register(PlaybackEntry("one", "video/mp4", 10, first), "stable")
+        val oldReader = store.acquire(token)!!
+        store.register(PlaybackEntry("one", "video/mp4", 10, second), "stable")
+        val newReader = store.acquire(token)!!
+
+        store.remove(token)
+
+        assertFalse(oldReader.touch())
+        assertFalse(newReader.touch())
+        oldReader.close()
+        newReader.close()
+        assertEquals(1, first.closeCount)
+        assertEquals(1, second.closeCount)
+        assertNull(store.lookup(token))
+    }
+
+    @Test
+    fun replacingAnIdleSourceClosesItImmediatelyAndRestartsExpiry() {
+        val clock = FakeClock()
+        val store = PlaybackTokenStore(clock::now, SecureRandom(), INACTIVITY_MILLIS)
+        val first = FakeSource("first")
+        val second = FakeSource("second")
+        val token = store.register(PlaybackEntry("one", "video/mp4", 10, first), "stable")
+        clock.advanceBy(INACTIVITY_MILLIS)
+        store.register(PlaybackEntry("one", "video/mp4", 10, second), "stable")
+
+        assertEquals(1, first.closeCount)
+        assertSame(second, store.lookup(token)!!.source)
+        clock.advanceBy(INACTIVITY_MILLIS)
+        store.sweepExpired()
+        assertNull(store.lookup(token))
+        assertEquals(1, second.closeCount)
+    }
+
+    @Test
     fun idleSweepsDoNotRefreshOtherTokens() {
         val clock = FakeClock()
         val store = PlaybackTokenStore(clock::now, SecureRandom(), INACTIVITY_MILLIS)
