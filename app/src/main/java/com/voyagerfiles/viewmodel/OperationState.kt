@@ -1,5 +1,6 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
 import com.voyagerfiles.data.model.TrashEntry
 import com.voyagerfiles.ui.text.UiText
 
@@ -19,7 +20,11 @@ sealed interface OperationState {
 
 enum class OperationOutcome { COMPLETED, FAILED, CANCELLED }
 
-data class OperationResult(val progress: TransferProgress, val outcome: OperationOutcome)
+data class OperationResult(
+    val progress: TransferProgress,
+    val outcome: OperationOutcome,
+    val archiveReport: ArchiveExtractionReport? = null,
+)
 
 data class TrashState(
     val entries: List<TrashEntry> = emptyList(),

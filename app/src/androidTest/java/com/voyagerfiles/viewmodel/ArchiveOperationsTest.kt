@@ -3,6 +3,8 @@ package com.voyagerfiles.viewmodel
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
+import com.voyagerfiles.data.model.FileItem
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
@@ -14,6 +16,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -110,6 +114,49 @@ class ArchiveOperationsTest {
             root.resolve("bundle_extracted/inside.txt").readText(),
         )
         assertTrue(viewModel.browseState.value.selectedFiles.isEmpty())
+    }
+
+    @Test
+    fun removingAKeptExtractionSelectsItsFolderForTheNormalDelete() = runBlocking {
+        val extracted = root.resolve("bundle_extracted").apply { mkdirs() }
+        extracted.resolve("a.txt").writeText("extracted")
+        extracted.resolve("added-later.txt").writeText("the user's own file")
+        val report = ArchiveExtractionReport(
+            root = FileItem(name = extracted.name, path = extracted.absolutePath, isDirectory = true),
+            extractedEntries = 1,
+            extractedFiles = 1,
+            totalEntries = 3,
+            renamed = emptyList(),
+            notExtracted = emptyList(),
+            complete = false,
+        )
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val viewModel = withContext(Dispatchers.Main) {
+            FileBrowserViewModel(application).also { it.openLocalRoot(root.absolutePath) }
+        }
+        waitUntil("open test root", viewModel) {
+            viewModel.browseState.value.currentPath == root.absolutePath && !viewModel.browseState.value.isLoading
+        }
+        // Browsing inside the extraction: removal goes back to the folder that shows it.
+        withContext(Dispatchers.Main) { viewModel.navigateTo(extracted.absolutePath) }
+        waitUntil("open the extraction", viewModel) {
+            viewModel.browseState.value.currentPath == extracted.absolutePath && !viewModel.browseState.value.isLoading
+        }
+
+        withContext(Dispatchers.Main) { viewModel.requestExtractionRemoval(report) }
+        waitUntil("return to the folder that holds the extraction", viewModel) {
+            viewModel.browseState.value.currentPath == root.absolutePath &&
+                viewModel.browseState.value.files.any { it.path == extracted.absolutePath } &&
+                !viewModel.browseState.value.isLoading
+        }
+        val opensDeleteConfirmation = withContext(Dispatchers.Main) { viewModel.takeExtractionRemoval() }
+
+        assertTrue(opensDeleteConfirmation)
+        assertEquals(setOf(extracted.absolutePath), viewModel.browseState.value.selectedFiles)
+        assertNull(viewModel.pendingExtractionRemoval.value)
+        // Nothing is deleted until the user confirms the usual dialog, so later additions stay visible there.
+        assertTrue(extracted.resolve("added-later.txt").isFile)
+        assertFalse(withContext(Dispatchers.Main) { viewModel.takeExtractionRemoval() })
     }
 
     private suspend fun waitUntil(

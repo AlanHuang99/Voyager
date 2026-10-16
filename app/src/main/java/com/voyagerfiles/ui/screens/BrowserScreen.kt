@@ -244,6 +244,11 @@ fun BrowserScreen(
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val pendingExtractionRemoval by viewModel.pendingExtractionRemoval.collectAsState()
+    // A kept extraction is removed like any folder: selected, then the usual delete confirmation.
+    LaunchedEffect(pendingExtractionRemoval, state.files, state.isLoading) {
+        if (pendingExtractionRemoval != null && viewModel.takeExtractionRemoval()) showDeleteDialog = true
+    }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -978,7 +983,7 @@ fun BrowserScreen(
                 OperationProgressContent(operation, onCancel = viewModel::cancelOperation)
             }
             if (runningOperation == null) {
-                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult) }
+                operationResult?.let { OperationResultContent(it, onDismiss = viewModel::dismissOperationResult, onRemoveExtraction = viewModel::requestExtractionRemoval) }
             }
             PullToRefreshBox(
                 isRefreshing = pullRefreshing && state.isLoading,
@@ -1365,11 +1370,6 @@ internal fun OperationProgressContent(
             stateDescription = progress.stateDescription(progressLabel, completedItemsText)
         },
     ) {
-        if (operation.cancellable && onCancel != null) {
-            TextButton(onClick = onCancel, enabled = !operation.cancelling) {
-                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
-            }
-        }
         val fraction = progress.fraction
         if (fraction != null) {
             LinearProgressIndicator(
@@ -1394,6 +1394,16 @@ internal fun OperationProgressContent(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+        }
+        // Below the text, where the result card puts its actions once the operation ends.
+        if (operation.cancellable && onCancel != null) {
+            TextButton(
+                onClick = onCancel,
+                enabled = !operation.cancelling,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Text(stringResource(if (operation.cancelling) R.string.transfer_cancelling else R.string.action_cancel))
+            }
         }
     }
 }

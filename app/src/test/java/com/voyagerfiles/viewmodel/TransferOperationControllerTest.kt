@@ -1,5 +1,7 @@
 package com.voyagerfiles.viewmodel
 
+import com.voyagerfiles.data.archive.ArchiveExtractionReport
+import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.repository.TransferCancellation
 import com.voyagerfiles.ui.text.UiText
 import kotlinx.coroutines.CancellationException
@@ -10,6 +12,45 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TransferOperationControllerTest {
+    @Test
+    fun anArchiveReportReachesTheResultAndIsNotCarriedIntoTheNextOperation() = runBlocking {
+        val controller = TransferOperationController({}, this)
+        val report = ArchiveExtractionReport(
+            root = FileItem("bundle_extracted", "/w/bundle_extracted", isDirectory = true),
+            extractedEntries = 1,
+            extractedFiles = 1,
+            totalEntries = 3,
+            renamed = emptyList(),
+            notExtracted = emptyList(),
+            complete = false,
+        )
+        controller.launch(UiText.Dynamic("Extracting"), {}, {}) { controller.attachArchiveReport(report) }
+        yield()
+        assertEquals(report, controller.lastResult.value!!.archiveReport)
+
+        controller.launch(UiText.Dynamic("Copying"), {}, {}) {}
+        yield()
+        assertNull(controller.lastResult.value!!.archiveReport)
+    }
+
+    @Test
+    fun cancelCanBeHiddenForWorkThatMustNotStopHalfway() = runBlocking {
+        val controller = TransferOperationController({}, this)
+        val removing = CompletableDeferred<Unit>()
+        controller.launch(UiText.Dynamic("Extracting"), {}, {}) { removing.await() }
+        assertTrue((controller.state.value as OperationState.Running).cancellable)
+
+        controller.disallowCancel()
+        controller.cancel()
+
+        val running = controller.state.value as OperationState.Running
+        assertFalse(running.cancellable)
+        assertFalse(running.cancelling)
+        removing.complete(Unit)
+        yield()
+        assertEquals(OperationOutcome.COMPLETED, controller.lastResult.value!!.outcome)
+    }
+
     @Test
     fun retainsFinalCompletedCountUntilDismissedOrNextOperation() = runBlocking {
         val controller = TransferOperationController({}, this)

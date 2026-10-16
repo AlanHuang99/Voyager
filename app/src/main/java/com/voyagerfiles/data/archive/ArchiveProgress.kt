@@ -12,9 +12,13 @@ data class ArchiveProgress(
     val totalBytes: Long? = null,
     /** True after source parsing and destination finalization have succeeded. */
     val isComplete: Boolean = false,
+    val skippedEntries: Int = 0,
+    val renamedEntries: Int = 0,
 ) {
     init {
         require(completedEntries >= 0) { "Completed entry count must not be negative" }
+        require(skippedEntries >= 0) { "Skipped entry count must not be negative" }
+        require(renamedEntries >= 0) { "Renamed entry count must not be negative" }
         require(totalEntries == null || totalEntries >= 0) { "Total entry count must not be negative" }
         require(processedBytes >= 0) { "Processed byte count must not be negative" }
         require(totalBytes == null || totalBytes >= 0) { "Total byte count must not be negative" }
@@ -30,4 +34,7 @@ enum class ArchivePhase {
 
     /** Creating the archive or writing extracted entries. */
     WRITING,
+
+    /** Deleting what a stopped or cancelled extraction had written. */
+    REMOVING,
 }

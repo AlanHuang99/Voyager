@@ -3,7 +3,9 @@ package com.voyagerfiles.viewmodel
 import com.voyagerfiles.R
 import com.voyagerfiles.data.archive.ArchiveConflictException
 import com.voyagerfiles.data.archive.ArchiveFormat
+import com.voyagerfiles.data.archive.PartialExtractionException
 import com.voyagerfiles.data.archive.UnsupportedArchiveException
+import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.ui.text.UiText
 import java.io.IOException
 import org.junit.Assert.assertEquals
@@ -13,6 +15,47 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 class OperationMessagesTest {
+
+    @Test
+    fun extractionSummaryMentionsOnlyRenamesAndLeftOutEntriesThatHappened() {
+        val root = UiText.Dynamic("photos_extracted")
+        assertEquals(
+            UiText.Resource(R.string.archive_extracted_to, listOf(root)),
+            OperationMessages.archiveExtracted("photos_extracted", renamedEntries = 0, notExtractedEntries = 0),
+        )
+        assertEquals(
+            UiText.Resource(
+                R.string.archive_extracted_to_with_note,
+                listOf(root, UiText.Plural(R.plurals.archive_entries_not_extracted, 3, listOf(3))),
+            ),
+            OperationMessages.archiveExtracted("photos_extracted", renamedEntries = 0, notExtractedEntries = 3),
+        )
+        assertEquals(
+            UiText.Resource(
+                R.string.archive_extracted_to_with_notes,
+                listOf(
+                    root,
+                    UiText.Plural(R.plurals.archive_entries_renamed, 1, listOf(1)),
+                    UiText.Plural(R.plurals.archive_entries_not_extracted, 2, listOf(2)),
+                ),
+            ),
+            OperationMessages.archiveExtracted("photos_extracted", renamedEntries = 1, notExtractedEntries = 2),
+        )
+    }
+
+    @Test
+    fun keptPartialExtractionNamesTheFolderAndTheReason() {
+        val root = FileItem(name = "bundle_extracted", path = "/w/bundle_extracted", isDirectory = true)
+        val error = PartialExtractionException(root, IOException("CRC mismatch"))
+
+        assertEquals(
+            UiText.Resource(
+                R.string.archive_extraction_stopped_kept,
+                listOf(UiText.Dynamic("CRC mismatch"), UiText.Dynamic("bundle_extracted")),
+            ),
+            OperationMessages.archivePartiallyExtracted(error),
+        )
+    }
 
     @Test
     fun conflictSuggestsHowToRecover() {

@@ -10,9 +10,20 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
 
+/**
+ * Declares [ignoresNameCase], where null leaves it to the extraction's own lookup. With
+ * [lookupIgnoresCase], names that differ only in case find the same item and creating a file over one
+ * empties it, as an FTP upload to a Windows server does. Deleting [failDeletePath], or a folder above it,
+ * fails as a stuck file would, and the first lookup of [failLookupPath] fails as a dropped connection
+ * would.
+ */
 internal open class ArchiveTestFileProvider(
     private val failOutputPath: String? = null,
     private val maximumReadRequest: Int? = null,
+    private val failDeletePath: String? = null,
+    private val ignoresNameCase: Boolean? = false,
+    private val lookupIgnoresCase: Boolean = false,
+    private var failLookupPath: String? = null,
 ) : FileProvider {
     private val entries = mutableMapOf<String, Entry>("/" to Entry.Directory)
     var largestReadRequest: Int = 0
@@ -35,7 +46,7 @@ internal open class ArchiveTestFileProvider(
     }
 
     fun readFile(path: String): ByteArray =
-        (entries.getValue(path.normalized()) as Entry.File).contents.copyOf()
+        (entries.getValue(path.stored()) as Entry.File).contents.copyOf()
 
     override suspend fun listFiles(path: String): Result<List<FileItem>> = runCatching {
         val normalized = path.normalized()
@@ -49,25 +60,33 @@ internal open class ArchiveTestFileProvider(
     }
 
     override suspend fun createDirectory(path: String, name: String): Result<FileItem> = runCatching {
-        val fullPath = join(path, name)
-        require(entries[path.normalized()] is Entry.Directory) { "Not a directory: $path" }
-        check(fullPath !in entries) { "Already exists: $fullPath" }
+        val fullPath = join(path.stored(), name)
+        require(entries[path.stored()] is Entry.Directory) { "Not a directory: $path" }
+        check(fullPath.stored() !in entries) { "Already exists: $fullPath" }
         entries[fullPath] = Entry.Directory
         toFileItem(fullPath)
     }
 
     override suspend fun createFile(path: String, name: String): Result<FileItem> = runCatching {
-        val fullPath = join(path, name)
-        require(entries[path.normalized()] is Entry.Directory) { "Not a directory: $path" }
-        check(fullPath !in entries) { "Already exists: $fullPath" }
-        entries[fullPath] = Entry.File(byteArrayOf())
+        val fullPath = join(path.stored(), name)
+        require(entries[path.stored()] is Entry.Directory) { "Not a directory: $path" }
+        val existing = fullPath.stored()
+        check(entries[existing] == null || (lookupIgnoresCase && entries[existing] is Entry.File)) {
+            "Already exists: $fullPath"
+        }
+        entries[existing] = Entry.File(byteArrayOf())
         toFileItem(fullPath)
     }
 
     override suspend fun delete(path: String): Result<Unit> = runCatching {
-        val normalized = path.normalized()
+        val normalized = path.stored()
         check(normalized != "/") { "Cannot delete root" }
         check(normalized in entries) { "Does not exist: $path" }
+        failDeletePath?.normalized()?.let { stuck ->
+            if (stuck in entries && (stuck == normalized || stuck.startsWith("$normalized/"))) {
+                throw IOException("Injected delete failure for $stuck")
+            }
+        }
         entries.keys
             .filter { it == normalized || it.startsWith("$normalized/") }
             .toList()
@@ -84,7 +103,7 @@ internal open class ArchiveTestFileProvider(
         Result.failure(UnsupportedOperationException("Not needed by archive tests"))
 
     override suspend fun getInputStream(path: String): Result<InputStream> = runCatching {
-        val bytes = (entries.getValue(path.normalized()) as Entry.File).contents
+        val bytes = (entries.getValue(path.stored()) as Entry.File).contents
         object : ByteArrayInputStream(bytes) {
             override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
                 largestReadRequest = maxOf(largestReadRequest, length)
@@ -99,7 +118,7 @@ internal open class ArchiveTestFileProvider(
     }
 
     override suspend fun getOutputStream(path: String): Result<OutputStream> = runCatching {
-        val normalized = path.normalized()
+        val normalized = path.stored()
         require(entries[normalized] is Entry.File) { "Not a file: $path" }
         object : ByteArrayOutputStream() {
             private var failed = false
@@ -131,7 +150,15 @@ internal open class ArchiveTestFileProvider(
         }
     }
 
-    override suspend fun exists(path: String): Boolean = path.normalized() in entries
+    override fun ignoresNameCase(path: String): Boolean? = ignoresNameCase
+
+    override suspend fun exists(path: String): Boolean {
+        if (path.normalized() == failLookupPath?.normalized()) {
+            failLookupPath = null
+            return false
+        }
+        return path.stored() in entries
+    }
 
     override suspend fun getFileInfo(path: String): Result<FileItem> = runCatching {
         toFileItem(path.normalized())
@@ -140,8 +167,9 @@ internal open class ArchiveTestFileProvider(
     override fun getParentPath(path: String): String? =
         path.normalized().takeUnless { it == "/" }?.let(::parent)
 
+    /** Names the item as [path] does; with [lookupIgnoresCase] the item may be stored in another case. */
     private fun toFileItem(path: String): FileItem {
-        val entry = entries.getValue(path)
+        val entry = entries.getValue(path.stored())
         return FileItem(
             name = path.substringAfterLast('/').ifEmpty { "/" },
             path = path,
@@ -160,6 +188,13 @@ internal open class ArchiveTestFileProvider(
 
     private fun String.normalized(): String =
         if (this == "/") "/" else trimEnd('/')
+
+    /** The key this path is stored under. */
+    private fun String.stored(): String {
+        val normalized = normalized()
+        if (!lookupIgnoresCase || normalized in entries) return normalized
+        return entries.keys.firstOrNull { it.equals(normalized, ignoreCase = true) } ?: normalized
+    }
 
     private sealed interface Entry {
         data object Directory : Entry
