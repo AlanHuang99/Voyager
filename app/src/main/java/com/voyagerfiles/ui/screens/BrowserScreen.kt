@@ -243,11 +243,16 @@ fun BrowserScreen(
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteRequest by remember(activeSession?.id, state.source, state.currentPath) {
+        mutableStateOf<FileActionTargets?>(null)
+    }
     val pendingExtractionRemoval by viewModel.pendingExtractionRemoval.collectAsState()
-    // A kept extraction is removed like any folder: selected, then the usual delete confirmation.
     LaunchedEffect(pendingExtractionRemoval, state.files, state.isLoading) {
-        if (pendingExtractionRemoval != null && viewModel.takeExtractionRemoval()) showDeleteDialog = true
+        pendingExtractionRemoval?.let { path ->
+            if (viewModel.takeExtractionRemoval()) {
+                deleteRequest = FileActionTargets(listOf(path), fromSelection = true)
+            }
+        }
     }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
@@ -255,9 +260,14 @@ fun BrowserScreen(
     var showViewMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
+    var rowMenuPath by remember(
+        state.selectedFiles.isNotEmpty(), state.currentPath, state.source, activeSession?.id, state.viewMode,
+    ) { mutableStateOf<String?>(null) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var showSessionsSheet by remember { mutableStateOf(false) }
-    var archiveNameDialogDefault by remember { mutableStateOf<String?>(null) }
+    var archiveNameRequest by remember(activeSession?.id, state.source, state.currentPath) {
+        mutableStateOf<ArchiveNameRequest?>(null)
+    }
     var archiveToExtract by remember { mutableStateOf<FileItem?>(null) }
     var playbackFallbackFor by remember { mutableStateOf<FileItem?>(null) }
     var downloadConfirmationFor by remember { mutableStateOf<FileItem?>(null) }
@@ -272,10 +282,7 @@ fun BrowserScreen(
     }
     val sharePlan = remember(selectedItems) { ShareIntentPlan.forFiles(selectedItems) }
     val canOpenWith = remember(selectedItems) {
-        selectedItems.singleOrNull()?.let { item ->
-            !item.isDirectory &&
-                (item.source == FileSource.LOCAL || item.source == FileSource.SAF || item.source == FileSource.WEBDAV)
-        } == true
+        selectedItems.singleOrNull()?.let(::canOpenWith) == true
     }
     val toolbarModel = remember(isNetwork) { BrowserToolbarModel.forState(isNetwork) }
     val createMenuModel = remember(isNetwork) { BrowserCreateMenuModel.forState(isNetwork) }
@@ -343,9 +350,9 @@ fun BrowserScreen(
         }
     }
 
-    fun shareSelected() {
-        FileUtils.shareFiles(context, selectedItems).fold(
-            onSuccess = { viewModel.clearSelection() },
+    fun share(items: List<FileItem>, clearSelectionAfter: Boolean) {
+        FileUtils.shareFiles(context, items).fold(
+            onSuccess = { if (clearSelectionAfter) viewModel.clearSelection() },
             onFailure = {
                 scope.launch {
                     snackbarHostState.showSnackbar(shareFailedMessage)
@@ -354,7 +361,7 @@ fun BrowserScreen(
         )
     }
 
-    fun openWebDavFile(file: FileItem, chooser: Boolean = false) {
+    fun openWebDavFile(file: FileItem, chooser: Boolean = false, clearSelectionAfter: Boolean = false) {
         scope.launch {
             viewModel.prepareWebDavPlayback(file).fold(
                 onSuccess = { uri ->
@@ -364,7 +371,7 @@ fun BrowserScreen(
                             if (chooser) Intent.createChooser(target, context.getString(R.string.action_open_with))
                             else target,
                         )
-                        if (chooser) viewModel.clearSelection()
+                        if (clearSelectionAfter) viewModel.clearSelection()
                     } catch (_: ActivityNotFoundException) {
                         WebDavPlaybackProvider.revoke(uri)
                         snackbarHostState.showSnackbar(noFileHandlerMessage)
@@ -378,14 +385,13 @@ fun BrowserScreen(
         }
     }
 
-    fun openSelectedWith() {
-        val file = selectedItems.singleOrNull() ?: return
+    fun openWith(file: FileItem, clearSelectionAfter: Boolean) {
         if (file.source == FileSource.WEBDAV) {
-            openWebDavFile(file, chooser = true)
+            openWebDavFile(file, chooser = true, clearSelectionAfter = clearSelectionAfter)
             return
         }
         FileUtils.openFileWith(context, file).fold(
-            onSuccess = { viewModel.clearSelection() },
+            onSuccess = { if (clearSelectionAfter) viewModel.clearSelection() },
             onFailure = { error ->
                 scope.launch {
                     snackbarHostState.showSnackbar(
@@ -398,6 +404,37 @@ fun BrowserScreen(
                 }
             },
         )
+    }
+
+    fun requestZip(items: List<FileItem>, fromSelection: Boolean) {
+        archiveNameRequest = ArchiveNameRequest(
+            initialName = BrowserArchiveActions.defaultZipName(
+                selectedItems = items,
+                existingNames = state.files.mapTo(mutableSetOf()) { it.name },
+                fallbackBaseName = archiveDefaultName,
+            ),
+            targets = FileActionTargets(items.map { it.path }, fromSelection),
+        )
+    }
+
+    // Runs an action from a list row's own menu. It acts on that file only and leaves the selection alone.
+    fun runFileRowAction(file: FileItem, action: FileRowAction) {
+        when (action) {
+            FileRowAction.OPEN_WITH -> openWith(file, clearSelectionAfter = false)
+            FileRowAction.SHARE -> share(listOf(file), clearSelectionAfter = false)
+            FileRowAction.DOWNLOAD -> viewModel.downloadFile(file.path)
+            FileRowAction.COPY -> viewModel.copyToClipboard(listOf(file.path), clearSelectionAfter = false)
+            FileRowAction.CUT -> viewModel.cutToClipboard(listOf(file.path), clearSelectionAfter = false)
+            FileRowAction.RENAME -> showRenameDialog = file.path
+            FileRowAction.COMPRESS_TO_ZIP -> requestZip(listOf(file), fromSelection = false)
+            FileRowAction.EXTRACT_HERE -> viewModel.extractArchive(file.path)
+            FileRowAction.DETAILS -> showDetailsFor = file
+            FileRowAction.DELETE -> deleteRequest = FileActionTargets(listOf(file.path), fromSelection = false)
+            // These entries have their own menu items and never reach this function.
+            FileRowAction.EXTRACTION_UNSUPPORTED,
+            FileRowAction.FOLDER_SHORTCUTS,
+            FileRowAction.AUDIO_TONES -> Unit
+        }
     }
 
     fun handleDeviceFileTap(file: FileItem) {
@@ -500,7 +537,7 @@ fun BrowserScreen(
                         }
                         if (SelectionToolbarAction.SHARE in selectionToolbarModel.primaryActions) {
                             IconButton(
-                                onClick = ::shareSelected,
+                                onClick = { share(selectedItems, clearSelectionAfter = true) },
                                 enabled = runningOperation == null,
                             ) {
                                 Icon(Icons.Filled.Share, stringResource(R.string.content_desc_share))
@@ -508,7 +545,9 @@ fun BrowserScreen(
                         }
                         if (SelectionToolbarAction.DELETE in selectionToolbarModel.primaryActions) {
                             IconButton(
-                                onClick = { showDeleteDialog = true },
+                                onClick = {
+                                    deleteRequest = FileActionTargets(state.selectedFiles.toList(), fromSelection = true)
+                                },
                                 enabled = runningOperation == null,
                             ) {
                                 Icon(Icons.Filled.Delete, stringResource(R.string.content_desc_delete))
@@ -548,13 +587,7 @@ fun BrowserScreen(
                                         text = { Text(stringResource(R.string.dialog_compress_zip)) },
                                         leadingIcon = { Icon(Icons.Filled.Archive, null) },
                                         onClick = {
-                                            archiveNameDialogDefault =
-                                                BrowserArchiveActions.defaultZipName(
-                                                    selectedItems = selectedItems,
-                                                    existingNames = state.files
-                                                        .mapTo(mutableSetOf()) { it.name },
-                                                    fallbackBaseName = archiveDefaultName,
-                                                )
+                                            requestZip(selectedItems, fromSelection = true)
                                             showSelectionMoreMenu = false
                                         },
                                     )
@@ -656,7 +689,7 @@ fun BrowserScreen(
                                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
                                         onClick = {
                                             showSelectionMoreMenu = false
-                                            openSelectedWith()
+                                            selectedItems.singleOrNull()?.let { openWith(it, clearSelectionAfter = true) }
                                         },
                                     )
                                 }
@@ -1091,6 +1124,7 @@ fun BrowserScreen(
                                     compact = state.viewMode == ViewMode.COMPACT,
                                     isSelected = file.path in state.selectedFiles,
                                     isSelectionMode = isSelectionMode,
+                                    isHighlighted = !isSelectionMode && rowMenuPath == file.path,
                                     enableRemoteSelect = isTelevision,
                                     enableDragSelection = !isTelevision && runningOperation == null,
                                     onClick = {
@@ -1108,6 +1142,29 @@ fun BrowserScreen(
                                     },
                                     onLongClick = {
                                         toggleSelection(file.path)
+                                    },
+                                    trailingContent = if (isSelectionMode) {
+                                        null
+                                    } else {
+                                        {
+                                            BrowserFileRowMenu(
+                                                file = file,
+                                                expanded = rowMenuPath == file.path,
+                                                onExpandedChange = { open ->
+                                                    rowMenuPath = if (open) file.path else null
+                                                },
+                                                isRemote = isNetwork,
+                                                enabled = runningOperation == null,
+                                                bookmarked = bookmarks.any {
+                                                    it.path == file.path && it.source == FileSource.LOCAL
+                                                },
+                                                onAction = { action -> runFileRowAction(file, action) },
+                                                onBookmark = { toggleFolderBookmark(file.path) },
+                                                onPin = { pinFolder(file.path) },
+                                                onFindDuplicates = { onFindDuplicates(file.path) },
+                                                onAudioTone = setAudioTone,
+                                            )
+                                        }
                                     },
                                 )
                             }
@@ -1234,13 +1291,17 @@ fun BrowserScreen(
         )
     }
 
-    archiveNameDialogDefault?.let { initialName ->
+    archiveNameRequest?.let { request ->
         ArchiveNameDialog(
-            initialName = initialName,
-            onDismiss = { archiveNameDialogDefault = null },
+            initialName = request.initialName,
+            onDismiss = { archiveNameRequest = null },
             onCreate = { name ->
-                viewModel.createZipFromSelection(name)
-                archiveNameDialogDefault = null
+                viewModel.createZip(
+                    paths = request.targets.paths,
+                    archiveName = name,
+                    clearSelectionAfter = request.targets.fromSelection,
+                )
+                archiveNameRequest = null
             },
         )
     }
@@ -1312,30 +1373,25 @@ fun BrowserScreen(
         )
     }
 
-    if (showDeleteDialog) {
-        val count = state.selectedFiles.size
-        val fileName = state.selectedFiles.firstOrNull()?.substringAfterLast("/") ?: ""
+    deleteRequest?.let { request ->
+        val count = request.paths.size
+        val fileName = request.paths.firstOrNull()?.substringAfterLast("/") ?: ""
+        fun delete(mode: DeleteMode) {
+            deleteRequest = null
+            viewModel.deletePaths(request.paths, mode, clearSelectionAfter = request.fromSelection)
+        }
         if (state.source == FileSource.LOCAL && useTrash) {
             DeleteChoiceDialog(
                 model = DeleteChoiceDialogModel.local(count, fileName),
-                onDismiss = { showDeleteDialog = false },
-                onMoveToTrash = {
-                    showDeleteDialog = false
-                    viewModel.deleteSelected(DeleteMode.TRASH)
-                },
-                onDeletePermanently = {
-                    showDeleteDialog = false
-                    viewModel.deleteSelected(DeleteMode.PERMANENT)
-                },
+                onDismiss = { deleteRequest = null },
+                onMoveToTrash = { delete(DeleteMode.TRASH) },
+                onDeletePermanently = { delete(DeleteMode.PERMANENT) },
             )
         } else {
             DeleteConfirmDialog(
                 model = DeleteDialogModel.permanent(count, fileName),
-                onDismiss = { showDeleteDialog = false },
-                onConfirm = {
-                    showDeleteDialog = false
-                    viewModel.deleteSelected(DeleteMode.PERMANENT)
-                },
+                onDismiss = { deleteRequest = null },
+                onConfirm = { delete(DeleteMode.PERMANENT) },
             )
         }
     }
@@ -1596,6 +1652,11 @@ data class SelectionToolbarModel(
         }
     }
 }
+
+/** The files a dialog acts on, and whether they came from the selection (which is cleared afterwards). */
+private data class FileActionTargets(val paths: List<String>, val fromSelection: Boolean)
+
+private data class ArchiveNameRequest(val initialName: String, val targets: FileActionTargets)
 
 enum class SelectionToolbarAction {
     COPY,
@@ -1927,7 +1988,7 @@ private fun SessionRow(
 }
 
 @Composable
-private fun FolderMenuItems(
+internal fun FolderMenuItems(
     bookmarked: Boolean,
     canFindDuplicates: Boolean,
     onBookmark: () -> Unit,

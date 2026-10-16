@@ -413,6 +413,7 @@
     <string name="content_desc_sort">Organizar</string>
     <string name="content_desc_more">Mais</string>
     <string name="content_desc_more_selection_actions">Mais ações de seleção</string>
+    <string name="content_desc_more_options_named">More options for %1$s</string>
     <string name="content_desc_copy">Cópia</string>
     <string name="content_desc_cut">Corte</string>
     <string name="content_desc_rename">Renomear</string>

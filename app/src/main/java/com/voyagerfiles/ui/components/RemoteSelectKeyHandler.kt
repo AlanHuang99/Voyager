@@ -61,12 +61,15 @@ internal fun Modifier.remoteSelectActions(
     onLongClick: () -> Unit,
 ): Modifier = composed {
     var state by remember { mutableStateOf(RemoteSelectState.Idle) }
+    var isFocused by remember { mutableStateOf(false) }
 
     onFocusChanged { focusState ->
+        isFocused = focusState.isFocused
         if (!focusState.isFocused) state = RemoteSelectState.Idle
     }.onPreviewKeyEvent { event ->
         val nativeEvent = event.nativeKeyEvent
-        if (!enabled || nativeEvent.keyCode !in remoteSelectKeyCodes) {
+        // Leave the key to a focused child, such as the row's menu button.
+        if (!enabled || !isFocused || nativeEvent.keyCode !in remoteSelectKeyCodes) {
             return@onPreviewKeyEvent false
         }
 

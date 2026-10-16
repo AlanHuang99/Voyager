@@ -66,6 +66,14 @@ Category indexing has JVM coverage in `StorageCategoryIndexTest` for mixed file 
 
 `BrowserFeedbackRegressionTest` checks stationary long presses across toolbar layout changes, intentional range selection, list/grid scroll restoration after parent navigation and refresh, independent session positions, rejection of late scroll updates, compact and bottom search, and selected-folder bookmark/shortcut/duplicate actions. `BrowserLocationSheetTest` checks recent bookmarks, Show all, system Back, in-place sessions, and Home navigation. `PreferenceWriteReloadTest` verifies that unrelated preference writes do not reload a directory. `BookmarkMigrationTest` opens a version-2 database with saved bookmarks and connections through Room version 3 and verifies their preservation and subsequent recent-use updates. `SplashThemeTest` checks the explicit Voyager icon and day/night background resources. Huawei-specific launcher rendering still requires confirmation on an affected EMUI device.
 
+## Per-file row menus
+
+`BrowserFileRowMenuTest` covers single-file targets, Copy/Cut clipboard contents, rename, delete confirmation for row targets and retained extraction folders, ZIP contents, extraction, unsupported-archive feedback, folder actions, details, selection hiding, List/Compact/Grid behavior, the full-height trailing touch target, and TV focus. `FileRowOperationsTest` checks that explicit-path clipboard operations preserve another selection while selection-based copying still clears it. `WebDavPlaybackFlowTest` verifies that a row's Open with action preserves a selection made while playback preparation is pending. `RemoteSelectKeyHandlerTest` covers D-pad right to the row button, left back to the row, and short and held row activation.
+
+```bash
+ANDROID_SERIAL=DEVICE ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.voyagerfiles.ui.screens.BrowserFileRowMenuTest,com.voyagerfiles.viewmodel.FileRowOperationsTest,com.voyagerfiles.ui.components.RemoteSelectKeyHandlerTest,com.voyagerfiles.ui.screens.WebDavPlaybackFlowTest,com.voyagerfiles.ui.screens.BrowserSelectionActionsTest,com.voyagerfiles.ui.screens.BrowserTvFocusTest,com.voyagerfiles.viewmodel.ArchiveOperationsTest --stacktrace
+```
+
 ## October browser maintenance
 
 `BrowserKeyboardLayoutTest` launches the real MainActivity and verifies that bottom search keeps the toolbar, file list, and search field visible while the keyboard is open. `WebDavPlaybackFlowTest` checks that SFTP taps wait for Download, Cancel performs no read and creates no file, and direct WebDAV opening remains available. `DuplicatesScreenTest` verifies saved folder exclusions, clearing stale results after editing exclusions, and loading those exclusions in a new ViewModel. Run these cases with `BrowserFeedbackRegressionTest` on a connected device; the real-Activity case requires full storage access for the debug package.

@@ -400,6 +400,7 @@
     <string name="content_desc_sort">排序</string>
     <string name="content_desc_more">更多</string>
     <string name="content_desc_more_selection_actions">更多选择操作</string>
+    <string name="content_desc_more_options_named">More options for %1$s</string>
     <string name="content_desc_copy">复制</string>
     <string name="content_desc_cut">剪切</string>
     <string name="content_desc_rename">重命名</string>

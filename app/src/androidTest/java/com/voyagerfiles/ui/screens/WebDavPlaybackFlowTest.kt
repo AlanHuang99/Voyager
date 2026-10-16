@@ -18,6 +18,7 @@ import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.RemoteConnection
+import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.data.repository.FileProvider
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.viewmodel.RemoteFileProviderFactory
@@ -26,6 +27,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Date
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -155,6 +157,38 @@ class WebDavPlaybackFlowTest {
         assertTrue(target.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
         assertEquals(0, target.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         assertEquals(0, provider.readCount)
+        composeTestRule.runOnIdle { assertTrue(viewModel.browseState.value.selectedFiles.isEmpty()) }
+    }
+
+    @Test
+    fun rowOpenWithPreservesSelectionMadeWhilePreparingPlayback() {
+        val file = remoteFile("row-choose-${System.nanoTime()}.pdf", FileSource.WEBDAV)
+        val provider = FakeProvider(listOf(file))
+        val launched = mutableListOf<Intent>()
+        val ready = CompletableDeferred<Unit>()
+        val viewModel = launch(
+            ConnectionProtocol.WEBDAV,
+            provider,
+            Result.success(Uri.parse("content://com.voyagerfiles.debug.webdavplayback/row-chooser")),
+            launched,
+            ready,
+        )
+        waitForFiles(viewModel, listOf(file.name))
+        composeTestRule.runOnIdle { viewModel.setViewMode(ViewMode.LIST) }
+        composeTestRule.waitUntil(5_000) { viewModel.browseState.value.viewMode == ViewMode.LIST }
+
+        composeTestRule.onNodeWithContentDescription("More options for ${file.name}").performClick()
+        composeTestRule.onNodeWithText("Open with").performClick()
+        composeTestRule.runOnIdle {
+            viewModel.toggleSelection(file.path)
+            ready.complete(Unit)
+        }
+        composeTestRule.waitUntil(5_000) { launched.size == 1 }
+        composeTestRule.runOnIdle {
+            assertEquals(setOf(file.path), viewModel.browseState.value.selectedFiles)
+        }
+        assertEquals(Intent.ACTION_CHOOSER, launched.single().action)
+        assertEquals(0, provider.readCount)
     }
 
     private fun launch(
@@ -162,12 +196,16 @@ class WebDavPlaybackFlowTest {
         provider: FakeProvider,
         playbackResult: Result<Uri>,
         launched: MutableList<Intent> = mutableListOf(),
+        playbackReady: CompletableDeferred<Unit>? = null,
     ): FileBrowserViewModel {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(
             application = application,
             remoteProviderFactory = RemoteFileProviderFactory { _, _ -> provider },
-            playbackPreparer = WebDavPlaybackPreparer { _, _, _ -> playbackResult },
+            playbackPreparer = WebDavPlaybackPreparer { _, _, _ ->
+                playbackReady?.await()
+                playbackResult
+            },
         )
         composeTestRule.setContent {
             MaterialTheme {

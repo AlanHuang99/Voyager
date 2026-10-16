@@ -403,6 +403,7 @@
     <string name="content_desc_sort">정렬</string>
     <string name="content_desc_more">더</string>
     <string name="content_desc_more_selection_actions">추가 선택 조치</string>
+    <string name="content_desc_more_options_named">More options for %1$s</string>
     <string name="content_desc_copy">복사</string>
     <string name="content_desc_cut">자르다</string>
     <string name="content_desc_rename">이름 변경</string>
