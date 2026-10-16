@@ -531,4 +531,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">Truy cập tệp từ xa</string>
+    <string name="playback_service_media">Phát từ xa</string>
+    <string name="playback_service_description">Đang cung cấp tệp được mở trong ứng dụng khác</string>
 </resources>

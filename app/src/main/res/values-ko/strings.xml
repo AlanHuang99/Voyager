@@ -531,4 +531,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">원격 파일 액세스</string>
+    <string name="playback_service_media">원격 재생</string>
+    <string name="playback_service_description">다른 앱에서 연 파일 제공 중</string>
 </resources>

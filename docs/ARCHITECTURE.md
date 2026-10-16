@@ -36,6 +36,8 @@ Direct opening is available for WebDAV files. `WebDavRangeSource` authenticates 
 
 Pinned folder shortcuts target the main Activity through an explicit intent. Canonical destination validation restricts launches to readable directories within currently accessible shared-storage roots. Pending requests survive Activity recreation and wait for full storage access; filesystem checks run on IO and navigation runs on the main thread. Missing or disconnected destinations produce a recovery message.
 
+WebDAV direct opening promotes a foreground service before handing the read-only URI to another app. Audio and video use a media-playback service; other files use a separate data-sync service, whose Android timeout closes only its own source generations. Proxy descriptors retain independent foreground leases until the kernel releases the last reader. Unopened launches expire after two minutes, and the last closed reader leaves a five-second decoder-probe grace. Failed preparation or launch removes only its registration, preserving earlier readers of the same stable URI. Notifications contain generic text without file names, server addresses, or credentials.
+
 ## Archives
 
 `ArchiveService` supports local storage, SAF document trees, SFTP, FTP, SMB, and WebDAV. It creates ZIP files and extracts ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ2, GZ, and BZ2 inputs. RAR is recognized but intentionally unsupported.

@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.rules.ActivityScenarioRule
+import com.voyagerfiles.app.MainActivity
+import kotlinx.coroutines.runBlocking
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.security.SecureRandom
@@ -16,9 +19,14 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.Rule
 
 class WebDavPlaybackProviderTest {
+    @get:Rule val activityRule = ActivityScenarioRule(MainActivity::class.java)
     private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    private fun register(context: Context, entry: PlaybackEntry, identity: PlaybackResourceIdentity? = null): Uri =
+        runBlocking { WebDavPlaybackProvider.prepare(context, entry, identity).uri }
 
     @Before
     fun setUp() {
@@ -33,7 +41,7 @@ class WebDavPlaybackProviderTest {
     @Test
     fun registersOpaqueUriAndExposesSafeMetadata() {
         val source = ByteArraySource(ByteArray(10) { it.toByte() }, "https://tester:secret@example.test/song.mp3")
-        val uri = WebDavPlaybackProvider.register(
+        val uri = register(
             context,
             PlaybackEntry("private song.mp3", "audio/mpeg", 10, source),
         )
@@ -62,7 +70,7 @@ class WebDavPlaybackProviderTest {
     @Test
     fun proxyDescriptorSupportsSeekedReadsAndCanBeReopenedAfterInspection() {
         val source = ByteArraySource(ByteArray(10) { it.toByte() }, "remote")
-        val uri = WebDavPlaybackProvider.register(
+        val uri = register(
             context,
             PlaybackEntry("song.mp3", "audio/mpeg", 10, source),
         )
@@ -91,7 +99,7 @@ class WebDavPlaybackProviderTest {
     @Test
     fun closingOneDescriptorKeepsAnotherDocumentDescriptorReadable() {
         val source = ByteArraySource(ByteArray(10) { it.toByte() }, "remote")
-        val uri = WebDavPlaybackProvider.register(
+        val uri = register(
             context, PlaybackEntry("report.pdf", "application/pdf", 10, source),
         )
         val first = context.contentResolver.openFileDescriptor(uri, "r")!!
@@ -109,13 +117,13 @@ class WebDavPlaybackProviderTest {
     fun reopeningAResourceKeepsItsUriAndExistingDescriptorsRemainReadable() {
         val identity = PlaybackResourceIdentity(14, "https://example.test/movie.mp4", "tester")
         val oldSource = ByteArraySource(byteArrayOf(1, 2, 3), "old")
-        val firstUri = WebDavPlaybackProvider.register(
+        val firstUri = register(
             context, PlaybackEntry("movie.mp4", "video/mp4", 3, oldSource), identity,
         )
 
         context.contentResolver.openFileDescriptor(firstUri, "r")!!.use { oldDescriptor ->
             val freshSource = ByteArraySource(byteArrayOf(4, 5, 6), "fresh")
-            val secondUri = WebDavPlaybackProvider.register(
+            val secondUri = register(
                 context, PlaybackEntry("movie.mp4", "video/mp4", 3, freshSource), identity,
             )
             assertEquals(firstUri, secondUri)
@@ -130,7 +138,7 @@ class WebDavPlaybackProviderTest {
         }
 
         WebDavPlaybackProvider.resetForTest()
-        val afterRestart = WebDavPlaybackProvider.register(
+        val afterRestart = register(
             context, PlaybackEntry("movie.mp4", "video/mp4", 3, ByteArraySource(byteArrayOf(7, 8, 9), "restart")), identity,
         )
         assertEquals(firstUri, afterRestart)
@@ -142,7 +150,7 @@ class WebDavPlaybackProviderTest {
         WebDavPlaybackProvider.setStoreForTest(
             PlaybackTokenStore(clock::now, SecureRandom(), inactivityMillis = 100),
         )
-        val uri = WebDavPlaybackProvider.register(
+        val uri = register(
             context, PlaybackEntry("movie.mp4", "video/mp4", 3, ByteArraySource(byteArrayOf(1, 2, 3), "remote")),
         )
 
@@ -161,7 +169,7 @@ class WebDavPlaybackProviderTest {
             PlaybackTokenStore(clock::now, SecureRandom(), inactivityMillis = 100),
         )
         val source = ByteArraySource(byteArrayOf(1, 2, 3), "remote")
-        val uri = WebDavPlaybackProvider.register(
+        val uri = register(
             context,
             PlaybackEntry("song.mp3", "audio/mpeg", 3, source),
         )

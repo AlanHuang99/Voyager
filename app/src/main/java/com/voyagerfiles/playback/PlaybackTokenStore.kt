@@ -117,6 +117,18 @@ internal class PlaybackTokenStore(
         closeSources(sourcesToClose)
     }
 
+    fun remove(token: String, entry: PlaybackEntry) {
+        val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
+        synchronized(lock) {
+            entries[token]?.let { stored ->
+                stored.generations.filter { it.entry === entry }.forEach { retire(stored, it, sourcesToClose) }
+                if (stored.generations.isEmpty()) entries.remove(token)
+                else if (stored.current !in stored.generations) stored.current = stored.generations.last()
+            }
+        }
+        closeSources(sourcesToClose)
+    }
+
     fun clear() {
         val sourcesToClose = mutableListOf<PlaybackRandomAccessSource>()
         synchronized(lock) {

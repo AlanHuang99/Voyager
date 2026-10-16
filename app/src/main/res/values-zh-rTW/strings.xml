@@ -531,4 +531,7 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
+    <string name="playback_service_channel">遠端檔案存取</string>
+    <string name="playback_service_media">遠端播放</string>
+    <string name="playback_service_description">正在提供其他應用程式開啟的檔案</string>
 </resources>
