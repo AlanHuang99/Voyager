@@ -1,0 +1,1 @@
+Add optional Shizuku file access, shared-storage filename search, remote image thumbnails, and per-file menus in List and Compact views. Preserve recovered archive output, report renamed filename clashes, and write files concurrently during local extraction. Keep WebDAV playback active in the background, preserve playback URI identity, and retry interrupted byte-range reads.
