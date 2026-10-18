@@ -7,6 +7,7 @@
 An open-source Android file manager for local storage, document trees, SFTP, FTP, SMB, and WebDAV.
 
 [![Build](https://github.com/AlanHuang99/Voyager/actions/workflows/build.yml/badge.svg)](https://github.com/AlanHuang99/Voyager/actions/workflows/build.yml)
+[![GetMerged Scorecard](https://getmerged.abhishekco.de/api/badge/AlanHuang99/Voyager)](https://getmerged.abhishekco.de/AlanHuang99/Voyager)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/AlanHuang99/Voyager)](https://github.com/AlanHuang99/Voyager/releases/latest)
 
