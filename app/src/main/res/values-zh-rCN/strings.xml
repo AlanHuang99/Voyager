@@ -383,6 +383,9 @@
     <string name="browser_extract_archive_message">把 %1$s 解压到此位置的新文件夹中？</string>
     <string name="browser_extract">解压</string>
     <string name="playback_direct_unavailable_title">无法直接打开</string>
+    <string name="playback_service_channel">远程文件访问</string>
+    <string name="playback_service_media">远程播放</string>
+    <string name="playback_service_description">正在提供其他应用打开的文件</string>
     <string name="playback_direct_unavailable_message">无法远程打开此文件。改为下载该文件？</string>
     <string name="browser_search_placeholder">搜索此文件夹</string>
     <string name="browser_sessions">会话</string>
@@ -528,7 +531,4 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">远程文件访问</string>
-    <string name="playback_service_media">远程播放</string>
-    <string name="playback_service_description">正在提供其他应用打开的文件</string>
 </resources>
