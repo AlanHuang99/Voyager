@@ -386,6 +386,9 @@
     <string name="browser_extract_archive_message">Giải nén %1$s vào một thư mục mới tại vị trí này?</string>
     <string name="browser_extract">Giải nén</string>
     <string name="playback_direct_unavailable_title">Không thể mở trực tiếp</string>
+    <string name="playback_service_channel">Truy cập tệp từ xa</string>
+    <string name="playback_service_media">Phát từ xa</string>
+    <string name="playback_service_description">Đang cung cấp tệp được mở trong ứng dụng khác</string>
     <string name="playback_direct_unavailable_message">Không thể mở tệp này từ xa. Vui lòng tải xuống tệp.</string>
     <string name="browser_search_placeholder">Tìm kiếm trong thư mục này</string>
     <string name="browser_sessions">Phiên họp</string>
@@ -531,7 +534,4 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">Truy cập tệp từ xa</string>
-    <string name="playback_service_media">Phát từ xa</string>
-    <string name="playback_service_description">Đang cung cấp tệp được mở trong ứng dụng khác</string>
 </resources>
