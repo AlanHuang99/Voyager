@@ -29,10 +29,10 @@ Preserve Android 8.0 support, existing user data and translations, current brows
 ### Task 3: Integrated validation
 
 - [x] Update README and docs/TESTING.md for the delivered behavior.
-- [ ] Run `./gradlew --no-daemon --max-workers=2 testDebugUnitTest lintDebug assembleDebug assembleRelease assembleDebugAndroidTest`.
-- [ ] Run new and related K60 instrumentation; inspect screenshots, restart persistence, and minified-build behavior.
-- [ ] Obtain an independent whole-branch review and address material findings with focused regressions.
-- [ ] Record results and leave a tested debug build installed on K60.
+- [x] Run `./gradlew --no-daemon --max-workers=2 testDebugUnitTest lintDebug assembleDebug assembleRelease assembleDebugAndroidTest`.
+- [x] Run new and related K60 instrumentation; inspect screenshots, restart persistence, and minified-build behavior.
+- [x] Obtain an independent whole-branch review and address material findings with focused regressions.
+- [x] Record results and leave a tested debug build installed on K60.
 
 ## Progress
 
@@ -41,3 +41,7 @@ Pre-flight: translations add only localized resources; sorting reuses existing E
 Task 1 verification: K60 missing-Sort regression failed before implementation. Two JVM sorting tests and all eight K60 category/sorting tests pass. Permission-loss and stale-file behavior remain covered.
 
 Task 2 verification: K60 Hide-menu regression failed before implementation. Visibility and row-menu JVM tests pass, all four K60 visibility cases pass, and all 24 translation-tool tests pass. Existing translations were preserved while adding the two English action labels.
+
+Task 3 local gate: 448 JVM tests passed, 14 opt-in tests skipped, and lint completed with no errors. Debug, release, and instrumentation APKs built successfully. An independent review of `71ca06b..79e5cd1` found no actionable defects and verified preservation of existing translations against immutable commits.
+
+Task 3 device verification: all 48 distinct selected K60 regression tests passed across focused and follow-up runs. An initial TV focus failure passed when repeated alone, with its full class, and in the follow-up batch; concurrent device use was observed. A misnamed class in the follow-up command was rerun under its correct package and passed all four tests. The isolated minified build preserved Date descending after a process restart, rendered the menu in portrait and landscape, and completed file, folder, and Grid Hide/Unhide round trips with exact byte preservation. Temporary device fixtures and the minified test app were removed. The installed debug APK's SHA-256 matches the tested local artifact. No publication was performed.
