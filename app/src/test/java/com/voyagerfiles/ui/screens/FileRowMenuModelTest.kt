@@ -16,6 +16,7 @@ class FileRowMenuModelTest {
                 FileRowAction.COPY,
                 FileRowAction.CUT,
                 FileRowAction.RENAME,
+                FileRowAction.HIDE,
                 FileRowAction.COMPRESS_TO_ZIP,
                 FileRowAction.DETAILS,
                 FileRowAction.DELETE,
@@ -31,6 +32,7 @@ class FileRowMenuModelTest {
                 FileRowAction.COPY,
                 FileRowAction.CUT,
                 FileRowAction.RENAME,
+                FileRowAction.HIDE,
                 FileRowAction.COMPRESS_TO_ZIP,
                 FileRowAction.FOLDER_SHORTCUTS,
                 FileRowAction.DETAILS,
@@ -114,6 +116,17 @@ class FileRowMenuModelTest {
                 isRemote = true,
             ).actions,
         )
+    }
+
+    @Test
+    fun hiddenLocalItemsOfferUnhideAndOtherProvidersOfferNeither() {
+        assertEquals(true, FileRowAction.UNHIDE in FileRowMenuModel.forFile(file(".notes.txt"), false).actions)
+        assertEquals(false, FileRowAction.HIDE in FileRowMenuModel.forFile(file(".notes.txt"), false).actions)
+        for (source in FileSource.entries.filter { it != FileSource.LOCAL }) {
+            val actions = FileRowMenuModel.forFile(file("notes.txt", source = source), isRemote = true).actions
+            assertEquals(source.name, false, FileRowAction.HIDE in actions || FileRowAction.UNHIDE in actions)
+        }
+        assertEquals(false, FileRowAction.UNHIDE in FileRowMenuModel.forFile(file("..."), false).actions)
     }
 
     private fun file(

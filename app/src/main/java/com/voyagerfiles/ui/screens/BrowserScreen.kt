@@ -34,6 +34,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -132,6 +134,7 @@ import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
 import com.voyagerfiles.ui.components.FileSortMenu
 import com.voyagerfiles.data.model.Bookmark
+import com.voyagerfiles.data.model.LocalFileVisibility
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
@@ -421,6 +424,7 @@ fun BrowserScreen(
             FileRowAction.COPY -> viewModel.copyToClipboard(listOf(file.path), clearSelectionAfter = false)
             FileRowAction.CUT -> viewModel.cutToClipboard(listOf(file.path), clearSelectionAfter = false)
             FileRowAction.RENAME -> showRenameDialog = file.path
+            FileRowAction.HIDE, FileRowAction.UNHIDE -> viewModel.toggleHidden(file.path)
             FileRowAction.COMPRESS_TO_ZIP -> requestZip(listOf(file), fromSelection = false)
             FileRowAction.EXTRACT_HERE -> viewModel.extractArchive(file.path)
             FileRowAction.DETAILS -> showDetailsFor = file
@@ -665,6 +669,17 @@ fun BrowserScreen(
                                         onClick = {
                                             showRenameDialog = state.selectedFiles.first()
                                             showSelectionMoreMenu = false
+                                        },
+                                    )
+                                }
+                                selectedItems.singleOrNull()?.takeIf { LocalFileVisibility.targetName(it) != null }?.let { file ->
+                                    val hidden = file.name.startsWith('.')
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (hidden) R.string.action_unhide else R.string.action_hide)) },
+                                        leadingIcon = { Icon(if (hidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, null) },
+                                        onClick = {
+                                            showSelectionMoreMenu = false
+                                            viewModel.toggleHidden(file.path)
                                         },
                                     )
                                 }

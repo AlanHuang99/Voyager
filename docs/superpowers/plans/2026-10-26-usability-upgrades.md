@@ -20,15 +20,15 @@ Preserve Android 8.0 support, existing user data and translations, current brows
 
 ### Task 2: Hide and unhide
 
-- [ ] Add failing behavior tests for visibility action eligibility and no-overwrite hide/unhide operations.
-- [ ] Add a local hidden-name helper, row actions, and single-selection overflow actions; use existing rename operations.
-- [ ] Add strings and run `uv run --no-project python scripts/prepare_translation_export.py`.
-- [ ] Verify K60 hide/unhide round trips for files and folders, hidden-file visibility, selection/Grid access, collisions, and unchanged bytes.
-- [ ] Commit the visibility change after focused verification.
+- [x] Add failing behavior tests for visibility action eligibility and no-overwrite hide/unhide operations.
+- [x] Add a local hidden-name helper, row actions, and single-selection overflow actions; use existing rename operations.
+- [x] Add strings and run `uv run --no-project python scripts/prepare_translation_export.py`.
+- [x] Verify K60 hide/unhide round trips for files and folders, hidden-file visibility, selection/Grid access, collisions, and unchanged bytes.
+- [x] Commit the visibility change after focused verification.
 
 ### Task 3: Integrated validation
 
-- [ ] Update README and docs/TESTING.md for the delivered behavior.
+- [x] Update README and docs/TESTING.md for the delivered behavior.
 - [ ] Run `./gradlew --no-daemon --max-workers=2 testDebugUnitTest lintDebug assembleDebug assembleRelease assembleDebugAndroidTest`.
 - [ ] Run new and related K60 instrumentation; inspect screenshots, restart persistence, and minified-build behavior.
 - [ ] Obtain an independent whole-branch review and address material findings with focused regressions.
@@ -39,3 +39,5 @@ Preserve Android 8.0 support, existing user data and translations, current brows
 Pre-flight: translations add only localized resources; sorting reuses existing English labels; visibility adds new resources after translation integration. No conflicting interfaces.
 
 Task 1 verification: K60 missing-Sort regression failed before implementation. Two JVM sorting tests and all eight K60 category/sorting tests pass. Permission-loss and stale-file behavior remain covered.
+
+Task 2 verification: K60 Hide-menu regression failed before implementation. Visibility and row-menu JVM tests pass, all four K60 visibility cases pass, and all 24 translation-tool tests pass. Existing translations were preserved while adding the two English action labels.

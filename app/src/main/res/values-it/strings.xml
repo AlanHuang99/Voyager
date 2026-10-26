@@ -546,4 +546,6 @@
         <item quantity="one">%d risultato</item>
         <item quantity="other">%d risultati</item>
     </plurals>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>
