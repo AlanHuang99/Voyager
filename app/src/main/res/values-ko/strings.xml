@@ -386,6 +386,9 @@
     <string name="browser_extract_archive_message">%1$s 를 이 위치의 새 폴더에 압축 해제하시겠습니까?</string>
     <string name="browser_extract">압축 해제</string>
     <string name="playback_direct_unavailable_title">직접 열 수 없음</string>
+    <string name="playback_service_channel">원격 파일 액세스</string>
+    <string name="playback_service_media">원격 재생</string>
+    <string name="playback_service_description">다른 앱에서 연 파일 제공 중</string>
     <string name="playback_direct_unavailable_message">이 파일을 원격으로 열 수 없습니다. 파일을 다운로드하시겠습니까?</string>
     <string name="browser_search_placeholder">이 폴더를 검색하세요</string>
     <string name="browser_sessions">세션</string>
@@ -531,7 +534,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">원격 파일 액세스</string>
-    <string name="playback_service_media">원격 재생</string>
-    <string name="playback_service_description">다른 앱에서 연 파일 제공 중</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

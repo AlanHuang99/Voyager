@@ -12,6 +12,10 @@ import com.voyagerfiles.data.index.CategoryIndexState
 import com.voyagerfiles.data.index.CategoryScanStatus
 import com.voyagerfiles.data.index.StorageCategory
 import com.voyagerfiles.data.index.StorageCategoryIndex
+import com.voyagerfiles.data.local.PreferencesManager
+import com.voyagerfiles.data.model.CategorySort
+import com.voyagerfiles.data.model.SortBy
+import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.util.FileUtils
 import kotlinx.coroutines.CancellationException
@@ -19,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,6 +34,37 @@ class StorageCategoryViewModel(application: Application) : AndroidViewModel(appl
     private val _state = MutableStateFlow(CategoryIndexState())
     val state = _state.asStateFlow()
     private var scanJob: Job? = null
+    private val preferences = PreferencesManager(application)
+    private val _sort = MutableStateFlow(CategorySort())
+    val sort = _sort.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            preferences.categorySort.distinctUntilChanged().collectLatest { selected ->
+                _sort.value = selected
+                do {
+                    val previous = _state.value
+                    val reordered = sorted(previous)
+                } while (!_state.compareAndSet(previous, reordered))
+            }
+        }
+    }
+
+    fun setSortBy(by: SortBy) {
+        viewModelScope.launch { preferences.setCategorySortBy(by) }
+    }
+
+    fun setSortOrder(order: SortOrder) {
+        viewModelScope.launch { preferences.setCategorySortOrder(order) }
+    }
+
+    private suspend fun sorted(snapshot: CategoryIndexState): CategoryIndexState {
+        while (true) {
+            val selected = _sort.value
+            val files = withContext(Dispatchers.Default) { selected.applyTo(snapshot.files) }
+            if (selected == _sort.value) return snapshot.copy(files = files)
+        }
+    }
 
     private fun hasPermission(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
@@ -45,7 +82,7 @@ class StorageCategoryViewModel(application: Application) : AndroidViewModel(appl
         scanJob = viewModelScope.launch {
             try {
                 val volumes = withContext(Dispatchers.IO) { FileUtils.getStorageVolumes(getApplication()) }
-                index.scan(category, volumes, showHidden, ::hasPermission).collect { _state.value = it }
+                index.scan(category, volumes, showHidden, ::hasPermission).collect { _state.value = sorted(it) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {

@@ -23,6 +23,8 @@ import com.voyagerfiles.data.local.PreferencesManager
 import com.voyagerfiles.data.model.Bookmark
 import com.voyagerfiles.data.model.BrowseState
 import com.voyagerfiles.data.model.ConnectionProtocol
+import com.voyagerfiles.data.model.LocalFileVisibility
+import com.voyagerfiles.data.repository.LocalFileProvider
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
@@ -758,6 +760,17 @@ class FileBrowserViewModel @JvmOverloads constructor(
 
     fun rename(oldPath: String, newName: String) {
         val validatedName = validFileNameOrNotify(newName) ?: return
+        renameFile(oldPath, validatedName)
+    }
+
+    fun toggleHidden(path: String) {
+        if (fileProvider !is LocalFileProvider) return
+        val file = _browseState.value.files.firstOrNull { it.path == path } ?: return
+        val target = LocalFileVisibility.targetName(file) ?: return
+        renameFile(path, target)
+    }
+
+    private fun renameFile(oldPath: String, validatedName: String) {
         val provider = fileProvider
         launchOperation(R.string.progress_renaming, R.string.operation_rename) {
             provider.rename(oldPath, validatedName).fold(

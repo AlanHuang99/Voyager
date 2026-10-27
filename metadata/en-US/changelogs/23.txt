@@ -1,0 +1,1 @@
+Sort Quick Access categories by name, size, modification date, or type in either direction. Save category sorting independently from browser sorting. Add Hide and Unhide actions for local files and folders, including Grid selection. Update translations.

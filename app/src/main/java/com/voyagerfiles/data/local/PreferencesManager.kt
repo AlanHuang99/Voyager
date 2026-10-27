@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.voyagerfiles.data.model.CategorySort
 import com.voyagerfiles.data.model.SortBy
 import com.voyagerfiles.data.duplicates.DuplicateScanner
 import com.voyagerfiles.data.model.SortOrder
@@ -37,6 +38,8 @@ class PreferencesManager(private val context: Context) {
         val DISMISSED_TRANSLATION_NOTICES = stringSetPreferencesKey("dismissed_translation_notices")
         val SORT_BY = stringPreferencesKey("sort_by")
         val SORT_ORDER = stringPreferencesKey("sort_order")
+        val CATEGORY_SORT_BY = stringPreferencesKey("category_sort_by")
+        val CATEGORY_SORT_ORDER = stringPreferencesKey("category_sort_order")
         val VIEW_MODE = stringPreferencesKey("view_mode")
         val DEFAULT_PATH = stringPreferencesKey("default_path")
         val AUTO_CLOSE_SESSIONS = booleanPreferencesKey("auto_close_sessions")
@@ -109,6 +112,13 @@ class PreferencesManager(private val context: Context) {
         catch (_: Exception) { SortOrder.ASCENDING }
     }
 
+    val categorySort: Flow<CategorySort> = context.dataStore.data.map { prefs ->
+        CategorySort(
+            by = runCatching { SortBy.valueOf(prefs[Keys.CATEGORY_SORT_BY].orEmpty()) }.getOrDefault(SortBy.NAME),
+            order = runCatching { SortOrder.valueOf(prefs[Keys.CATEGORY_SORT_ORDER].orEmpty()) }.getOrDefault(SortOrder.ASCENDING),
+        )
+    }
+
     val viewMode: Flow<ViewMode> = context.dataStore.data.map { prefs ->
         try { ViewMode.valueOf(prefs[Keys.VIEW_MODE] ?: ViewMode.LIST.name) }
         catch (_: Exception) { ViewMode.LIST }
@@ -170,6 +180,14 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setSortOrder(order: SortOrder) {
         context.dataStore.edit { it[Keys.SORT_ORDER] = order.name }
+    }
+
+    suspend fun setCategorySortBy(sortBy: SortBy) {
+        context.dataStore.edit { it[Keys.CATEGORY_SORT_BY] = sortBy.name }
+    }
+
+    suspend fun setCategorySortOrder(order: SortOrder) {
+        context.dataStore.edit { it[Keys.CATEGORY_SORT_ORDER] = order.name }
     }
 
     suspend fun setViewMode(mode: ViewMode) {

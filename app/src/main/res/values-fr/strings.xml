@@ -395,6 +395,9 @@
     <string name="browser_extract_archive_message">Extraire %1$s dans un nouveau dossier à cet emplacement ?</string>
     <string name="browser_extract">Extraire</string>
     <string name="playback_direct_unavailable_title">Ouverture directe non disponible</string>
+    <string name="playback_service_channel">Accès aux fichiers distants</string>
+    <string name="playback_service_media">Lecture à distance</string>
+    <string name="playback_service_description">Mise à disposition d’un fichier ouvert dans une autre application</string>
     <string name="playback_direct_unavailable_message">Impossible d\'ouvrir ce fichier à distance. Voulez-vous le télécharger à la place ?</string>
     <string name="browser_search_placeholder">Rechercher dans ce dossier</string>
     <string name="browser_sessions">Sessions</string>
@@ -543,7 +546,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">Accès aux fichiers distants</string>
-    <string name="playback_service_media">Lecture à distance</string>
-    <string name="playback_service_description">Mise à disposition d’un fichier ouvert dans une autre application</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

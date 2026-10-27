@@ -49,7 +49,8 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 - Use list, compact list, or grid views, local and remote image thumbnails, sorting, current-folder search, and file-type filters.
 - Search filenames across accessible mounted shared storage from Home, and open a result's containing folder.
 - Open per-file action menus in List and Compact views.
-- Browse Home media categories, bookmark local folders, and keep multiple browser sessions open.
+- Browse Home media categories with saved sorting by name, size, modification date, or type. Bookmark local folders and keep multiple browser sessions open.
+- Hide and unhide local files and folders from their menus. Use Show hidden files to reveal hidden entries.
 - Restore direct-local files from Trash and find duplicate files by content, with configurable folder exclusions.
 - Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 archives with progress and cancellation.
 - Connect to SFTP, FTP, SMB, and WebDAV. SFTP supports passwords, private keys, and generated key pairs; SMB can discover disk shares.

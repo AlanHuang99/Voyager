@@ -34,9 +34,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Bookmark
@@ -58,8 +59,6 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SdStorage
@@ -133,14 +132,14 @@ import com.voyagerfiles.audio.AudioToneInstaller
 import com.voyagerfiles.ui.components.AudioToneMenuItems
 import com.voyagerfiles.ui.components.rememberAudioToneAction
 import com.voyagerfiles.R
+import com.voyagerfiles.ui.components.FileSortMenu
 import com.voyagerfiles.data.model.Bookmark
+import com.voyagerfiles.data.model.LocalFileVisibility
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.data.model.FileTypeFilter
 import com.voyagerfiles.data.model.isNetwork
 import com.voyagerfiles.data.model.RemoteConnection
-import com.voyagerfiles.data.model.SortBy
-import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.ui.components.ArchiveNameDialog
 import com.voyagerfiles.ui.components.CreateItemDialog
@@ -256,7 +255,6 @@ fun BrowserScreen(
     }
     var showRenameDialog by remember { mutableStateOf<String?>(null) }
     var showDetailsFor by remember { mutableStateOf<FileItem?>(null) }
-    var showSortMenu by remember { mutableStateOf(false) }
     var showViewMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
@@ -426,6 +424,7 @@ fun BrowserScreen(
             FileRowAction.COPY -> viewModel.copyToClipboard(listOf(file.path), clearSelectionAfter = false)
             FileRowAction.CUT -> viewModel.cutToClipboard(listOf(file.path), clearSelectionAfter = false)
             FileRowAction.RENAME -> showRenameDialog = file.path
+            FileRowAction.HIDE, FileRowAction.UNHIDE -> viewModel.toggleHidden(file.path)
             FileRowAction.COMPRESS_TO_ZIP -> requestZip(listOf(file), fromSelection = false)
             FileRowAction.EXTRACT_HERE -> viewModel.extractArchive(file.path)
             FileRowAction.DETAILS -> showDetailsFor = file
@@ -673,6 +672,17 @@ fun BrowserScreen(
                                         },
                                     )
                                 }
+                                selectedItems.singleOrNull()?.takeIf { LocalFileVisibility.targetName(it) != null }?.let { file ->
+                                    val hidden = file.name.startsWith('.')
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (hidden) R.string.action_unhide else R.string.action_hide)) },
+                                        leadingIcon = { Icon(if (hidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, null) },
+                                        onClick = {
+                                            showSelectionMoreMenu = false
+                                            viewModel.toggleHidden(file.path)
+                                        },
+                                    )
+                                }
                                 if (SelectionToolbarAction.DETAILS in selectionToolbarModel.overflowActions) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.details_title)) },
@@ -781,68 +791,12 @@ fun BrowserScreen(
                                     }
                                 }
                             }
-                            Box {
-                                IconButton(onClick = { showSortMenu = true }) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.content_desc_sort))
-                                }
-                                DropdownMenu(
-                                    expanded = showSortMenu,
-                                    onDismissRequest = { showSortMenu = false },
-                                ) {
-                                    SortBy.entries.forEach { sort ->
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(sort.labelRes)) },
-                                            trailingIcon = {
-                                                if (state.sortBy == sort) {
-                                                    Icon(
-                                                        if (state.sortOrder == SortOrder.ASCENDING) Icons.Filled.KeyboardArrowUp
-                                                        else Icons.Filled.KeyboardArrowDown,
-                                                        stringResource(
-                                                            if (state.sortOrder == SortOrder.ASCENDING) {
-                                                                R.string.browser_sort_ascending
-                                                            } else {
-                                                                R.string.browser_sort_descending
-                                                            },
-                                                        ),
-                                                    )
-                                                }
-                                            },
-                                            onClick = {
-                                                viewModel.setSortBy(sort)
-                                                showSortMenu = false
-                                            },
-                                        )
-                                    }
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                stringResource(
-                                                    if (state.sortOrder == SortOrder.ASCENDING) {
-                                                        R.string.browser_sort_descending_action
-                                                    } else {
-                                                        R.string.browser_sort_ascending_action
-                                                    },
-                                                ),
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                if (state.sortOrder == SortOrder.ASCENDING) Icons.Filled.KeyboardArrowDown
-                                                else Icons.Filled.KeyboardArrowUp,
-                                                null,
-                                            )
-                                        },
-                                        onClick = {
-                                            viewModel.setSortOrder(
-                                                if (state.sortOrder == SortOrder.ASCENDING) SortOrder.DESCENDING
-                                                else SortOrder.ASCENDING,
-                                            )
-                                            showSortMenu = false
-                                        },
-                                    )
-                                }
-                            }
+                            FileSortMenu(
+                                sortBy = state.sortBy,
+                                sortOrder = state.sortOrder,
+                                onSortByChange = viewModel::setSortBy,
+                                onSortOrderChange = viewModel::setSortOrder,
+                            )
                             Box {
                                 IconButton(onClick = { showMoreMenu = true }) {
                                     Icon(Icons.Filled.MoreVert, stringResource(R.string.content_desc_more))

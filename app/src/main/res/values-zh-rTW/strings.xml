@@ -386,6 +386,9 @@
     <string name="browser_extract_archive_message">將 %1$s 解壓縮到此位置的一個新資料夾？</string>
     <string name="browser_extract">解壓縮</string>
     <string name="playback_direct_unavailable_title">無法直接開啟</string>
+    <string name="playback_service_channel">遠端檔案存取</string>
+    <string name="playback_service_media">遠端播放</string>
+    <string name="playback_service_description">正在提供其他應用程式開啟的檔案</string>
     <string name="playback_direct_unavailable_message">此文件無法遠端開啟。是否改為下載檔案？</string>
     <string name="browser_search_placeholder">搜尋此資料夾</string>
     <string name="browser_sessions">工作階段</string>
@@ -531,7 +534,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">遠端檔案存取</string>
-    <string name="playback_service_media">遠端播放</string>
-    <string name="playback_service_description">正在提供其他應用程式開啟的檔案</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.voyagerfiles.R
 import com.voyagerfiles.audio.AudioTone
 import com.voyagerfiles.audio.AudioToneInstaller
+import com.voyagerfiles.data.model.LocalFileVisibility
 import com.voyagerfiles.data.model.FileItem
 import com.voyagerfiles.data.model.FileSource
 import com.voyagerfiles.ui.components.AudioToneMenuItems
@@ -50,6 +53,8 @@ enum class FileRowAction {
     COPY,
     CUT,
     RENAME,
+    HIDE,
+    UNHIDE,
     COMPRESS_TO_ZIP,
     EXTRACT_HERE,
     EXTRACTION_UNSUPPORTED,
@@ -92,6 +97,9 @@ data class FileRowMenuModel(val actions: List<FileRowAction>) {
                         BrowserArchiveAction.EXTRACT_HERE -> add(FileRowAction.EXTRACT_HERE)
                         BrowserArchiveAction.EXTRACTION_UNSUPPORTED -> add(FileRowAction.EXTRACTION_UNSUPPORTED)
                     }
+                }
+                if (LocalFileVisibility.targetName(file) != null) {
+                    add(if (file.name.startsWith('.')) FileRowAction.UNHIDE else FileRowAction.HIDE)
                 }
                 if (file.isDirectory && file.source == FileSource.LOCAL) add(FileRowAction.FOLDER_SHORTCUTS)
                 if (AudioToneInstaller.isSupported(file)) add(FileRowAction.AUDIO_TONES)
@@ -166,6 +174,10 @@ internal fun BrowserFileRowMenu(
                         RowMenuItem(R.string.action_cut, Icons.Filled.ContentCut) { choose(action) }
                     FileRowAction.RENAME ->
                         RowMenuItem(R.string.action_rename, Icons.Filled.DriveFileRenameOutline) { choose(action) }
+                    FileRowAction.HIDE ->
+                        RowMenuItem(R.string.action_hide, Icons.Filled.VisibilityOff) { choose(action) }
+                    FileRowAction.UNHIDE ->
+                        RowMenuItem(R.string.action_unhide, Icons.Filled.Visibility) { choose(action) }
                     FileRowAction.COMPRESS_TO_ZIP ->
                         RowMenuItem(R.string.dialog_compress_zip, Icons.Filled.Archive) { choose(action) }
                     FileRowAction.EXTRACT_HERE ->

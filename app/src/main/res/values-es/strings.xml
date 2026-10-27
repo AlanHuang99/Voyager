@@ -43,7 +43,7 @@
     <string name="progress_compressing">Apresamiento</string>
     <string name="progress_extracting">Extracción</string>
     <string name="progress_reading_archive">Reading archive</string>
-    <string name="progress_preparing_archive">Preparing</string>
+    <string name="progress_preparing_archive">Preparando</string>
     <string name="progress_copying">Proceso de copiar</string>
     <string name="progress_moving">Emocionante</string>
     <string name="progress_pasting">Paliza</string>
@@ -68,11 +68,11 @@
     <string name="selected_archive_unavailable">El archivo seleccionado ya no está disponible. Actualice la carpeta e inténtelo de nuevo.</string>
     <string name="archive_unavailable">El archivo ya no está disponible. Actualice la carpeta e inténtelo de nuevo.</string>
     <string name="archive_extracted_to">Extraído a %1$s</string>
-    <string name="archive_extraction_cancelled">Extraction cancelled</string>
-    <string name="archive_compression_cancelled">Compression cancelled</string>
-    <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
+    <string name="archive_extraction_cancelled">Extracción cancelada</string>
+    <string name="archive_compression_cancelled">Compresión cancelada</string>
+    <string name="archive_extraction_stopped_kept">Extracción detenida (%1$s). Se han conservado los archivos extraídos hasta el momento en %2$s</string>
     <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
-    <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
+    <string name="archive_extracted_to_with_notes">Extraído a %1$s · %2$s · %3$s</string>
     <plurals name="archive_entries_renamed">
         <item quantity="one">%d item renamed</item>
         <item quantity="other">%d items renamed</item>
@@ -81,16 +81,16 @@
         <item quantity="one">%d item could not be extracted</item>
         <item quantity="other">%d items could not be extracted</item>
     </plurals>
-    <string name="archive_details">Details</string>
-    <string name="archive_details_title">Extraction details</string>
-    <string name="archive_details_not_extracted">Not extracted</string>
-    <string name="archive_details_renamed">Renamed, because this location does not tell upper and lower case apart</string>
+    <string name="archive_details">Detalles</string>
+    <string name="archive_details_title">Detalles de la extracción</string>
+    <string name="archive_details_not_extracted">No extraído</string>
+    <string name="archive_details_renamed">Renombrado, ya que esta ubicación no distingue entre mayúsculas y minúsculas</string>
     <plurals name="archive_details_more">
         <item quantity="one">and %d more</item>
         <item quantity="other">and %d more</item>
     </plurals>
-    <string name="archive_remove_extracted">Remove extracted files</string>
-    <string name="progress_removing_extracted">Removing extracted files</string>
+    <string name="archive_remove_extracted">Eliminar los archivos extraídos</string>
+    <string name="progress_removing_extracted">Eliminando los archivos extraídos</string>
     <string name="paste_success">Pegado correctamente</string>
     <string name="file_already_on_device">Este archivo ya se encuentra en este dispositivo.</string>
     <string name="choose_inside_location">Seleccione archivos o carpetas dentro de esta ubicación.</string>
@@ -340,8 +340,8 @@
     <string name="settings_show_hidden_files">Mostrar archivos ocultos</string>
     <string name="settings_use_trash">Use Trash for local files</string>
     <string name="settings_use_trash_description">Turn off only if local deletes should be permanent</string>
-    <string name="settings_confirm_remote_downloads">Ask before downloading remote files</string>
-    <string name="download_confirm_title">Download to this device?</string>
+    <string name="settings_confirm_remote_downloads">Preguntar antes de descargar archivos remotos</string>
+    <string name="download_confirm_title">¿Descargar a este dispositivo?</string>
     <string name="settings_about">Acerca de</string>
     <string name="translation_help">Ayuda a mejorar las traducciones</string>
     <string name="translation_notice">Esta traducción está en proceso.</string>
@@ -395,6 +395,9 @@
     <string name="browser_extract_archive_message">¿Extraer %1$s en una nueva carpeta en esta ubicación?</string>
     <string name="browser_extract">Extraer</string>
     <string name="playback_direct_unavailable_title">Apertura directa no disponible</string>
+    <string name="playback_service_channel">Acceso a archivos remotos</string>
+    <string name="playback_service_media">Reproducción remota</string>
+    <string name="playback_service_description">Proporcionando un archivo abierto en otra aplicación</string>
     <string name="playback_direct_unavailable_message">No se pudo abrir este archivo de forma remota. ¿Desea descargarlo?</string>
     <string name="browser_search_placeholder">Buscar en esta carpeta</string>
     <string name="browser_sessions">Sesiones</string>
@@ -413,7 +416,7 @@
     <string name="content_desc_sort">Clasificar</string>
     <string name="content_desc_more">Más</string>
     <string name="content_desc_more_selection_actions">Más acciones de selección</string>
-    <string name="content_desc_more_options_named">More options for %1$s</string>
+    <string name="content_desc_more_options_named">Más opciones para %1$s</string>
     <string name="content_desc_copy">Copiar</string>
     <string name="content_desc_cut">Cortar</string>
     <string name="content_desc_rename">Rebautizar</string>
@@ -523,16 +526,16 @@
     <string name="search_bar_bottom">Siempre visible en la parte inferior</string>
     <string name="action_search">Buscar</string>
     <string name="action_close_search">Cerrar búsqueda</string>
-    <string name="shizuku_editor_title">Edit file with Shizuku</string>
-    <string name="shizuku_open">Open Shizuku session</string>
-    <string name="shizuku_description">Browse and manage files using Shizuku. Start Shizuku, then allow Voyager when asked. Access depends on Android and the permissions of the Shizuku service.</string>
-    <string name="shizuku_connect">Connect</string>
-    <string name="shizuku_connecting">Connecting to Shizuku…</string>
-    <string name="shizuku_manager">Open Shizuku</string>
-    <string name="shizuku_unavailable">Install and start Shizuku, then try again.</string>
-    <string name="search_storage_title">Search shared storage</string>
-    <string name="search_storage_scope">Files across accessible mounted shared storage.</string>
-    <string name="search_file_name">File name</string>
+    <string name="shizuku_editor_title">Editar archivo con Shizuku</string>
+    <string name="shizuku_open">Abrir sesión Shizuku</string>
+    <string name="shizuku_description">Explora y gestiona archivos mediante Shizuku. Inicia Shizuku y, cuando se te solicite, concede acceso a Voyager. El acceso depende de la versión de Android y de los permisos del servicio Shizuku.</string>
+    <string name="shizuku_connect">Conectar</string>
+    <string name="shizuku_connecting">Conectando con Shizuku...</string>
+    <string name="shizuku_manager">Abrir Shizuku</string>
+    <string name="shizuku_unavailable">Instala y ejecuta Shizuku, después intenta de nuevo.</string>
+    <string name="search_storage_title">Buscar almacenamiento compartido</string>
+    <string name="search_storage_scope">Archivos en almacenamiento compartido montado y accesible.</string>
+    <string name="search_file_name">Nombre del archivo</string>
     <string name="search_ready">Enter a file name and choose Search.</string>
     <string name="search_results_for">Results for %1$s</string>
     <string name="search_permission_required">Full storage access is required to search shared storage.</string>
@@ -543,7 +546,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">Acceso a archivos remotos</string>
-    <string name="playback_service_media">Reproducción remota</string>
-    <string name="playback_service_description">Proporcionando un archivo abierto en otra aplicación</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

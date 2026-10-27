@@ -41,7 +41,11 @@ import com.voyagerfiles.R
 import com.voyagerfiles.data.index.CategoryIndexState
 import com.voyagerfiles.data.index.CategoryScanStatus
 import com.voyagerfiles.data.index.StorageCategory
+import com.voyagerfiles.data.model.CategorySort
+import com.voyagerfiles.data.model.SortBy
+import com.voyagerfiles.data.model.SortOrder
 import com.voyagerfiles.data.model.FileItem
+import com.voyagerfiles.ui.components.FileSortMenu
 import com.voyagerfiles.ui.components.FileListItem
 import com.voyagerfiles.util.FileUtils
 import com.voyagerfiles.viewmodel.StorageCategoryViewModel
@@ -57,6 +61,7 @@ fun CategoryScreen(
     categoryViewModel: StorageCategoryViewModel = viewModel(),
 ) {
     val state by categoryViewModel.state.collectAsState()
+    val sort by categoryViewModel.sort.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -82,6 +87,9 @@ fun CategoryScreen(
         state = state,
         showHidden = showHidden,
         snackbar = snackbar,
+        sort = sort,
+        onSortByChange = categoryViewModel::setSortBy,
+        onSortOrderChange = categoryViewModel::setSortOrder,
         onRefresh = refresh,
         onCancel = categoryViewModel::cancel,
         onRequestAllFilesAccess = onRequestAllFilesAccess,
@@ -114,6 +122,9 @@ internal fun CategoryContent(
     onRequestAllFilesAccess: () -> Unit,
     onNavigateBack: () -> Unit,
     onOpenFile: (FileItem) -> Unit,
+    sort: CategorySort = CategorySort(),
+    onSortByChange: (SortBy) -> Unit = {},
+    onSortOrderChange: (SortOrder) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -123,6 +134,7 @@ internal fun CategoryContent(
                     IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_desc_back)) }
                 },
                 actions = {
+                    FileSortMenu(sort.by, sort.order, onSortByChange, onSortOrderChange)
                     IconButton(onClick = onRefresh) { Icon(Icons.Filled.Refresh, stringResource(R.string.content_desc_refresh)) }
                 },
             )

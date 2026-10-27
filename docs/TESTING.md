@@ -42,6 +42,18 @@ ANDROID_SERIAL=DEVICE ./gradlew connectedDebugAndroidTest -Pandroid.testInstrume
 
 Use the forced-RTL commands and cleanup procedure in [TRANSLATING.md](TRANSLATING.md) for visual review. Always restore `debug.force_rtl` to `0` and restart the debug app after testing.
 
+## Quick Access sorting and hidden files
+
+Run the sorting, visibility-name, and row-menu JVM checks with:
+
+```bash
+./gradlew testDebugUnitTest --tests com.voyagerfiles.data.model.CategorySortTest --tests com.voyagerfiles.data.model.LocalFileVisibilityTest --tests com.voyagerfiles.ui.screens.FileRowMenuModelTest
+```
+
+On a connected device with full storage access enabled for the debug app, run `CategoryScreenTest`, `CategorySortingTest`, `StorageCategoryIndexAndroidTest`, and `BrowserHiddenFilesTest`. These exercise category sort choices and direction, new and partial results, persistence through ViewModel recreation, independence from browser sorting, stale entries, hidden-file visibility, file and folder round trips, Grid selection actions, and collisions that must preserve both files. Device fixtures use dedicated temporary directories and restore changed preferences.
+
+For a manual check, choose Date and descending order in a Home category, restart the app, and confirm the setting remains selected. In List or Compact, hide a disposable local file from its row menu, enable Show hidden files, and unhide it. Repeat with a folder and through Grid's single-selection menu. Confirm both versions survive when the visible and dot-prefixed destination names already exist. Check portrait and landscape menu scrolling and a minified build.
+
 ## Device instrumentation
 
 Connect an Android device through USB or wireless debugging and confirm that `adb devices` reports it as `device` rather than `offline` or `unauthorized`.

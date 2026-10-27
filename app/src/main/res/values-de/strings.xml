@@ -395,6 +395,9 @@
     <string name="browser_extract_archive_message">Extrahieren Sie %1$s in einen neuen Ordner an diesem Speicherort?</string>
     <string name="browser_extract">Entpacken</string>
     <string name="playback_direct_unavailable_title">Direktes Öffnen nicht möglich</string>
+    <string name="playback_service_channel">Remote-Dateizugriff</string>
+    <string name="playback_service_media">Remote-Wiedergabe</string>
+    <string name="playback_service_description">Datei wird für eine andere App bereitgestellt</string>
     <string name="playback_direct_unavailable_message">Diese Datei konnte nicht remote geöffnet werden. Soll ich die Datei stattdessen herunterladen?</string>
     <string name="browser_search_placeholder">Durchsuchen Sie diesen Ordner</string>
     <string name="browser_sessions">Sitzungen</string>
@@ -543,7 +546,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">Remote-Dateizugriff</string>
-    <string name="playback_service_media">Remote-Wiedergabe</string>
-    <string name="playback_service_description">Datei wird für eine andere App bereitgestellt</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

@@ -395,6 +395,9 @@
     <string name="browser_extract_archive_message">Extrair %1$s para uma nova pasta neste local?</string>
     <string name="browser_extract">Extrair</string>
     <string name="playback_direct_unavailable_title">Abertura direta não disponível</string>
+    <string name="playback_service_channel">Acesso a arquivos remotos</string>
+    <string name="playback_service_media">Reprodução remota</string>
+    <string name="playback_service_description">Fornecendo um arquivo aberto em outro aplicativo</string>
     <string name="playback_direct_unavailable_message">Não foi possível abrir este arquivo remotamente. Deseja baixá-lo?</string>
     <string name="browser_search_placeholder">Pesquisar nesta pasta</string>
     <string name="browser_sessions">Sessões</string>
@@ -543,7 +546,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">Acesso a arquivos remotos</string>
-    <string name="playback_service_media">Reprodução remota</string>
-    <string name="playback_service_description">Fornecendo um arquivo aberto em outro aplicativo</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>

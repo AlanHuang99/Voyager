@@ -386,6 +386,9 @@
     <string name="browser_extract_archive_message">%1$s をこの場所に新しいフォルダに展開しますか？</string>
     <string name="browser_extract">展開</string>
     <string name="playback_direct_unavailable_title">直接開くことができません</string>
+    <string name="playback_service_channel">リモートファイルアクセス</string>
+    <string name="playback_service_media">リモート再生</string>
+    <string name="playback_service_description">別のアプリで開いたファイルを提供しています</string>
     <string name="playback_direct_unavailable_message">このファイルはリモートで開けませんでした。代わりにファイルをダウンロードしますか？</string>
     <string name="browser_search_placeholder">このフォルダを検索</string>
     <string name="browser_sessions">セッション</string>
@@ -531,7 +534,6 @@
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
     </plurals>
-    <string name="playback_service_channel">リモートファイルアクセス</string>
-    <string name="playback_service_media">リモート再生</string>
-    <string name="playback_service_description">別のアプリで開いたファイルを提供しています</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_unhide">Unhide</string>
 </resources>
