@@ -72,7 +72,7 @@
     <string name="archive_compression_cancelled">Kompression abgebrochen</string>
     <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
     <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
-    <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
+    <string name="archive_extracted_to_with_notes">Entpackt nach %1$s %2$s %3$s</string>
     <plurals name="archive_entries_renamed">
         <item quantity="one">%d item renamed</item>
         <item quantity="other">%d items renamed</item>
