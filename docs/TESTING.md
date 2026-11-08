@@ -56,6 +56,8 @@ For a manual check, choose Date and descending order in a Home category, restart
 
 ## Device instrumentation
 
+Incoming file sharing is covered by `IncomingShareTest`, `IncomingShareActivityTest`, and `IncomingShareNavigationTest`: single/multiple streams, ClipData fallback, unsafe URI rejection, Activity recreation, cancellation, destination selection, and saving via document upload. Run these with `UploadSourceFactoryTest` and `DocumentUploadTest` after granting the debug app full storage access. Manually share single and multiple photos, videos, audio, and documents from another app; choose local, SAF, and disposable remote folders, then Save here. Check Back, session switching, conflicts, cancellation, and an unreadable or revoked source. Text-only shares are intentionally unsupported.
+
 Connect an Android device through USB or wireless debugging and confirm that `adb devices` reports it as `device` rather than `offline` or `unauthorized`.
 
 ```bash
