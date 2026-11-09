@@ -26,13 +26,25 @@ class IncomingShareActivityTest {
             compose.onNodeWithText("Save here").assertIsNotEnabled()
             scenario.recreate()
             compose.onNodeWithText("Save here").assertIsDisplayed()
+            compose.onNodeWithText("Cancel").performClick()
+            scenario.recreate()
+            compose.onNodeWithText("Save here").assertDoesNotExist()
+        }
+    }
+
+    @Test fun launcherIntentKeepsPendingShare() {
+        val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java).apply {
+            action = Intent.ACTION_SEND
+            type = "application/octet-stream"
+            putExtra(Intent.EXTRA_STREAM, Uri.parse("content://com.voyagerfiles.test.upload/document/zero"))
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        ActivityScenario.launch<MainActivity>(intent).use { scenario ->
+            compose.onNodeWithText("Save here").assertIsDisplayed()
             scenario.onActivity {
                 it.startActivity(Intent(it, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
             }
             compose.onNodeWithText("Save here").assertIsDisplayed()
-            compose.onNodeWithText("Cancel").performClick()
-            scenario.recreate()
-            compose.onNodeWithText("Save here").assertDoesNotExist()
         }
     }
 }

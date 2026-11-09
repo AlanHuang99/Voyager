@@ -74,7 +74,9 @@ class TransferService : Service() {
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
             )
         }
-        return START_NOT_STICKY
+        // Keep the start item (and its URI permission owner) until stopSelfResult revokes it.
+        // A redelivery after process death sees an idle controller and stops above.
+        return if (intent?.clipData != null) START_REDELIVER_INTENT else START_NOT_STICKY
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {

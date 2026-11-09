@@ -12,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.voyagerfiles.data.model.ConnectionProtocol
 import com.voyagerfiles.data.model.RemoteConnection
 import com.voyagerfiles.data.remote.saf.SafFileProvider
+import com.voyagerfiles.ui.text.resolve
 import com.voyagerfiles.viewmodel.OperationOutcome
 import com.voyagerfiles.viewmodel.OperationState
 import java.io.File
@@ -126,7 +127,12 @@ class IncomingShareLifetimeTest {
             main { browser.closeActiveSession() }
             waitUntil { browser.activeSession.value == null }
             control("release")
-            waitForCompletion(OperationOutcome.COMPLETED)
+            try {
+                waitForCompletion(OperationOutcome.COMPLETED)
+            } catch (error: AssertionError) {
+                val requests = List(server.requestCount) { server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)?.let { "${it.method} ${it.path}" } }
+                throw AssertionError("${error.message}\nDAV requests=$requests\n${listing(files)}", error)
+            }
             sources.forEach { uri -> assertArrayEquals(IncomingShareSourceProvider.payload(uri.lastPathSegment), files["/${uri.lastPathSegment}"]) }
             waitForGrantRelease()
         } finally { server.shutdown() }
@@ -195,7 +201,26 @@ class IncomingShareLifetimeTest {
         assertEquals("Service must retain the unread source grant", PackageManager.PERMISSION_GRANTED, readPermission(sources[1]))
     }
 
-    private fun waitForGrantRelease() = waitUntil { sources.all { readPermission(it) == PackageManager.PERMISSION_DENIED } }
+    private fun waitForGrantRelease() {
+        try {
+            waitUntil { sources.all { uri ->
+                try {
+                    app.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.close()
+                    false
+                } catch (_: SecurityException) { true }
+            } }
+        } catch (error: AssertionError) {
+            val permissionDump = shell("dumpsys activity permissions").lines()
+            val fixtureGrants = permissionDump.indices.filter { permissionDump[it].contains(IncomingShareSourceProvider.AUTHORITY) }.joinToString("\n") { index ->
+                permissionDump.drop(index).takeWhile { line -> line == permissionDump[index] || !line.contains("UriPermission{") }
+                    .filter { line -> line.contains(IncomingShareSourceProvider.AUTHORITY) || line.contains("targetPkg=${app.packageName}") || line.trim().startsWith("mode=") || line.contains("Owners:") || line.contains("StartItem{") || line.contains("ActivityRecord{") }
+                    .joinToString("\n")
+            }
+            throw AssertionError("Source access still allowed; checkUriPermission=${sources.map(::readPermission)}\n$fixtureGrants\n${shell("dumpsys activity services ${app.packageName}")}", error)
+        }
+    }
+    private fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+        .bufferedReader().use { it.readText() }
     private fun readPermission(uri: Uri) = app.checkUriPermission(uri, Process.myPid(), Process.myUid(), Intent.FLAG_GRANT_READ_URI_PERMISSION)
     private fun removeTasks() {
         main { app.getSystemService(ActivityManager::class.java).appTasks.forEach { it.finishAndRemoveTask() } }
@@ -209,7 +234,7 @@ class IncomingShareLifetimeTest {
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
     private fun waitForCompletion(outcome: OperationOutcome, timeout: Long = 15_000) {
         waitUntil(timeout) { browser.operationState.value == OperationState.Idle && browser.lastOperationResult.value != null }
-        assertEquals(outcome, browser.lastOperationResult.value!!.outcome)
+        assertEquals(browser.snackbarMessage.value?.resolve(app.resources), outcome, browser.lastOperationResult.value!!.outcome)
     }
     private fun waitUntil(timeout: Long = 10_000, condition: () -> Boolean) {
         val deadline = System.nanoTime() + timeout * 1_000_000
@@ -221,7 +246,7 @@ class IncomingShareLifetimeTest {
         <?xml version="1.0" encoding="utf-8"?>
         <D:multistatus xmlns:D="DAV:">
           <D:response><D:href>/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
-          ${files.entries.joinToString("\n") { (path, bytes) -> "<D:response><D:href>$path</D:href><D:propstat><D:prop><D:resourcetype/><D:getcontentlength>${bytes.size}</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>" }}
+          ${files.entries.joinToString("") { (path, bytes) -> "<D:response><D:href>$path</D:href><D:propstat><D:prop><D:resourcetype/><D:getcontentlength>${bytes.size}</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>" }}
         </D:multistatus>
     """.trimIndent()
 }
