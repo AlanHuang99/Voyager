@@ -52,6 +52,8 @@ The Crowdin translations workflow uploads English resource changes from `master`
 
 Maintainers can run the workflow manually from GitHub Actions. For the initial import, enable **Import repository translations into Crowdin** once. Leave it disabled for normal synchronization to avoid reimporting older repository translations. The project ID is `927407`; the token is stored only in the repository's `CROWDIN_PERSONAL_TOKEN` Actions secret. The repository must allow GitHub Actions to create pull requests.
 
+The manual **Apply reviewed Crowdin corrections** workflow applies the fixed mapping in `scripts/crowdin_corrections.json` from `master`. It checks English source text, placeholders, and existing suggestions before adding and approving the reviewed corrections; existing contributor suggestions retain their text and attribution. It verifies the corrected wording in an approved export and uploads the export as an artifact. Run **Crowdin translations** afterward to regenerate the translation pull request.
+
 To accept a language request, maintainers can run **Add Crowdin target language** on `master` with the Crowdin language ID, such as `pl` for Polish. It verifies the language, preserves existing targets, and checks the result. The stored token must have permission to edit the project. Alternatively, add the language under the project's Settings > Languages > Target Languages. Enabling a language opens it for contributions; it does not generate translations or immediately ship that locale in the app.
 
 ## Add a locale directly
