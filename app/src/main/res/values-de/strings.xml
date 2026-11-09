@@ -72,7 +72,7 @@
     <string name="archive_compression_cancelled">Kompression abgebrochen</string>
     <string name="archive_extraction_stopped_kept">Extraction stopped (%1$s). Kept the files extracted so far in %2$s</string>
     <string name="archive_extracted_to_with_note">Extracted to %1$s · %2$s</string>
-    <string name="archive_extracted_to_with_notes">Extracted to %1$s · %2$s · %3$s</string>
+    <string name="archive_extracted_to_with_notes">Entpackt nach %1$s %2$s %3$s</string>
     <plurals name="archive_entries_renamed">
         <item quantity="one">%d item renamed</item>
         <item quantity="other">%d items renamed</item>
@@ -548,6 +548,9 @@
     </plurals>
     <string name="action_hide">Hide</string>
     <string name="action_unhide">Unhide</string>
+    <string name="share_choose_destination">Choose a folder for shared files (%1$d)</string>
+    <string name="share_save_here">Save here</string>
+    <string name="share_receive_failed">Could not receive shared files. Share files with read access and try again.</string>
     <string name="search_storage_items_scope">Files and folders across accessible mounted shared storage.</string>
     <string name="search_item_name">File or folder name</string>
     <string name="search_items_ready">Enter a file or folder name and choose Search.</string>

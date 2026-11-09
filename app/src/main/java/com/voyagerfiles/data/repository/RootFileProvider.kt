@@ -24,19 +24,11 @@ open class RootFileProvider(
     private val source: FileSource = FileSource.ROOT,
 ) : FileProvider, Closeable {
     override suspend fun listFiles(path: String) = io {
-        val directory = path(path)
-        val script = "d=${q(directory)}; [ -d \"\$d\" ] && [ -r \"\$d\" ] && [ -x \"\$d\" ] || { echo 'Folder missing or permission denied' >&2; exit 1; }; " +
-            "for p in \"\$d\"/* \"\$d\"/.[!.]* \"\$d\"/..?*; do [ -e \"\$p\" ] || [ -L \"\$p\" ] || continue; " +
-            "printf '%s\\0' \"\$p\"; stat -c '%f %s %Y %u:%g' -- \"\$p\" || exit 1; done"
-        parse(shell.execute(script))
+        parse(listing(path(path)))
     }
 
     override suspend fun getFileInfo(path: String) = io { info(path(path)) }
-    override suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) {
-        val p = q(path(path))
-        // A denied su request is an error, not an absent file.
-        shell.execute("if [ -e $p ] || [ -L $p ]; then printf 1; else printf 0; fi", 1).contentEquals(byteArrayOf(49))
-    }
+    override suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) { existsAt(path(path)) }
     override fun getParentPath(path: String): String? = File(path(path)).parent
     override fun isSameStorage(other: FileProvider): Boolean = other is RootFileProvider || other is LocalFileProvider
     override fun isSamePath(first: String, second: String): Boolean = canonical(first) == canonical(second)
@@ -48,18 +40,16 @@ open class RootFileProvider(
 
     override suspend fun createDirectory(path: String, name: String) = io {
         val target = child(path, name)
-        shell.execute("mkdir -- ${q(target)}")
+        mkdirAt(target)
         info(target)
     }
     override suspend fun createFile(path: String, name: String) = io {
         val target = child(path, name)
-        shell.execute("set -C; : > ${q(target)}")
+        createFileAt(target)
         info(target)
     }
     override suspend fun delete(path: String) = io {
-        val p = mutablePath(path)
-        shell.execute("[ -e ${q(p)} ] || [ -L ${q(p)} ] || { echo 'File no longer exists' >&2; exit 1; }; rm -r -- ${q(p)}")
-        Unit
+        deleteAt(mutablePath(path))
     }
     override suspend fun rename(oldPath: String, newName: String) = io {
         val source = mutablePath(oldPath)
@@ -81,19 +71,18 @@ open class RootFileProvider(
         moveNew(source, target)
     }
     override suspend fun getInputStream(path: String): Result<InputStream> = io {
-        val p = q(path(path))
-        shell.input(regular(p) + "exec cat -- $p")
+        openRead(path(path))
     }
     override suspend fun getOutputStream(path: String): Result<OutputStream> = io {
-        stagedOutput(mutablePath(path))
+        openStaged(mutablePath(path), null)
     }
     override suspend fun writeStream(path: String, input: InputStream, sourcePath: String, totalBytes: Long?, onProgress: (StreamTransferProgress) -> Unit) = io {
-        val output = stagedOutput(mutablePath(path))
+        val output = openStaged(mutablePath(path), null)
         try {
             StreamTransfer.copy(input, output, sourcePath, totalBytes, onProgress = onProgress)
             output.close()
         } catch (error: Throwable) {
-            output.abortTransfer()
+            (output as TransferAbortable).abortTransfer()
             throw error
         }
     }
@@ -101,7 +90,7 @@ open class RootFileProvider(
     suspend fun readText(path: String): Result<RootTextDocument> = io {
         val p = path(path)
         val before = fingerprint(p)
-        val bytes = shell.execute(regular(q(p)) + "exec cat -- ${q(p)}", MAX_TEXT_BYTES)
+        val bytes = readBytes(p, MAX_TEXT_BYTES)
         if (bytes.any { it == 0.toByte() }) throw IOException("Binary files cannot be edited as text")
         val text = decode(bytes)
         if (before != fingerprint(p) || !before.endsWith(hash(bytes))) throw IOException("File changed while opening. Open it again.")
@@ -112,15 +101,45 @@ open class RootFileProvider(
         val bytes = text.toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_TEXT_BYTES) { "Text editor limit is 256 KiB" }
         require('\u0000' !in text) { "Binary files cannot be edited as text" }
-        val output = stagedOutput(mutablePath(document.path), document.fingerprint)
+        val output = openStaged(mutablePath(document.path), document.fingerprint)
         try {
             output.write(bytes)
             output.close()
         } catch (error: Throwable) {
-            output.abortTransfer()
+            (output as TransferAbortable).abortTransfer()
             throw error
         }
     }
+
+    // Privileged primitives. Paths arrive normalized and validated; the defaults run supervised shell commands.
+    protected open fun listing(directory: String): ByteArray = shell.execute(
+        "d=${q(directory)}; [ -d \"\$d\" ] && [ -r \"\$d\" ] && [ -x \"\$d\" ] || { echo 'Folder missing or permission denied' >&2; exit 1; }; " +
+            "for p in \"\$d\"/* \"\$d\"/.[!.]* \"\$d\"/..?*; do [ -e \"\$p\" ] || [ -L \"\$p\" ] || continue; " +
+            "printf '%s\\0' \"\$p\"; stat -c '%f %s %Y %u:%g' -- \"\$p\" || exit 1; done"
+    )
+    protected open fun statEntry(path: String): ByteArray = shell.execute("printf '%s\\0' ${q(path)}; stat -c '%f %s %Y %u:%g' -- ${q(path)}")
+    protected open fun existsAt(path: String): Boolean {
+        val p = q(path)
+        // A denied su request is an error, not an absent file.
+        return shell.execute("if [ -e $p ] || [ -L $p ]; then printf 1; else printf 0; fi", 1).contentEquals(byteArrayOf(49))
+    }
+    protected open fun canonicalAt(path: String): String =
+        decode(shell.execute("readlink -f -- ${q(path)}", 65_536)).removeSuffix("\n")
+    protected open fun mkdirAt(path: String) { shell.execute("mkdir -- ${q(path)}") }
+    protected open fun createFileAt(path: String) { shell.execute("set -C; : > ${q(path)}") }
+    protected open fun deleteAt(path: String) {
+        shell.execute("[ -e ${q(path)} ] || [ -L ${q(path)} ] || { echo 'File no longer exists' >&2; exit 1; }; rm -r -- ${q(path)}")
+    }
+    protected open fun moveNew(source: String, target: String) {
+        shell.execute(noTarget(target) + "mv -nT -- ${q(source)} ${q(target)}; [ ! -e ${q(source)} ] && [ ! -L ${q(source)} ] || { echo 'Move failed; original retained' >&2; exit 1; }")
+    }
+    protected open fun openRead(path: String): InputStream = shell.input(regular(q(path)) + "exec cat -- ${q(path)}")
+    protected open fun readBytes(path: String, maxBytes: Int): ByteArray =
+        shell.execute(regular(q(path)) + "exec cat -- ${q(path)}", maxBytes)
+    /** Replaces [path] when closed; the stream also implements [TransferAbortable]. */
+    protected open fun openStaged(path: String, expected: String?): OutputStream = stagedOutput(path, expected)
+    protected open fun fingerprint(path: String): String =
+        shell.execute(fingerprintCommand(path), 1024).toString(Charsets.UTF_8).trimEnd('\n')
 
     private fun stagedOutput(path: String, expected: String? = null): StagedOutput {
         val original = expected ?: fingerprint(path)
@@ -190,14 +209,13 @@ open class RootFileProvider(
         private fun cleanup() { runCatching { shell.execute(cleanupScript) } }
     }
 
-    private fun fingerprint(path: String) = shell.execute(fingerprintCommand(path), 1024).toString(Charsets.UTF_8).trimEnd('\n')
     private fun fingerprintCommand(path: String): String = fingerprintOperand(q(path))
     private fun fingerprintOperand(p: String): String {
         // Hash stdin so GNU sha256sum never escapes a newline-bearing filename in its output.
         return regular(p) + "stat -c '%d:%i:%f:%u:%g:%h:%s:%Y:%Z' -- $p || exit 1; " +
             "context=\$(ls -Zd -- $p 2>/dev/null); printf '%s\\n' \"\${context%% *}\"; sha256sum < $p | cut -d ' ' -f 1"
     }
-    private fun info(path: String): FileItem = parse(shell.execute("printf '%s\\0' ${q(path)}; stat -c '%f %s %Y %u:%g' -- ${q(path)}")).single()
+    private fun info(path: String): FileItem = parse(statEntry(path)).single()
     private fun parse(bytes: ByteArray): List<FileItem> {
         val result = mutableListOf<FileItem>()
         var offset = 0
@@ -213,17 +231,13 @@ open class RootFileProvider(
         }
         return result
     }
-    private fun moveNew(source: String, target: String) {
-        shell.execute(noTarget(target) + "mv -nT -- ${q(source)} ${q(target)}; [ ! -e ${q(source)} ] && [ ! -L ${q(source)} ] || { echo 'Move failed; original retained' >&2; exit 1; }")
-    }
     private fun noTarget(path: String) = "[ ! -e ${q(path)} ] && [ ! -L ${q(path)} ] || { echo 'Destination already exists' >&2; exit 1; }; "
     private fun regular(quoted: String) = "[ -f $quoted ] && [ ! -L $quoted ] || { echo 'Only regular files can be read or edited; symbolic links and special files are unsupported' >&2; exit 1; }; "
     private fun path(value: String): String {
         require(value.startsWith('/') && '\u0000' !in value) { "Root paths must be absolute and contain no NUL" }
         return File(value).toPath().normalize().toString()
     }
-    private fun canonical(value: String): String = shell.execute("readlink -f -- ${q(path(value))}", 65_536)
-        .toString(Charsets.UTF_8).removeSuffix("\n").also { if (it.isEmpty()) throw IOException("Cannot resolve root path") }
+    private fun canonical(value: String): String = canonicalAt(path(value)).also { if (it.isEmpty()) throw IOException("Cannot resolve root path") }
     private fun mutablePath(value: String) = path(value).also { require(it != "/") { "The root directory cannot be modified" } }
     private fun child(parent: String, name: String): String {
         require(name.isNotEmpty() && name != "." && name != ".." && '/' !in name && '\u0000' !in name) { "Invalid file name" }

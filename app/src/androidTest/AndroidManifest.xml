@@ -2,6 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <service
+            android:name="com.voyagerfiles.app.ShizukuDeathTokenService"
+            android:exported="true"
+            android:permission="com.voyagerfiles.debug.test.SHIZUKU_DEATH_FIXTURE"
+            android:process=":shizuku_death_fixture" />
+        <activity
+            android:name="com.voyagerfiles.app.IncomingShareSenderActivity"
+            android:exported="true"
+            android:taskAffinity="com.voyagerfiles.test.sender" />
+        <provider
+            android:name="com.voyagerfiles.app.IncomingShareSourceProvider"
+            android:authorities="com.voyagerfiles.test.shares"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+        <provider
+            android:name="com.voyagerfiles.app.IncomingShareControlProvider"
+            android:authorities="com.voyagerfiles.test.sharecontrol"
+            android:exported="true" />
         <provider
             android:name="com.voyagerfiles.util.UploadMetadataTestProvider"
             android:authorities="com.voyagerfiles.test.upload"
