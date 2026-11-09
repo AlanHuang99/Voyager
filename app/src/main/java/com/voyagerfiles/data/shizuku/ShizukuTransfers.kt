@@ -159,7 +159,7 @@ internal class ServiceWrite(
                 if (state == State.ABORTED) throw IllegalStateException("Write was cancelled")
                 if (!complete) throw IllegalStateException("Shizuku write timed out")
                 failure?.let { throw IllegalStateException(hooks.describe(it)) }
-                staged.commit()
+                staged.commit { stopped }
                 state = State.DONE
             } catch (error: Throwable) {
                 abortLocked()
@@ -172,13 +172,14 @@ internal class ServiceWrite(
 
     override fun abort() {
         hooks.check()
+        stopped = true
         synchronized(this) { abortLocked() }
     }
 
-    override fun binderDied() { synchronized(this) { abortLocked() } }
+    override fun binderDied() { stopped = true; synchronized(this) { abortLocked() } }
 
     /** Service shutdown. */
-    fun terminate() { synchronized(this) { abortLocked() } }
+    fun terminate() { stopped = true; synchronized(this) { abortLocked() } }
 
     private fun abortLocked() {
         if (state == State.DONE || state == State.ABORTED) return

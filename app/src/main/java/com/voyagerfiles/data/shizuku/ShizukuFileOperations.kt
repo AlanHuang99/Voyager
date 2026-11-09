@@ -104,10 +104,11 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
     ) {
         private var renamed = false
 
-        fun commit() {
+        fun commit(cancelled: () -> Boolean = { false }) {
+            checkCancelled(cancelled)
             Os.fsync(payload.fd)
             val original = openRegular(parent.child(name), O_RDONLY).use { file ->
-                if (fingerprintOf(file) != expected) throw IOException(CHANGED)
+                if (fingerprintOf(file, cancelled) != expected) throw IOException(CHANGED)
                 Os.fstat(file.fd)
             }
             if (original.st_nlink != 1L) throw IOException("Cannot replace a hard-linked file")
@@ -119,6 +120,7 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
             if (written.st_mode != original.st_mode || written.st_uid != original.st_uid || written.st_gid != original.st_gid) {
                 throw IOException("Cannot preserve file ownership or permissions; original retained")
             }
+            checkCancelled(cancelled)
             Os.rename(stage.child(PAYLOAD), parent.child(name))
             renamed = true
             syncDirectory(parent)
@@ -214,19 +216,20 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         }
     }
 
-    private fun fingerprintOf(file: PinnedFd): String {
+    private fun fingerprintOf(file: PinnedFd, cancelled: () -> Boolean = { false }): String {
         val stat = Os.fstat(file.fd)
         val context = selinuxContext(file.path)?.text ?: "?"
-        val hash = sha256(file, stat.st_size)
+        val hash = sha256(file, stat.st_size, cancelled)
         return "${stat.st_dev}:${stat.st_ino}:${Integer.toHexString(stat.st_mode)}:${stat.st_uid}:${stat.st_gid}:" +
             "${stat.st_nlink}:${stat.st_size}:${stat.st_mtime}:${stat.st_ctime}\n$context\n$hash"
     }
 
-    private fun sha256(file: PinnedFd, size: Long): String {
+    private fun sha256(file: PinnedFd, size: Long, cancelled: () -> Boolean): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(64 * 1024)
         var offset = 0L
         while (true) {
+            checkCancelled(cancelled)
             val count = Os.pread(file.fd, buffer, 0, buffer.size, offset)
             if (count <= 0) break
             digest.update(buffer, 0, count)
@@ -234,6 +237,10 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
             if (offset > size + buffer.size) break // Growing while hashed; the stat fields already differ.
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun checkCancelled(cancelled: () -> Boolean) {
+        if (cancelled()) throw IOException("Write was cancelled")
     }
 
     private class Context(val raw: ByteArray, val text: String)
