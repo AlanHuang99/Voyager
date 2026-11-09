@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 
 /** Owns the active operation independently of an Activity's lifecycle. */
 class TransferOperationController(
-    private val startForeground: () -> Unit,
+    private val startForeground: (List<String>) -> Unit,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     private val mutableState = MutableStateFlow<OperationState>(OperationState.Idle)
@@ -33,6 +33,7 @@ class TransferOperationController(
         onFailure: (Throwable) -> Unit,
         onFinished: () -> Unit,
         cancellable: Boolean = true,
+        readUris: List<String> = emptyList(),
         block: suspend () -> Unit,
     ): Boolean {
         if (mutableState.value is OperationState.Running) return false
@@ -44,12 +45,13 @@ class TransferOperationController(
         cancellation = token
         mutableState.value = OperationState.Running(TransferProgress(label), id = ++nextId, cancellable = cancellable)
         try {
-            startForeground()
+            startForeground(readUris)
         } catch (error: Throwable) {
             cancellation = null
             finish(OperationOutcome.FAILED)
             mutableState.value = OperationState.Idle
             onFailure(error)
+            onFinished()
             return true
         }
         scope.launch(token.contextElement()) {

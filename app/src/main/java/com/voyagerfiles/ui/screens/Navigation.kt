@@ -8,6 +8,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.voyagerfiles.viewmodel.OperationState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -64,6 +70,8 @@ fun AppNavigation(
     requestedFolder: String? = null,
     folderRequestGeneration: Long = 0,
     onFolderRequestConsumed: () -> Unit = {},
+    sharedFiles: List<Uri> = emptyList(),
+    onShareConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -83,166 +91,188 @@ fun AppNavigation(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = Screen.Home.route,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        enterTransition = {
-            val direction = if (targetState.destination.route == Screen.Home.route) {
-                AnimatedContentTransitionScope.SlideDirection.End
-            } else {
-                AnimatedContentTransitionScope.SlideDirection.Start
-            }
-            slideIntoContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
-                fadeIn(tween(220))
-        },
-        exitTransition = {
-            val direction = if (targetState.destination.route == Screen.Home.route) {
-                AnimatedContentTransitionScope.SlideDirection.End
-            } else {
-                AnimatedContentTransitionScope.SlideDirection.Start
-            }
-            slideOutOfContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
-                fadeOut(tween(180))
-        },
-        popEnterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                tween(300, easing = FastOutSlowInEasing),
-            ) { it / 8 } + fadeIn(tween(220))
-        },
-        popExitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                tween(300, easing = FastOutSlowInEasing),
-            ) { it / 8 } + fadeOut(tween(180))
-        },
-    ) {
-        composable(Screen.Home.route) {
-            HomeScreen(
-                viewModel = viewModel,
-                onNavigateToBrowser = { path ->
-                    viewModel.openLocalRoot(path)
-                    navController.navigate(Screen.Browser.createRoute(path))
-                },
-                onNavigateToSession = { sessionId, path ->
-                    viewModel.activateSession(sessionId)
-                    navController.navigate(Screen.Browser.createRoute(path))
-                },
-                onNavigateToConnections = {
-                    navController.navigate(Screen.Connections.route)
-                },
-                onNavigateToTrash = {
-                    navController.navigate(Screen.Trash.route)
-                },
-                onNavigateToSettings = {
-                    navController.navigate(Screen.Settings.route)
-                },
-                onOpenSafTree = { uri: Uri ->
-                    viewModel.openSafRoot(uri)
-                    navController.navigate(Screen.Browser.createRoute(uri.toString()))
-                },
-                hasAllFilesAccess = hasAllFilesAccess,
-                onRequestAllFilesAccess = onRequestAllFilesAccess,
-                onNavigateToCategory = { navController.navigate(Screen.Category.createRoute(it)) },
-                onNavigateToSearch = { navController.navigate(Screen.Search.route) },
-            )
-        }
-
-        composable(
-            route = Screen.Browser.route,
-            arguments = listOf(navArgument("path") { type = NavType.StringType }),
-        ) {
-            BrowserScreen(
-                viewModel = viewModel,
-                onNavigateBack = {
-                    if (navController.previousBackStackEntry?.destination?.route == Screen.Search.route) navController.popBackStack()
-                    else navController.navigateHome()
-                },
-                onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
-                hasAllFilesAccess = hasAllFilesAccess,
-                onSearchSharedStorage = { query ->
-                    storageSearchQuery = query
-                    navController.navigate(Screen.Search.route)
-                },
-            )
-        }
-
-        composable(Screen.Duplicates.route, arguments = listOf(navArgument("path") { type = NavType.StringType })) { entry ->
-            val sourceSessionId by rememberSaveable { mutableStateOf(viewModel.activeSession.value?.id) }
-            DuplicatesScreen(checkNotNull(entry.arguments?.getString("path")), onNavigateBack = {
-                if (viewModel.sessions.value.any { it.id == sourceSessionId }) {
-                    viewModel.refresh()
-                    navController.popBackStack()
+    Column(Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier
+                .weight(1f)
+                .background(MaterialTheme.colorScheme.background),
+            enterTransition = {
+                val direction = if (targetState.destination.route == Screen.Home.route) {
+                    AnimatedContentTransitionScope.SlideDirection.End
                 } else {
-                    navController.navigateHome()
+                    AnimatedContentTransitionScope.SlideDirection.Start
                 }
-            })
-        }
+                slideIntoContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
+                    fadeIn(tween(220))
+            },
+            exitTransition = {
+                val direction = if (targetState.destination.route == Screen.Home.route) {
+                    AnimatedContentTransitionScope.SlideDirection.End
+                } else {
+                    AnimatedContentTransitionScope.SlideDirection.Start
+                }
+                slideOutOfContainer(direction, tween(300, easing = FastOutSlowInEasing)) { it / 8 } +
+                    fadeOut(tween(180))
+            },
+            popEnterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(300, easing = FastOutSlowInEasing),
+                ) { it / 8 } + fadeIn(tween(220))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(300, easing = FastOutSlowInEasing),
+                ) { it / 8 } + fadeOut(tween(180))
+            },
+        ) {
+            composable(Screen.Home.route) {
+                HomeScreen(
+                    viewModel = viewModel,
+                    onNavigateToBrowser = { path ->
+                        viewModel.openLocalRoot(path)
+                        navController.navigate(Screen.Browser.createRoute(path))
+                    },
+                    onNavigateToSession = { sessionId, path ->
+                        viewModel.activateSession(sessionId)
+                        navController.navigate(Screen.Browser.createRoute(path))
+                    },
+                    onNavigateToConnections = {
+                        navController.navigate(Screen.Connections.route)
+                    },
+                    onNavigateToTrash = {
+                        navController.navigate(Screen.Trash.route)
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
+                    },
+                    onOpenSafTree = { uri: Uri ->
+                        viewModel.openSafRoot(uri)
+                        navController.navigate(Screen.Browser.createRoute(uri.toString()))
+                    },
+                    hasAllFilesAccess = hasAllFilesAccess,
+                    onRequestAllFilesAccess = onRequestAllFilesAccess,
+                    onNavigateToCategory = { navController.navigate(Screen.Category.createRoute(it)) },
+                    onNavigateToSearch = { navController.navigate(Screen.Search.route) },
+                )
+            }
 
-        composable(
-            route = Screen.Category.route,
-            arguments = listOf(navArgument("category") { type = NavType.StringType }),
-        ) { entry ->
-            val category = StorageCategory.entries.firstOrNull { it.name == entry.arguments?.getString("category") }
-            val browseState by viewModel.browseState.collectAsState()
-            if (category != null) {
-                CategoryScreen(
-                    category = category,
+            composable(
+                route = Screen.Browser.route,
+                arguments = listOf(navArgument("path") { type = NavType.StringType }),
+            ) {
+                BrowserScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = {
+                        if (navController.previousBackStackEntry?.destination?.route == Screen.Search.route) navController.popBackStack()
+                        else navController.navigateHome()
+                    },
+                    onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
+                    hasAllFilesAccess = hasAllFilesAccess,
+                    onSearchSharedStorage = { query ->
+                        storageSearchQuery = query
+                        navController.navigate(Screen.Search.route)
+                    },
+                )
+            }
+
+            composable(Screen.Duplicates.route, arguments = listOf(navArgument("path") { type = NavType.StringType })) { entry ->
+                val sourceSessionId by rememberSaveable { mutableStateOf(viewModel.activeSession.value?.id) }
+                DuplicatesScreen(checkNotNull(entry.arguments?.getString("path")), onNavigateBack = {
+                    if (viewModel.sessions.value.any { it.id == sourceSessionId }) {
+                        viewModel.refresh()
+                        navController.popBackStack()
+                    } else {
+                        navController.navigateHome()
+                    }
+                })
+            }
+
+            composable(
+                route = Screen.Category.route,
+                arguments = listOf(navArgument("category") { type = NavType.StringType }),
+            ) { entry ->
+                val category = StorageCategory.entries.firstOrNull { it.name == entry.arguments?.getString("category") }
+                val browseState by viewModel.browseState.collectAsState()
+                if (category != null) {
+                    CategoryScreen(
+                        category = category,
+                        showHidden = browseState.showHidden,
+                        hasAllFilesAccess = hasAllFilesAccess,
+                        onRequestAllFilesAccess = onRequestAllFilesAccess,
+                        onNavigateBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
+            composable(Screen.Search.route) {
+                val browseState by viewModel.browseState.collectAsState()
+                StorageSearchScreen(
                     showHidden = browseState.showHidden,
                     hasAllFilesAccess = hasAllFilesAccess,
                     onRequestAllFilesAccess = onRequestAllFilesAccess,
                     onNavigateBack = { navController.popBackStack() },
+                    onOpenFolder = { path ->
+                        viewModel.openLocalRoot(path)
+                        navController.navigate(Screen.Browser.createRoute(path))
+                    },
+                    requestedQuery = storageSearchQuery,
+                    onRequestedQueryConsumed = { storageSearchQuery = null },
+                )
+            }
+
+            composable(Screen.Connections.route) {
+                ConnectionsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onConnected = {
+                        navController.navigate(Screen.Browser.createRoute("/")) {
+                            popUpTo(Screen.Home.route)
+                        }
+                    },
+                )
+            }
+
+            composable(Screen.Trash.route) {
+                TrashScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    hasAllFilesAccess = hasAllFilesAccess,
+                    onRequestAllFilesAccess = onRequestAllFilesAccess,
+                    onOpenRoot = { confirmRoot = true },
+                    onOpenShizuku = { showShizuku = true },
                 )
             }
         }
-
-        composable(Screen.Search.route) {
-            val browseState by viewModel.browseState.collectAsState()
-            StorageSearchScreen(
-                showHidden = browseState.showHidden,
-                hasAllFilesAccess = hasAllFilesAccess,
-                onRequestAllFilesAccess = onRequestAllFilesAccess,
-                onNavigateBack = { navController.popBackStack() },
-                onOpenFolder = { path ->
-                    viewModel.openLocalRoot(path)
-                    navController.navigate(Screen.Browser.createRoute(path))
-                },
-                requestedQuery = storageSearchQuery,
-                onRequestedQueryConsumed = { storageSearchQuery = null },
-            )
-        }
-
-        composable(Screen.Connections.route) {
-            ConnectionsScreen(
-                viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onConnected = {
-                    navController.navigate(Screen.Browser.createRoute("/")) {
-                        popUpTo(Screen.Home.route)
-                    }
-                },
-            )
-        }
-
-        composable(Screen.Trash.route) {
-            TrashScreen(
-                viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
-            )
-        }
-
-        composable(Screen.Settings.route) {
-            SettingsScreen(
-                viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
-                hasAllFilesAccess = hasAllFilesAccess,
-                onRequestAllFilesAccess = onRequestAllFilesAccess,
-                onOpenRoot = { confirmRoot = true },
-                onOpenShizuku = { showShizuku = true },
-            )
+        if (sharedFiles.isNotEmpty()) {
+            val entry by navController.currentBackStackEntryAsState()
+            val state by viewModel.browseState.collectAsState()
+            val operation by viewModel.operationState.collectAsState()
+            BottomAppBar(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                Text(
+                    stringResource(R.string.share_choose_destination, sharedFiles.size),
+                    modifier = Modifier.weight(1f).padding(start = 16.dp),
+                )
+                TextButton(onClick = onShareConsumed) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(
+                    enabled = entry?.destination?.route == Screen.Browser.route &&
+                        !state.isLoading && state.error == null && operation !is OperationState.Running,
+                    onClick = {
+                        viewModel.uploadDocuments(sharedFiles)
+                        if (viewModel.operationState.value is OperationState.Running) onShareConsumed()
+                    },
+                ) { Text(stringResource(R.string.share_save_here)) }
+            }
         }
     }
     if (showShizuku) {
