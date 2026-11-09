@@ -138,7 +138,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         folderShortcutPath = FolderShortcuts.requestedPath(intent)
         folderShortcutGeneration++
-        sharedFiles = receiveSharedFiles(intent)
+        if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) {
+            sharedFiles = receiveSharedFiles(intent)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

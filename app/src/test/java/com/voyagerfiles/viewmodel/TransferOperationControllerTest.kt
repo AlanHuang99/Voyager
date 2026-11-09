@@ -13,6 +13,36 @@ import org.junit.Test
 
 class TransferOperationControllerTest {
     @Test
+    fun sourceGrantsAreForwardedBeforeOpeningAnySourceAndBusyOperationsDoNotForward() = runBlocking {
+        val calls = mutableListOf<List<String>>()
+        val controller = TransferOperationController({ calls += it }, this)
+        val finish = CompletableDeferred<Unit>()
+        val sources = listOf("content://sender/first", "content://sender/second")
+        controller.launch(UiText.Dynamic("Uploading"), { throw it }, {}, readUris = sources) {
+            assertEquals(listOf(sources), calls)
+            finish.await()
+        }
+        assertFalse(controller.launch(UiText.Dynamic("Busy"), {}, {}, readUris = listOf("content://sender/other")) {})
+        assertEquals(listOf(sources), calls)
+        finish.complete(Unit)
+        yield()
+        controller.launch(UiText.Dynamic("Next"), {}, {}) {}
+        assertEquals(listOf(sources, emptyList<String>()), calls)
+    }
+
+    @Test
+    fun failedGrantForwardingNeverOpensSourcesAndRunsCompletionCleanup() = runBlocking {
+        var finished = false
+        val controller = TransferOperationController({ throw SecurityException("Read grant revoked") }, this)
+        controller.launch(UiText.Dynamic("Uploading"), {}, { finished = true }, readUris = listOf("content://sender/file")) {
+            fail("No source may be read after the grant handoff failed")
+        }
+        assertTrue(finished)
+        assertEquals(OperationState.Idle, controller.state.value)
+        assertEquals(OperationOutcome.FAILED, controller.lastResult.value!!.outcome)
+    }
+
+    @Test
     fun anArchiveReportReachesTheResultAndIsNotCarriedIntoTheNextOperation() = runBlocking {
         val controller = TransferOperationController({}, this)
         val report = ArchiveExtractionReport(

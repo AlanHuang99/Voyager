@@ -42,6 +42,20 @@ class IncomingShareTest {
         IncomingShare.files(context, Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, Uri.parse("file:///data/private.txt")))
     }
 
+    @Test fun rejectsUserQualifiedAndEncodedOwnedAuthorities() {
+        listOf(
+            "content://0@${context.packageName}.fileprovider/cache/private.txt",
+            "content://0%40${context.packageName}.webdavplayback/private",
+            "content://${context.packageName.uppercase()}.fileprovider/cache/private.txt",
+            "content://10@external.provider/document/file",
+            "content://${context.packageName}.fileprovider:42/cache/private.txt",
+        ).forEach { value ->
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                IncomingShare.files(context, Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, Uri.parse(value)))
+            }
+        }
+    }
+
     @Test(expected = IllegalArgumentException::class) fun rejectsOwnProvider() {
         val uri = Uri.parse("content://${context.packageName}.fileprovider/cache/private.txt")
         IncomingShare.files(context, Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uri))

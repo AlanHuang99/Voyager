@@ -26,6 +26,10 @@ class IncomingShareActivityTest {
             compose.onNodeWithText("Save here").assertIsNotEnabled()
             scenario.recreate()
             compose.onNodeWithText("Save here").assertIsDisplayed()
+            scenario.onActivity {
+                it.startActivity(Intent(it, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            compose.onNodeWithText("Save here").assertIsDisplayed()
             compose.onNodeWithText("Cancel").performClick()
             scenario.recreate()
             compose.onNodeWithText("Save here").assertDoesNotExist()
