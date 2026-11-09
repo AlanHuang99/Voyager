@@ -1,6 +1,6 @@
 # Voyager icon for Lawnicons
 
-[voyager.svg](voyager.svg) is an outlined, monochrome version of Voyager's boat icon for an icon-pack contribution. It uses a 192 × 192 canvas, black 12-pixel strokes, rounded caps and joins, and no fill. It is licensed under the repository's [GPLv3 license](../../LICENSE).
+[voyager.svg](voyager.svg) is an outlined, monochrome version of Voyager's boat icon for an icon-pack contribution. It uses a 192 × 192 canvas, black 12-pixel strokes, rounded caps and joins, and no fill. Choose either the repository's [GPLv3 license](../../LICENSE) or the [Apache License 2.0](LICENSE) for this SVG. The Apache option allows contributions under Lawnicons' license.
 
 Voyager's release application component is `com.voyagerfiles/com.voyagerfiles.app.MainActivity`. In a Lawnicons contribution, copy the SVG to `svgs/voyager.svg` and add this component mapping to `app/assets/appfilter.xml`:
 
