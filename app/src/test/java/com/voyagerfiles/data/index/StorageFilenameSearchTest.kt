@@ -27,9 +27,41 @@ class StorageFilenameSearchTest {
             "  rEpOrT ", listOf(volume(internal), volume(removable)), false,
         ) { true }.last()
 
-        assertEquals(setOf(first.path, second.path), result.files.map { it.path }.toSet())
+        assertEquals(setOf(first.path, second.path, internal.resolve("report-folder").path), result.files.map { it.path }.toSet())
         assertEquals(CategoryScanStatus.COMPLETE, result.status)
         assertEquals(3, result.coverage.sumOf { it.filesExamined })
+    }
+
+    @Test
+    fun returnsMatchingFoldersAndFilesAndRejectsChangedFolderResults() = runBlocking {
+        val root = temporary.newFolder("storage")
+        val folder = root.resolve("report-folder").apply { mkdirs() }
+        val child = write(folder, "report.txt")
+        val index = StorageCategoryIndex()
+        val volumes = listOf(volume(root))
+
+        val result = index.search("REPORT", volumes, false) { true }.last()
+        assertEquals(setOf(folder.path, child.path), result.files.map { it.path }.toSet())
+        val directory = result.files.single { it.isDirectory }
+        assertTrue(index.isCurrent(directory, volumes) { true })
+        assertTrue(folder.deleteRecursively())
+        assertFalse(index.isCurrent(directory, volumes) { true })
+        folder.writeText("replacement file")
+        assertFalse(index.isCurrent(directory, volumes) { true })
+    }
+
+    @Test
+    fun directoryMatchesRespectLimitsAndDoNotChangeCategoryResults() = runBlocking {
+        val root = temporary.newFolder("storage")
+        root.resolve("match-one").mkdirs()
+        root.resolve("match-two").mkdirs()
+        val volumes = listOf(volume(root))
+
+        val limited = StorageCategoryIndex(maxResults = 1).search("match", volumes, false) { true }.last()
+        assertEquals(CategoryScanStatus.LIMITED, limited.status)
+        assertEquals(1, limited.files.size)
+        assertTrue(limited.files.single().isDirectory)
+        assertTrue(StorageCategoryIndex().scan(StorageCategory.DOCUMENTS, volumes, false) { true }.last().files.isEmpty())
     }
 
     @Test

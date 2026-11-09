@@ -4,6 +4,9 @@ import android.os.Build
 import android.os.Environment
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +28,33 @@ import org.junit.Test
 
 class StorageSearchNavigationTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Test
+    fun folderResultsAndBrowserSearchShareTheSameStorageSearch() {
+        assumeTrue("Full storage access is required", Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager())
+        val fixture = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "voyager-combined-${UUID.randomUUID()}").apply { mkdirs() }
+        val needle = "shared-search-${UUID.randomUUID()}"
+        val folder = fixture.resolve(needle).apply { mkdirs() }
+        folder.resolve("$needle.txt").writeText("fixture")
+        val browser = (compose.activity.application as VoyagerApp).browserViewModel
+        try {
+            compose.onNodeWithContentDescription("Search shared storage").performClick()
+            compose.onNodeWithTag("storage-search-query").performTextInput(needle)
+            compose.onNodeWithTag("storage-search-query").performImeAction()
+            compose.waitUntil(45_000) { compose.onAllNodesWithText("2 results").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("storage-search-results").performScrollToNode(hasText(needle))
+            compose.onNode(hasText(needle) and hasAnyAncestor(hasTestTag("storage-search-results"))).performClick()
+            compose.waitUntil(10_000) { browser.browseState.value.currentPath == folder.canonicalPath && !browser.browseState.value.isLoading }
+            compose.runOnIdle { browser.setSearchQuery(needle) }
+            compose.onNodeWithContentDescription("More").performClick()
+            compose.onNodeWithText("Search shared storage").performClick()
+            compose.onNodeWithTag("storage-search-query").assertIsDisplayed()
+            compose.waitUntil(45_000) { compose.onAllNodesWithText("2 results").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Results for $needle").assertIsDisplayed()
+        } finally {
+            fixture.deleteRecursively()
+        }
+    }
 
     @Test
     fun realActivitySearchOpensTheChosenLocalFolderAndReturnsToSearch() {
