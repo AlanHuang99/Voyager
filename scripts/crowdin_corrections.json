@@ -1,0 +1,176 @@
+{
+  "project_id": 927407,
+  "reviewed_pr_head": "66032edd3cab4e11bafb5999667a1cddc4ea27b0",
+  "corrections": [
+    {
+      "language": "zh-TW",
+      "identifier": "progress_reading_archive",
+      "source": "Reading archive",
+      "previous": "讀取檔案",
+      "text": "讀取壓縮檔"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_extraction_cancelled",
+      "source": "Extraction cancelled",
+      "previous": "取消讀取",
+      "text": "已取消解壓縮"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_compression_cancelled",
+      "source": "Compression cancelled",
+      "previous": "取消壓縮",
+      "text": "已取消壓縮"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_extraction_stopped_kept",
+      "source": "Extraction stopped (%1$s). Kept the files extracted so far in %2$s",
+      "previous": "讀取暫停（%1$s）\n將已經讀取的檔案儲存於%2$s",
+      "text": "已停止解壓縮（%1$s）。已解壓縮的檔案保留在 %2$s"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_extracted_to_with_note",
+      "source": "Extracted to %1$s · %2$s",
+      "previous": "已讀取至%1$s·%2$s",
+      "text": "已解壓縮至 %1$s · %2$s"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_extracted_to_with_notes",
+      "source": "Extracted to %1$s · %2$s · %3$s",
+      "previous": "已讀取至%1$s·%2$s·%3$s",
+      "text": "已解壓縮至 %1$s · %2$s · %3$s"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_entries_renamed",
+      "source": {
+        "one": "%d item renamed",
+        "other": "%d items renamed"
+      },
+      "previous": "已重命名%d",
+      "text": "已重新命名 %d 個項目",
+      "quantity": "other"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_entries_not_extracted",
+      "source": {
+        "one": "%d item could not be extracted",
+        "other": "%d items could not be extracted"
+      },
+      "previous": "無法讀取%d",
+      "text": "無法解壓縮 %d 個項目",
+      "quantity": "other"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_details_title",
+      "source": "Extraction details",
+      "previous": "詳情讀取",
+      "text": "解壓縮詳細資料"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_details_not_extracted",
+      "source": "Not extracted",
+      "previous": "無法讀取",
+      "text": "未解壓縮"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_details_renamed",
+      "source": "Renamed, because this location does not tell upper and lower case apart",
+      "previous": "已重命名，因爲該位置不區分大、小項目",
+      "text": "已重新命名，因為此位置不區分大小寫"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_details_more",
+      "source": {
+        "one": "and %d more",
+        "other": "and %d more"
+      },
+      "previous": "%d如下",
+      "text": "另有 %d 個項目",
+      "quantity": "other"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "archive_remove_extracted",
+      "source": "Remove extracted files",
+      "previous": "移除已讀取的檔案",
+      "text": "移除已解壓縮的檔案"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "progress_removing_extracted",
+      "source": "Removing extracted files",
+      "previous": "正在移除已讀取的檔案",
+      "text": "正在移除已解壓縮的檔案"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "browser_format_extraction_unavailable",
+      "source": "%1$s extraction is not available in this build",
+      "previous": "%1$s此建置中無法讀取",
+      "text": "此版本不支援 %1$s 解壓縮。"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "content_desc_more_options_named",
+      "source": "More options for %1$s",
+      "previous": "於%1$s選擇更多",
+      "text": "%1$s 的更多選項"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "shizuku_open",
+      "source": "Open Shizuku session",
+      "previous": "開啟Shizuku",
+      "text": "開啟 Shizuku 工作階段"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "search_storage_scope",
+      "source": "Files across accessible mounted shared storage.",
+      "previous": "可存取的共用儲存空間中的檔案。",
+      "text": "所有可存取且已掛載的共用儲存空間中的檔案。"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "search_results_for",
+      "source": "Results for %1$s",
+      "previous": "結果爲%1$s",
+      "text": "%1$s 的搜尋結果"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "content_desc_open_location_named",
+      "source": "Open folder for %1$s",
+      "previous": "開啟資料夾以支援%1$s",
+      "text": "開啟 %1$s 所在的資料夾"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "search_result_count",
+      "source": {
+        "one": "%d result",
+        "other": "%d results"
+      },
+      "previous": "%d的結果",
+      "text": "%d 個結果",
+      "quantity": "other"
+    },
+    {
+      "language": "zh-TW",
+      "identifier": "action_unhide",
+      "source": "Unhide",
+      "previous": "未隱藏",
+      "text": "取消隱藏"
+    }
+  ]
+}
