@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -91,6 +92,7 @@ class ArchiveReportDialogTest {
         compose.waitForIdle()
         compose.setContent { MaterialTheme { content() } }
         compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 10_000) { compose.onNodeWithText("Done").isDisplayed() }
     }
 
     private fun screenshot(name: String) {
