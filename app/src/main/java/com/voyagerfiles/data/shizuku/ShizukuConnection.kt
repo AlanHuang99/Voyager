@@ -36,6 +36,28 @@ class ShizukuConnection private constructor(
         }
     }
 
+    /** Runs a file call on the service; service-side failures arrive as IOExceptions with their message. */
+    internal fun <T> files(action: (IShizukuFiles) -> T): T {
+        if (closed.get()) throw IOException("Shizuku session is closed. Open a new session.")
+        if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            throw IOException("Shizuku stopped or permission was revoked. Open a new session after authorizing Shizuku.")
+        }
+        return remote { action(service) }
+    }
+
+    /** For calls on stream objects the service already handed out. */
+    internal fun <T> remote(action: () -> T): T = try {
+        action()
+    } catch (error: android.os.RemoteException) {
+        throw IOException("Shizuku disconnected. Start Shizuku and open a new session.", error)
+    } catch (error: IllegalStateException) {
+        throw IOException(error.message ?: "Shizuku operation failed", error)
+    } catch (error: IllegalArgumentException) {
+        throw IOException(error.message ?: "Invalid Shizuku request", error)
+    } catch (error: SecurityException) {
+        throw IOException(error.message ?: "Shizuku operation denied", error)
+    }
+
     override fun close() {
         if (closed.compareAndSet(false, true)) runCatching { Shizuku.unbindUserService(args, connection, true) }
     }

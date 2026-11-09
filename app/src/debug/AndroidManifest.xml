@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <permission android:name="${applicationId}.test.SHIZUKU_DEATH_FIXTURE" android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.test.SHIZUKU_DEATH_FIXTURE" />
     <application>
         <provider
             android:name="com.voyagerfiles.app.TransferDocumentsProvider"
