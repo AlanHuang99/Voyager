@@ -40,11 +40,21 @@ class IncomingShareActivityTest {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            compose.onNodeWithText("Save here").assertIsDisplayed()
-            scenario.onActivity {
-                it.startActivity(Intent(it, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            try {
+                compose.onNodeWithText("Save here").assertIsDisplayed()
+                scenario.onActivity {
+                    it.startActivity(Intent(it, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                }
+                compose.waitUntil(10_000) {
+                    var received = false
+                    scenario.onActivity { received = it.intent.action == Intent.ACTION_MAIN }
+                    received
+                }
+                compose.onNodeWithText("Save here").assertIsDisplayed()
+            } finally {
+                // ActivityScenario matches lifecycle callbacks against its original launch Intent.
+                scenario.onActivity { it.intent = intent }
             }
-            compose.onNodeWithText("Save here").assertIsDisplayed()
         }
     }
 }
