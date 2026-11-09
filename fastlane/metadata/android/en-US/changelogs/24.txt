@@ -1,0 +1,1 @@
+Receive shared files from other apps and save them to local storage, document trees, or remote servers. Search for files and folders across shared storage, with query forwarding from the browser. Use direct Shizuku service I/O for regular-file transfers. Correct Traditional Chinese translations and update German and Italian strings.

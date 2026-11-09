@@ -33,12 +33,17 @@ F-Droid verifies releases through its own build process, so a new GitHub release
   <img src="docs/screenshots/trash.png" width="30%" alt="Trash screen with restore and permanent-delete actions">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/search.png" width="30%" alt="Shared-storage search showing a matching file and folder">
+</p>
+
 ## Get started
 
 1. Open a storage location from Home. Grant Android's all-files access to browse shared storage, or continue in limited mode and choose a folder through Android's folder picker.
-2. Tap a folder to browse or a file to open it. The browser's search filters the current folder; Home's search finds file names across accessible mounted shared storage. Type filters and sorting help narrow the browser list.
+2. Tap a folder to browse or a file to open it. The browser's search filters the current folder; Home's search finds file and folder names across accessible mounted shared storage. The browser menu can expand its current query through Search shared storage. Type filters and sorting help narrow the browser list.
 3. Long-press an item to select it, then use the available actions to copy, move, share, rename, or delete. Direct-local deletions can go to Trash for later restoration.
 4. Add a connection for a remote server. SFTP, FTP, and SMB file taps ask before downloading by default. WebDAV can open files in another app directly when the server supports the required byte ranges.
+5. To receive files from another app, choose Voyager in Android's share sheet, browse to a destination, and tap Save here.
 
 Settings lets you choose the search position, theme, Home sections, and remote download behavior. Use the browser's view controls to switch between list and grid layouts, and its Sessions sheet to switch between open locations without returning to Home.
 
@@ -46,6 +51,7 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 
 - Browse internal storage, SD cards, USB/OTG volumes, and folders granted through Android's folder picker.
 - Copy, move, rename, create, and delete files across local, document-tree, and remote locations, with transfer progress and cancellation. Share local and document-tree files through Android's share sheet.
+- Receive shared files from other apps and save them to a local folder, document tree, or remote server.
 - Use list, compact list, or grid views, local and remote image thumbnails, sorting, current-folder search, and file-type filters.
 - Search file and folder names across accessible mounted shared storage from Home or the browser menu. Open a matching folder or a file's containing folder.
 - Open per-file action menus in List and Compact views.
