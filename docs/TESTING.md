@@ -56,6 +56,10 @@ For a manual check, choose Date and descending order in a Home category, restart
 
 ## Device instrumentation
 
+Incoming file sharing is covered by `IncomingShareTest`, `IncomingShareActivityTest`, and `IncomingShareNavigationTest`: single/multiple streams, ClipData fallback, unsafe URI rejection, Activity recreation, cancellation, destination selection, and saving via document upload. Run these with `UploadSourceFactoryTest` and `DocumentUploadTest` after granting the debug app full storage access. Manually share single and multiple photos, videos, audio, and documents from another app; choose local, SAF, and disposable remote folders, then Save here. Check Back, session switching, conflicts, cancellation, and an unreadable or revoked source. Text-only shares are intentionally unsupported.
+
+`IncomingShareLifetimeTest` starts a sender Activity and non-exported source provider in the separate test APK UID. It verifies that unread source grants survive removal of the receiving task, compares exact local/SAF/authenticated WebDAV destination bytes including empty and unknown-size files, closes the remote browser session during upload, cancels a stalled source, revokes a later source, rejects revoked grants before Save, and checks service-grant release. Its disposable fixtures require no external server. Run it alongside the incoming-share and document-upload classes above.
+
 Connect an Android device through USB or wireless debugging and confirm that `adb devices` reports it as `device` rather than `offline` or `unauthorized`.
 
 ```bash

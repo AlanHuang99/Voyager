@@ -122,6 +122,8 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private var browserSessionRootPath: String? = null
     private var initialNavigationJob: Job? = null
     private val sessionProviders = mutableMapOf<String, FileProvider>()
+    private val uploadingProviders = mutableSetOf<FileProvider>()
+    private val retiredUploadProviders = mutableSetOf<FileProvider>()
     private val remoteImageThumbnailSessions = mutableMapOf<String, RemoteImageThumbnailSession>()
     private val loadGuard = DirectoryLoadGuard()
     private val scrollMemory = DirectoryScrollMemory()
@@ -606,61 +608,25 @@ class FileBrowserViewModel @JvmOverloads constructor(
         val destinationPath = _browseState.value.currentPath
         val contentResolver = getApplication<Application>().contentResolver
         val progressLabel = UiText.Resource(R.string.progress_uploading)
-        launchOperation(R.string.progress_uploading, R.string.operation_upload) {
-            val sources = withContext(Dispatchers.IO) {
-                uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
-            }
-            val validatedSources = sources.map { source ->
-                when (val result = FileNameValidator.validate(source.name)) {
-                    is FileNameValidationResult.Valid -> source.copy(name = result.name)
-                    is FileNameValidationResult.Invalid -> {
-                        throw UiTextException(UiText.Resource(result.messageRes))
+        launchOperation(R.string.progress_uploading, R.string.operation_upload, readUris = uris.map(Uri::toString)) {
+            uploadingProviders.add(destinationProvider)
+            try {
+                val sources = withContext(Dispatchers.IO) {
+                    uris.map { uri -> UploadSourceFactory.fromUri(contentResolver, uri) }
+                }
+                val validatedSources = sources.map { source ->
+                    when (val result = FileNameValidator.validate(source.name)) {
+                        is FileNameValidationResult.Valid -> source.copy(name = result.name)
+                        is FileNameValidationResult.Invalid -> {
+                            throw UiTextException(UiText.Resource(result.messageRes))
+                        }
                     }
                 }
-            }
-            var failed = 0
-            var firstError: Throwable? = null
-            var completed = 0
-            var skipped = 0
-            for (source in validatedSources) {
-                updateOperationProgress(
-                    TransferProgress(
-                        label = progressLabel,
-                        completedItems = completed,
-                        skippedItems = skipped,
-                        totalItems = validatedSources.size,
-                        currentItemName = source.name,
-                        totalBytes = source.size,
-                    ),
-                )
-                val progressThrottle = StreamProgressThrottle()
-                var latestStreamProgress: StreamTransferProgress? = null
-                val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
-                    latestStreamProgress = streamProgress
-                    if (progressThrottle.shouldPublish(streamProgress)) {
-                        updateOperationProgress(
-                            TransferProgress(
-                                label = progressLabel,
-                                completedItems = completed,
-                                skippedItems = skipped,
-                                totalItems = validatedSources.size,
-                                currentItemName = source.name,
-                                copiedBytes = streamProgress.bytesTransferred,
-                                totalBytes = streamProgress.totalBytes,
-                                elapsedNanos = streamProgress.elapsedNanos,
-                            ),
-                        )
-                    }
-                }
-                FileOperationCoordinator.uploadFile(
-                    source = source,
-                    destinationProvider = destinationProvider,
-                    destinationDirectoryPath = destinationPath,
-                    resolveConflict = operationController.conflicts::resolve,
-                    onProgress = publishStreamProgress,
-                ).onSuccess { disposition ->
-                    if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
-                    val streamProgress = latestStreamProgress
+                var failed = 0
+                var firstError: Throwable? = null
+                var completed = 0
+                var skipped = 0
+                for (source in validatedSources) {
                     updateOperationProgress(
                         TransferProgress(
                             label = progressLabel,
@@ -668,31 +634,73 @@ class FileBrowserViewModel @JvmOverloads constructor(
                             skippedItems = skipped,
                             totalItems = validatedSources.size,
                             currentItemName = source.name,
-                            copiedBytes = streamProgress?.bytesTransferred ?: 0,
-                            totalBytes = streamProgress?.totalBytes ?: source.size,
-                            elapsedNanos = streamProgress?.elapsedNanos ?: 0,
+                            totalBytes = source.size,
                         ),
                     )
-                }.onFailure { error ->
-                    if (error is CancellationException) throw error
-                    failed++
-                    operationController.recordFailure(error)
-                    if (firstError == null) firstError = error
+                    val progressThrottle = StreamProgressThrottle()
+                    var latestStreamProgress: StreamTransferProgress? = null
+                    val publishStreamProgress: (StreamTransferProgress) -> Unit = { streamProgress ->
+                        latestStreamProgress = streamProgress
+                        if (progressThrottle.shouldPublish(streamProgress)) {
+                            updateOperationProgress(
+                                TransferProgress(
+                                    label = progressLabel,
+                                    completedItems = completed,
+                                    skippedItems = skipped,
+                                    totalItems = validatedSources.size,
+                                    currentItemName = source.name,
+                                    copiedBytes = streamProgress.bytesTransferred,
+                                    totalBytes = streamProgress.totalBytes,
+                                    elapsedNanos = streamProgress.elapsedNanos,
+                                ),
+                            )
+                        }
+                    }
+                    FileOperationCoordinator.uploadFile(
+                        source = source,
+                        destinationProvider = destinationProvider,
+                        destinationDirectoryPath = destinationPath,
+                        resolveConflict = operationController.conflicts::resolve,
+                        onProgress = publishStreamProgress,
+                    ).onSuccess { disposition ->
+                        if (disposition == TransferDisposition.SKIPPED) skipped++ else completed++
+                        val streamProgress = latestStreamProgress
+                        updateOperationProgress(
+                            TransferProgress(
+                                label = progressLabel,
+                                completedItems = completed,
+                                skippedItems = skipped,
+                                totalItems = validatedSources.size,
+                                currentItemName = source.name,
+                                copiedBytes = streamProgress?.bytesTransferred ?: 0,
+                                totalBytes = streamProgress?.totalBytes ?: source.size,
+                                elapsedNanos = streamProgress?.elapsedNanos ?: 0,
+                            ),
+                        )
+                    }.onFailure { error ->
+                        if (error is CancellationException) throw error
+                        failed++
+                        operationController.recordFailure(error)
+                        if (firstError == null) firstError = error
+                    }
                 }
-            }
-            refreshFiles()
-            if (failed > 0) {
-                showSnackbar(
-                    OperationMessages.partial(
-                        failed = failed,
-                        total = validatedSources.size,
-                        action = R.string.action_uploaded,
-                        error = checkNotNull(firstError),
+                refreshFiles()
+                if (failed > 0) {
+                    showSnackbar(
+                        OperationMessages.partial(
+                            failed = failed,
+                            total = validatedSources.size,
+                            action = R.string.action_uploaded,
+                            error = checkNotNull(firstError),
+                        )
                     )
-                )
-            } else {
-                showSnackbar(if (skipped > 0) UiText.Resource(R.string.upload_completed_skipped, listOf(completed, skipped))
-                    else UiText.Plural(R.plurals.files_uploaded, completed, listOf(completed)))
+                } else {
+                    showSnackbar(if (skipped > 0) UiText.Resource(R.string.upload_completed_skipped, listOf(completed, skipped))
+                        else UiText.Plural(R.plurals.files_uploaded, completed, listOf(completed)))
+                }
+            } finally {
+                uploadingProviders.remove(destinationProvider)
+                if (retiredUploadProviders.remove(destinationProvider)) destinationProvider.disconnect()
             }
         }
     }
@@ -1423,10 +1431,12 @@ class FileBrowserViewModel @JvmOverloads constructor(
         @StringRes progressLabel: Int,
         @StringRes operationName: Int,
         @StringRes cancelledMessage: Int = R.string.transfer_cancelled,
+        readUris: List<String> = emptyList(),
         block: suspend () -> Unit,
     ) {
         val started = operationController.launch(
             label = UiText.Resource(progressLabel),
+            readUris = readUris,
             cancellable = operationName in setOf(R.string.operation_upload, R.string.operation_paste, R.string.operation_download, R.string.audio_setting_tone, R.string.operation_extract, R.string.operation_compress),
             onFailure = { error ->
                 showSnackbar(
@@ -1640,7 +1650,9 @@ class FileBrowserViewModel @JvmOverloads constructor(
     private suspend fun closeSessionInternal(sessionId: String) {
         val closedSession = _sessions.value.firstOrNull { it.id == sessionId } ?: return
         remoteImageThumbnailSessions.remove(sessionId)?.close()
-        sessionProviders.remove(sessionId)?.disconnect()
+        sessionProviders.remove(sessionId)?.let { provider ->
+            if (provider in uploadingProviders) retiredUploadProviders.add(provider) else provider.disconnect()
+        }
         val wasActive = _activeSession.value?.id == sessionId
         val remainingSessions = _sessions.value.filterNot { it.id == sessionId }
         _sessions.value = remainingSessions

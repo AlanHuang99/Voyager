@@ -34,6 +34,8 @@ import com.voyagerfiles.ui.theme.VoyagerTheme
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import com.voyagerfiles.R
 import com.voyagerfiles.util.FolderShortcuts
+import com.voyagerfiles.util.IncomingShare
+import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
 
@@ -41,6 +43,7 @@ class MainActivity : ComponentActivity() {
     private val hasStoragePermission = mutableStateOf(false)
     private var folderShortcutPath by mutableStateOf<String?>(null)
     private var folderShortcutGeneration by mutableLongStateOf(0L)
+    private var sharedFiles by mutableStateOf<List<Uri>>(emptyList())
 
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -66,6 +69,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         hasStoragePermission.value = checkStoragePermission()
+        sharedFiles = if (savedInstanceState != null) {
+            savedInstanceState.getStringArrayList("shared_files").orEmpty().map(Uri::parse)
+        } else {
+            receiveSharedFiles(intent)
+        }
         folderShortcutPath = if (savedInstanceState?.containsKey("folder_shortcut") == true) {
             savedInstanceState.getString("folder_shortcut")
         } else {
@@ -102,6 +110,8 @@ class MainActivity : ComponentActivity() {
                         requestedFolder = folderShortcutPath,
                         folderRequestGeneration = folderShortcutGeneration,
                         onFolderRequestConsumed = { folderShortcutPath = null },
+                        sharedFiles = sharedFiles,
+                        onShareConsumed = { sharedFiles = emptyList() },
                     )
                 }
                 if (folderShortcutPath != null && !permissionGranted) {
@@ -128,10 +138,14 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         folderShortcutPath = FolderShortcuts.requestedPath(intent)
         folderShortcutGeneration++
+        if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) {
+            sharedFiles = receiveSharedFiles(intent)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("folder_shortcut", folderShortcutPath)
+        outState.putStringArrayList("shared_files", ArrayList(sharedFiles.map(Uri::toString)))
         super.onSaveInstanceState(outState)
     }
 
@@ -154,6 +168,13 @@ class MainActivity : ComponentActivity() {
                 this, Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    private fun receiveSharedFiles(intent: Intent): List<Uri> = try {
+        IncomingShare.files(this, intent)
+    } catch (_: Exception) {
+        Toast.makeText(this, R.string.share_receive_failed, Toast.LENGTH_LONG).show()
+        emptyList()
     }
 
     private fun requestStoragePermission() {

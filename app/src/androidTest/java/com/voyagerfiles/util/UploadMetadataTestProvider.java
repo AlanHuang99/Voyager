@@ -44,6 +44,19 @@ public final class UploadMetadataTestProvider extends ContentProvider {
     }
 
     @Override
+    public android.os.ParcelFileDescriptor openFile(Uri uri, String mode) throws java.io.FileNotFoundException {
+        if (!"r".equals(mode)) throw new java.io.FileNotFoundException("Read only");
+        boolean zeroFixture = "zero".equals(uri.getLastPathSegment());
+        java.io.File file = new java.io.File(getContext().getCacheDir(), zeroFixture ? "empty-share-fixture.txt" : "unknown-share-fixture.bin");
+        try (java.io.FileOutputStream output = new java.io.FileOutputStream(file)) {
+            if (!zeroFixture) output.write("shared document".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException error) {
+            throw new java.io.FileNotFoundException(error.getMessage());
+        }
+        return android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+    }
+
+    @Override
     public Uri insert(Uri uri, ContentValues values) {
         return null;
     }
