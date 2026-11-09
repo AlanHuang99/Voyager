@@ -178,6 +178,7 @@ fun BrowserScreen(
     launchPlaybackIntent: ((Intent) -> Unit)? = null,
     onFindDuplicates: (String) -> Unit = {},
     hasAllFilesAccess: Boolean = true,
+    onSearchSharedStorage: ((String) -> Unit)? = null,
 ) {
     val state by viewModel.browseState.collectAsState()
     val rootEditor by viewModel.rootEditor.collectAsState()
@@ -832,6 +833,16 @@ fun BrowserScreen(
                                         },
                                     )
                                     if (state.source == FileSource.LOCAL) {
+                                        if (onSearchSharedStorage != null) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.search_storage_title)) },
+                                                leadingIcon = { Icon(Icons.Filled.Search, null) },
+                                                onClick = {
+                                                    showMoreMenu = false
+                                                    onSearchSharedStorage(state.searchQuery)
+                                                },
+                                            )
+                                        }
                                         FolderMenuItems(
                                             bookmarked = isCurrentFolderBookmarked,
                                             canFindDuplicates = runningOperation == null,
