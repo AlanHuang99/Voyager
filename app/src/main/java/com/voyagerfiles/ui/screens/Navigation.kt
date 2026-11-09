@@ -78,6 +78,7 @@ fun AppNavigation(
     var shortcutFailed by remember { mutableStateOf(false) }
     var confirmRoot by remember { mutableStateOf(false) }
     var showShizuku by remember { mutableStateOf(false) }
+    var storageSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
     val sessionClosureGeneration by viewModel.sessionClosureGeneration.collectAsState()
 
     LaunchedEffect(sessionClosureGeneration) {
@@ -171,6 +172,10 @@ fun AppNavigation(
                     },
                     onFindDuplicates = { path -> navController.navigate(Screen.Duplicates.createRoute(path)) },
                     hasAllFilesAccess = hasAllFilesAccess,
+                    onSearchSharedStorage = { query ->
+                        storageSearchQuery = query
+                        navController.navigate(Screen.Search.route)
+                    },
                 )
             }
 
@@ -214,6 +219,8 @@ fun AppNavigation(
                         viewModel.openLocalRoot(path)
                         navController.navigate(Screen.Browser.createRoute(path))
                     },
+                    requestedQuery = storageSearchQuery,
+                    onRequestedQueryConsumed = { storageSearchQuery = null },
                 )
             }
 

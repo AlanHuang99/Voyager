@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -69,6 +70,8 @@ fun StorageSearchScreen(
     onNavigateBack: () -> Unit,
     onOpenFolder: (String) -> Unit,
     searchViewModel: StorageSearchViewModel = viewModel(),
+    requestedQuery: String? = null,
+    onRequestedQueryConsumed: () -> Unit = {},
 ) {
     val state by searchViewModel.state.collectAsState()
     val context = LocalContext.current
@@ -78,6 +81,13 @@ fun StorageSearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val refresh = { searchViewModel.refresh(showHidden, hasAllFilesAccess) }
+    LaunchedEffect(requestedQuery) {
+        if (requestedQuery != null) {
+            searchViewModel.setQuery(requestedQuery)
+            searchViewModel.submit(showHidden, hasAllFilesAccess)
+            onRequestedQueryConsumed()
+        }
+    }
     DisposableEffect(lifecycleOwner, showHidden, hasAllFilesAccess) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -96,9 +106,11 @@ fun StorageSearchScreen(
     fun open(file: FileItem, containingFolder: Boolean) {
         scope.launch(Dispatchers.Main.immediate) {
             if (!searchViewModel.validate(file)) {
-                snackbar.showSnackbar(context.getString(R.string.search_stale_file))
+                snackbar.showSnackbar(context.getString(R.string.search_stale_item))
             } else if (containingFolder) {
                 File(file.path).parent?.let(onOpenFolder)
+            } else if (file.isDirectory) {
+                onOpenFolder(file.path)
             } else {
                 FileUtils.openFile(context, file).onFailure { error ->
                     snackbar.showSnackbar(context.getString(
@@ -167,7 +179,7 @@ internal fun StorageSearchContent(
                         value = state.query,
                         onValueChange = onQueryChange,
                         modifier = Modifier.weight(1f).testTag("storage-search-query"),
-                        label = { Text(stringResource(R.string.search_file_name)) },
+                        label = { Text(stringResource(R.string.search_item_name)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { if (state.query.isNotBlank()) onSubmit() }),
@@ -176,12 +188,12 @@ internal fun StorageSearchContent(
                         Icon(Icons.Filled.Search, stringResource(R.string.action_search))
                     }
                 }
-                Text(stringResource(R.string.search_storage_scope), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.search_storage_items_scope), style = MaterialTheme.typography.bodySmall)
                 if (result.status == CategoryScanStatus.DENIED) {
                     Text(stringResource(R.string.search_permission_required))
                     TextButton(onClick = onRequestAllFilesAccess) { Text(stringResource(R.string.permission_grant_full_access)) }
                 } else if (state.submittedQuery.isBlank()) {
-                    Text(stringResource(R.string.search_ready))
+                    Text(stringResource(R.string.search_items_ready))
                 } else {
                     Text(stringResource(R.string.search_results_for, state.submittedQuery), style = MaterialTheme.typography.titleSmall)
                     Text(pluralStringResource(R.plurals.search_result_count, result.files.size, result.files.size))
@@ -190,7 +202,7 @@ internal fun StorageSearchContent(
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
                     } else if (result.status == CategoryScanStatus.COMPLETE && result.files.isEmpty()) {
-                        Text(stringResource(R.string.search_no_matches))
+                        Text(stringResource(R.string.search_no_matching_items))
                     }
                 }
             }

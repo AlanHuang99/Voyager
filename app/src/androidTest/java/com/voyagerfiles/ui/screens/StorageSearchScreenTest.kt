@@ -93,6 +93,21 @@ class StorageSearchScreenTest {
     }
 
     @Test
+    fun tappingAFolderResultOpensTheFolderItself() {
+        val folder = root.resolve("report-folder").apply { mkdirs() }
+        val model = searchModel()
+        var opened: String? = null
+        showSearch(model) { opened = it }
+        compose.onNodeWithTag("storage-search-query").performTextInput("report")
+        compose.onNodeWithTag("storage-search-query").performImeAction()
+        compose.waitUntil(10_000) { model.state.value.result.status == CategoryScanStatus.COMPLETE }
+        compose.onNodeWithTag("storage-search-results").performScrollToNode(hasText("report-folder"))
+        compose.onNodeWithText("report-folder").performClick()
+        compose.waitUntil(5_000) { opened != null }
+        assertEquals(folder.canonicalPath, opened)
+    }
+
+    @Test
     fun removedResultCannotOpenItsFormerLocation() {
         val model = searchModel()
         var opened: String? = null
@@ -111,7 +126,7 @@ class StorageSearchScreenTest {
             assertEquals(CategoryScanStatus.PARTIAL, model.state.value.result.status)
         }
         compose.onNodeWithText(removed.path).assertDoesNotExist()
-        compose.onNodeWithText("This file changed or is no longer accessible. Search again.").assertIsDisplayed()
+        compose.onNodeWithText("This item changed or is no longer accessible. Search again.").assertIsDisplayed()
     }
 
     @Test
