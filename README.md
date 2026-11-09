@@ -35,6 +35,7 @@ F-Droid verifies releases through its own build process, so a new GitHub release
 
 <p align="center">
   <img src="docs/screenshots/search.png" width="30%" alt="Shared-storage search showing a matching file and folder">
+  <img src="docs/screenshots/incoming-share.png" width="30%" alt="Incoming share with two files and Save here in the chosen folder">
 </p>
 
 ## Get started
