@@ -546,8 +546,8 @@
         <item quantity="one">%d risultato</item>
         <item quantity="other">%d risultati</item>
     </plurals>
-    <string name="action_hide">Hide</string>
-    <string name="action_unhide">Unhide</string>
+    <string name="action_hide">Nascondi</string>
+    <string name="action_unhide">Mostra</string>
     <string name="share_choose_destination">Choose a folder for shared files (%1$d)</string>
     <string name="share_save_here">Save here</string>
     <string name="share_receive_failed">Could not receive shared files. Share files with read access and try again.</string>
