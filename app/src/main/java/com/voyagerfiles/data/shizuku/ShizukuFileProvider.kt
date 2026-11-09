@@ -14,25 +14,21 @@ import java.io.OutputStream
 
 /**
  * File operations run in the Shizuku UserService ([ShizukuFileOperations]) and data moves through pipes.
- * The supervised shell is still used for copies, moves, and renames.
+ * Listing, deletion, canonical paths, copies, moves, and renames retain the supervised shell.
  */
 class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileProvider(
     RootShell(startProcess = connection::start, requireRoot = false, accessName = "Shizuku", externalInputPipe = true, temporaryDirectory = "/data/local/tmp"),
     FileSource.SHIZUKU,
 ) {
-    override fun listing(directory: String): ByteArray = connection.files { it.list(directory) }.let { read ->
-        ShizukuInputStream(connection, read).use { it.readBytes() }
-    }
     override fun statEntry(path: String): ByteArray = connection.files { it.stat(path) }
     override fun existsAt(path: String): Boolean = connection.files { it.exists(path) }
-    override fun canonicalAt(path: String): String = connection.files { it.canonical(path) }
-    override fun mkdirAt(path: String) = connection.files { it.mkdir(path) }
-    override fun createFileAt(path: String) = connection.files { it.createFile(path) }
-    override fun deleteAt(path: String) {
-        if (!connection.files { it.delete(path) }) super.deleteAt(path)
+    override fun mkdirAt(path: String) { val pinned = primitivePath(path); connection.files { it.mkdir(pinned) } }
+    override fun createFileAt(path: String) { val pinned = primitivePath(path); connection.files { it.createFile(pinned) } }
+    override fun fingerprint(path: String): String { val pinned = primitivePath(path); return connection.files { it.fingerprint(pinned) } }
+    override fun openRead(path: String): InputStream {
+        val pinned = primitivePath(path)
+        return ShizukuInputStream(connection, connection.files { it.openRead(pinned) })
     }
-    override fun fingerprint(path: String): String = connection.files { it.fingerprint(path) }
-    override fun openRead(path: String): InputStream = ShizukuInputStream(connection, connection.files { it.openRead(path) })
     override fun readBytes(path: String, maxBytes: Int): ByteArray = openRead(path).use { input ->
         val bytes = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
@@ -46,7 +42,13 @@ class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileP
     }
     override fun openStaged(path: String, expected: String?): OutputStream {
         // Identifies this process to the service, which discards the write if the process dies.
-        return ShizukuOutputStream(connection, connection.files { it.openWrite(path, expected.orEmpty(), Binder()) })
+        val pinned = primitivePath(path)
+        return ShizukuOutputStream(connection, connection.files { it.openWrite(pinned, expected.orEmpty(), Binder()) })
+    }
+
+    private fun primitivePath(path: String): String {
+        val parent = super.canonicalAt(checkNotNull(getParentPath(path)))
+        return "${parent.trimEnd('/')}/${path.substringAfterLast('/')}"
     }
 
     override fun close() {

@@ -3,7 +3,6 @@ package com.voyagerfiles.data.shizuku
 import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
-import android.system.OsConstants.ENOENT
 import android.system.OsConstants.O_CREAT
 import android.system.OsConstants.O_EXCL
 import android.system.OsConstants.O_NOFOLLOW
@@ -16,7 +15,6 @@ import android.system.StructStat
 import com.voyagerfiles.data.repository.RootFileProvider
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
-import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.UUID
@@ -24,65 +22,22 @@ import java.util.UUID
 /**
  * File operations of the Shizuku UserService, which runs as shell or root.
  *
- * Paths come from the app and are re-resolved here, so every mutation and every file open goes through a
- * pinned directory: the canonical parent is walked from `/` one component at a time without following
+ * Canonical parents come from the supervised shell. Every mutation and file open goes through a
+ * pinned directory: the parent is walked from `/` one component at a time without following
  * symbolic links, and later calls address `/proc/self/fd/N/name`. A path component swapped for a link
  * after the walk can't redirect a privileged operation. Byte formats match the shell commands in
  * [RootFileProvider], so listing parsing and fingerprints stay shared.
  */
 internal class ShizukuFileOperations(private val serviceUid: Int) {
 
-    fun list(directory: String): ByteArray {
-        val names = File(directory).list() ?: throw IOException("Folder missing or permission denied")
-        val base = directory.trimEnd('/')
-        val output = ByteArrayOutputStream()
-        var count = 0
-        val missing = mutableListOf<String>()
-        // Same order as the shell globs: plain names first, then hidden ones.
-        for (name in names.sortedWith(compareBy<String>({ it.startsWith('.') }, { it }))) {
-            val path = "$base/$name"
-            val stat = try { Os.lstat(path) } catch (error: ErrnoException) {
-                if (error.errno == ENOENT) { missing.add(name); continue }
-                throw error
-            }
-            writeEntry(output, path, stat)
-            // One entry beyond the provider's limit lets its parser report the limit.
-            if (++count > LISTING_LIMIT) break
-        }
-        // A name the directory still holds but lstat can't find was decoded lossily from non-UTF-8 bytes.
-        // Report it like the shell listing does instead of hiding the file; other misses were removed meanwhile.
-        if (missing.isNotEmpty() && File(directory).list()?.any { it in missing } == true) throw IOException(NOT_UTF8)
-        return output.toByteArray()
-    }
-
     fun stat(path: String): ByteArray = ByteArrayOutputStream().also { writeEntry(it, path, Os.lstat(path)) }.toByteArray()
 
     fun exists(path: String): Boolean = try { Os.lstat(path); true } catch (_: ErrnoException) { false }
-
-    fun canonical(path: String): String = File(path).canonicalPath
 
     fun mkdir(path: String) = inParent(path) { parent, name -> Os.mkdir(parent.child(name), MODE_0700) }
 
     fun createFile(path: String) = inParent(path) { parent, name ->
         PinnedFd.open(parent.child(name), O_WRONLY or O_CREAT or O_EXCL or O_NOFOLLOW, MODE_0600).close()
-    }
-
-    /**
-     * False when a name below [path] can't be addressed from Java (not valid UTF-8); the caller then lets
-     * the shell's descriptor-based `rm -r` finish the deletion, as before.
-     */
-    fun delete(path: String): Boolean = try { deleteTree(path); true } catch (_: UnaddressableName) { false }
-
-    private class UnaddressableName : IOException("Only valid UTF-8 filenames can be addressed")
-
-    private fun deleteTree(path: String) = inParent(path) { parent, name ->
-        val target = parent.child(name)
-        val stat = try { Os.lstat(target) } catch (error: ErrnoException) {
-            if (error.errno == ENOENT) throw IOException("File no longer exists")
-            throw error
-        }
-        if (S_ISDIR(stat.st_mode)) removeContents(target, stat)
-        Os.remove(target)
     }
 
     fun fingerprint(path: String): String = inParent(path) { parent, name ->
@@ -98,7 +53,7 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
      */
     fun openWrite(path: String, expected: String?): StagedWrite {
         val (parentPath, name) = split(path)
-        val parent = pinDirectory(canonical(parentPath))
+        val parent = pinDirectory(parentPath)
         val stageName = ".voyager-root-${UUID.randomUUID()}"
         var stage: PinnedFd? = null
         var payload: PinnedFd? = null
@@ -197,26 +152,9 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         }
     }
 
-    /** Recursive removal through pinned descriptors; links are removed, never followed. */
-    private fun removeContents(path: String, expected: StructStat) {
-        openDirectory(path, expected).use { directory ->
-            val names = File(directory.path).list() ?: throw IOException("Folder missing or permission denied")
-            for (name in names) {
-                val child = directory.child(name)
-                val stat = try { Os.lstat(child) } catch (error: ErrnoException) {
-                    // Java decodes non-UTF-8 names lossily, so readdir's name can't be found again.
-                    if (error.errno == ENOENT) throw UnaddressableName()
-                    throw error
-                }
-                if (S_ISDIR(stat.st_mode)) removeContents(child, stat)
-                Os.remove(child)
-            }
-        }
-    }
-
     private fun <T> inParent(path: String, action: (PinnedFd, String) -> T): T {
         val (parentPath, name) = split(path)
-        return pinDirectory(canonical(parentPath)).use { action(it, name) }
+        return pinDirectory(parentPath).use { action(it, name) }
     }
 
     private fun split(path: String): Pair<String, String> {
@@ -232,6 +170,7 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         try {
             for (part in canonicalPath.split('/')) {
                 if (part.isEmpty()) continue
+                require(part != "." && part != "..") { "Parent path must be canonical" }
                 val next = openDirectory(current.child(part))
                 current.close()
                 current = next
@@ -243,13 +182,12 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         }
     }
 
-    private fun openDirectory(path: String, expected: StructStat? = null): PinnedFd {
+    private fun openDirectory(path: String): PinnedFd {
         // O_PATH needs only search permission and opens nothing, so a swapped-in device or FIFO is inert.
         val directory = PinnedFd.open(path, O_PATH or O_NOFOLLOW)
         try {
             val stat = Os.fstat(directory.fd)
             if (!S_ISDIR(stat.st_mode)) throw IOException("Folder changed or is a symbolic link")
-            if (expected != null && !sameFile(stat, expected)) throw IOException("Folder changed")
             return directory
         } catch (error: Throwable) {
             directory.close()
@@ -323,8 +261,6 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         private val MODE_2700 = "2700".toInt(8)
         private const val PAYLOAD = "payload"
         private const val SELINUX_XATTR = "security.selinux"
-        private const val LISTING_LIMIT = 20_000
-        private const val NOT_UTF8 = "Only valid UTF-8 text and filenames are supported in root sessions"
         private const val CHANGED = "File changed since opening. Original preserved; reopen before saving."
         private const val REGULAR_ONLY = "Only regular files can be read or edited; symbolic links and special files are unsupported"
     }

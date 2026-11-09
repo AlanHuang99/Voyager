@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class ShizukuTransferLifecycleTest {
     private fun fixture(block: (File, ShizukuFileOperations, CountDownLatch, AtomicInteger, TransferHooks) -> Unit) {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val directory = File(context.cacheDir, "shizuku-lifecycle-${UUID.randomUUID()}").apply { mkdir() }
+        val directory = File(context.cacheDir.canonicalFile, "shizuku-lifecycle-${UUID.randomUUID()}").apply { mkdir() }
         val releases = AtomicInteger()
         val released = CountDownLatch(1)
         val hooks = TransferHooks({}, { it.message ?: "failure" }, { releases.incrementAndGet(); released.countDown() })
@@ -163,7 +163,9 @@ class ShizukuTransferLifecycleTest {
         File(folder, "file").writeText("keep")
         android.system.Os.chmod(folder.path, "400".toInt(8))
         try {
-            assertTrue("A failed entry stat must fail the listing", runCatching { operations.list(folder.path) }.isFailure)
+            sandboxProvider().use { provider ->
+                assertTrue("A failed entry stat must fail the listing", kotlinx.coroutines.runBlocking { provider.listFiles(folder.path).isFailure })
+            }
         } finally { android.system.Os.chmod(folder.path, "700".toInt(8)) }
     }
 
@@ -172,8 +174,64 @@ class ShizukuTransferLifecycleTest {
         val quoted = com.voyagerfiles.data.repository.RootShell.quote(directory.path)
         val process = ProcessBuilder("sh", "-c", ": > $quoted/\"\$(printf '\\377')\"").start()
         assertEquals(0, process.waitFor())
-        assertEquals(2, directory.list()!!.size)
-        assertTrue("Lossily decoded names must not alias a valid filename", runCatching { operations.list(directory.path) }.isFailure)
+        try {
+            sandboxProvider().use { provider ->
+                kotlinx.coroutines.runBlocking {
+                    assertTrue("Invalid raw filenames must fail safely", provider.listFiles(directory.path).isFailure)
+                    provider.delete(directory.path).getOrThrow()
+                }
+            }
+        } finally {
+            // Java File.list itself aborts in JNI on malformed byte names under CheckJNI.
+            assertEquals(0, ProcessBuilder("sh", "-c", "rm -rf -- $quoted").start().waitFor())
+        }
+    }
+
+    private fun sandboxProvider() = com.voyagerfiles.data.repository.RootFileProvider(
+        com.voyagerfiles.data.repository.RootShell(startProcess = { ProcessBuilder("sh", "-c", it).start() }, requireRoot = false),
+    )
+
+    @Test fun abortDuringTheFinalHashKeepsTheOriginal() = cancelDuringFinalHash(false)
+    @Test fun clientDeathDuringTheFinalHashKeepsTheOriginal() = cancelDuringFinalHash(true)
+
+    private fun cancelDuringFinalHash(death: Boolean) = fixture { directory, operations, released, releases, hooks ->
+        val original = ByteArray(300_000) { (it * 31).toByte() }
+        val file = File(directory, "file").apply { writeBytes(original) }
+        val write = ServiceWrite(hooks, operations.openWrite(file.path, null), Binder())
+        ParcelFileDescriptor.AutoCloseOutputStream(write.input()).use { it.write("replacement".toByteArray()) }
+        PausingSha256.delegateProvider = java.security.MessageDigest.getInstance("SHA-256").provider
+        PausingSha256.entered = CountDownLatch(1)
+        PausingSha256.resume = CountDownLatch(1)
+        PausingSha256.armed = true
+        val provider = object : java.security.Provider("VoyagerCommitPause", 1.0, "Instrumentation digest pause") {
+            init { put("MessageDigest.SHA-256", PausingSha256::class.java.name) }
+        }
+        val result = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val committer = Thread({ try { write.commit() } catch (error: Throwable) { result.set(error) } }, "shizuku-final-commit")
+        val canceller = Thread { if (death) write.binderDied() else write.abort() }
+        assertEquals(1, java.security.Security.insertProviderAt(provider, 1))
+        try {
+            committer.start()
+            assertTrue("Commit must reach its final content hash", PausingSha256.entered.await(5, TimeUnit.SECONDS))
+            canceller.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+            while (canceller.state != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.sleep(5)
+            assertEquals("Cancellation must arrive while hashing holds the commit monitor", Thread.State.BLOCKED, canceller.state)
+            PausingSha256.resume.countDown()
+            committer.join(5000); canceller.join(5000)
+            assertFalse(committer.isAlive); assertFalse(canceller.isAlive)
+            assertNotNull("Cancellation during hashing must fail the commit", result.get())
+            assertArrayEquals(original, file.readBytes())
+            assertTrue(released.await(3, TimeUnit.SECONDS))
+            assertEquals(1, releases.get())
+            assertEquals(listOf("file"), directory.list()!!.toList())
+        } finally {
+            PausingSha256.armed = false
+            PausingSha256.resume.countDown()
+            committer.join(5000); canceller.join(5000)
+            java.security.Security.removeProvider(provider.name)
+            write.abort()
+        }
     }
 
     private fun awaitWaiting(thread: Thread) {

@@ -57,14 +57,11 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         }
     }
 
-    override fun list(directory: String): IShizukuRead = guard { read { it.write(operations.list(directory)) } }
     override fun stat(path: String): ByteArray = guard { operations.stat(path) }
     override fun exists(path: String): Boolean = guard { operations.exists(path) }
-    override fun canonical(path: String): String = guard { operations.canonical(path) }
     override fun fingerprint(path: String): String = guard { operations.fingerprint(path) }
     override fun mkdir(path: String) = guard { operations.mkdir(path) }
     override fun createFile(path: String) = guard { operations.createFile(path) }
-    override fun delete(path: String): Boolean = guard { operations.delete(path) }
 
     override fun openRead(path: String): IShizukuRead = guard {
         val file = operations.openRead(path)

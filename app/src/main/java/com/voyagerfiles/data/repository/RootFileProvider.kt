@@ -124,7 +124,7 @@ open class RootFileProvider(
         return shell.execute("if [ -e $p ] || [ -L $p ]; then printf 1; else printf 0; fi", 1).contentEquals(byteArrayOf(49))
     }
     protected open fun canonicalAt(path: String): String =
-        shell.execute("readlink -f -- ${q(path)}", 65_536).toString(Charsets.UTF_8).removeSuffix("\n")
+        decode(shell.execute("readlink -f -- ${q(path)}", 65_536)).removeSuffix("\n")
     protected open fun mkdirAt(path: String) { shell.execute("mkdir -- ${q(path)}") }
     protected open fun createFileAt(path: String) { shell.execute("set -C; : > ${q(path)}") }
     protected open fun deleteAt(path: String) {
