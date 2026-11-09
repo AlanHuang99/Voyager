@@ -4,7 +4,6 @@ import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants.ENOENT
-import android.system.OsConstants.EXDEV
 import android.system.OsConstants.O_CREAT
 import android.system.OsConstants.O_EXCL
 import android.system.OsConstants.O_NOFOLLOW
@@ -43,8 +42,8 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         for (name in names.sortedWith(compareBy<String>({ it.startsWith('.') }, { it }))) {
             val path = "$base/$name"
             val stat = try { Os.lstat(path) } catch (error: ErrnoException) {
-                if (error.errno == ENOENT) missing.add(name)
-                continue
+                if (error.errno == ENOENT) { missing.add(name); continue }
+                throw error
             }
             writeEntry(output, path, stat)
             // One entry beyond the provider's limit lets its parser report the limit.
@@ -84,21 +83,6 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         }
         if (S_ISDIR(stat.st_mode)) removeContents(target, stat)
         Os.remove(target)
-    }
-
-    /** False when source and target are on different file systems; the caller then falls back to `mv`. */
-    fun moveNew(source: String, target: String): Boolean = inParent(source) { sourceParent, sourceName ->
-        inParent(target) { targetParent, targetName ->
-            val from = sourceParent.child(sourceName)
-            val to = targetParent.child(targetName)
-            if (exists(to)) throw IOException("Destination already exists")
-            try { Os.rename(from, to) } catch (error: ErrnoException) {
-                if (error.errno == EXDEV) return@inParent false
-                throw error
-            }
-            if (exists(from)) throw IOException("Move failed; original retained")
-            true
-        }
     }
 
     fun fingerprint(path: String): String = inParent(path) { parent, name ->
@@ -295,9 +279,7 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
     private fun fingerprintOf(file: PinnedFd): String {
         val stat = Os.fstat(file.fd)
         val context = selinuxContext(file.path)?.text ?: "?"
-        // Only the text editor compares the hash with content, and it is limited to MAX_TEXT_BYTES. Larger
-        // files rely on dev/ino/size/mtime/ctime, which any change to them updates; the shell hashed everything.
-        val hash = if (stat.st_size > RootFileProvider.MAX_TEXT_BYTES) "unhashed" else sha256(file, stat.st_size)
+        val hash = sha256(file, stat.st_size)
         return "${stat.st_dev}:${stat.st_ino}:${Integer.toHexString(stat.st_mode)}:${stat.st_uid}:${stat.st_gid}:" +
             "${stat.st_nlink}:${stat.st_size}:${stat.st_mtime}:${stat.st_ctime}\n$context\n$hash"
     }

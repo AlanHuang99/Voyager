@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <service
+            android:name="com.voyagerfiles.app.ShizukuDeathTokenService"
+            android:exported="true"
+            android:permission="com.voyagerfiles.debug.test.SHIZUKU_DEATH_FIXTURE"
+            android:process=":shizuku_death_fixture" />
         <provider
             android:name="com.voyagerfiles.util.UploadMetadataTestProvider"
             android:authorities="com.voyagerfiles.test.upload"

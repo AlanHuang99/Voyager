@@ -57,10 +57,7 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         }
     }
 
-    override fun list(directory: String): IShizukuRead = guard {
-        val bytes = operations.list(directory)
-        read { it.write(bytes) }
-    }
+    override fun list(directory: String): IShizukuRead = guard { read { it.write(operations.list(directory)) } }
     override fun stat(path: String): ByteArray = guard { operations.stat(path) }
     override fun exists(path: String): Boolean = guard { operations.exists(path) }
     override fun canonical(path: String): String = guard { operations.canonical(path) }
@@ -68,7 +65,6 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
     override fun mkdir(path: String) = guard { operations.mkdir(path) }
     override fun createFile(path: String) = guard { operations.createFile(path) }
     override fun delete(path: String): Boolean = guard { operations.delete(path) }
-    override fun moveNew(source: String, target: String): Boolean = guard { operations.moveNew(source, target) }
 
     override fun openRead(path: String): IShizukuRead = guard {
         val file = operations.openRead(path)
@@ -90,11 +86,13 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
 
     override fun openWrite(path: String, expectedFingerprint: String, client: IBinder): IShizukuWrite = guard {
         var write: ServiceWrite? = null
-        val slot = admit { write?.let(writes::remove) }
+        val slot = admit { synchronized(writes) { write?.let(writes::remove) } }
         val staged = try { operations.openWrite(path, expectedFingerprint.ifEmpty { null }) }
         catch (error: Throwable) { slot.release(); throw error }
         try {
-            ServiceWrite(slot, staged, client).also { write = it; writes.add(it) }
+            synchronized(writes) {
+                ServiceWrite(slot, staged, client).also { write = it; writes.add(it) }
+            }
         } catch (error: Throwable) {
             staged.discard(); staged.close(); slot.release()
             throw error

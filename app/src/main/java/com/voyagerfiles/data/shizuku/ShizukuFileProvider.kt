@@ -14,7 +14,7 @@ import java.io.OutputStream
 
 /**
  * File operations run in the Shizuku UserService ([ShizukuFileOperations]) and data moves through pipes.
- * The supervised shell is still used for copies and for moves across file systems.
+ * The supervised shell is still used for copies, moves, and renames.
  */
 class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileProvider(
     RootShell(startProcess = connection::start, requireRoot = false, accessName = "Shizuku", externalInputPipe = true, temporaryDirectory = "/data/local/tmp"),
@@ -30,9 +30,6 @@ class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileP
     override fun createFileAt(path: String) = connection.files { it.createFile(path) }
     override fun deleteAt(path: String) {
         if (!connection.files { it.delete(path) }) super.deleteAt(path)
-    }
-    override fun moveNew(source: String, target: String) {
-        if (!connection.files { it.moveNew(source, target) }) super.moveNew(source, target)
     }
     override fun fingerprint(path: String): String = connection.files { it.fingerprint(path) }
     override fun openRead(path: String): InputStream = ShizukuInputStream(connection, connection.files { it.openRead(path) })
@@ -102,7 +99,7 @@ private class ShizukuOutputStream(
         try {
             TransferCancellation.check()
             output.close()
-            connection.remote { write.commit() }
+            connection.files { write.commit() }
         } catch (error: Throwable) {
             discard()
             throw error

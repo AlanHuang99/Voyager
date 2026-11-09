@@ -13,7 +13,6 @@ interface IShizukuFiles {
     void mkdir(String path) = 8;
     void createFile(String path) = 9;
     boolean delete(String path) = 10;
-    boolean moveNew(String source, String target) = 11;
     IShizukuRead openRead(String path) = 12;
     IShizukuWrite openWrite(String path, String expectedFingerprint, IBinder client) = 13;
     void destroy() = 16777114;

@@ -103,15 +103,22 @@ internal class ServiceWrite(
                     val output = FileOutputStream(staged.payload.fd)
                     val buffer = ByteArray(BUFFER_BYTES)
                     val readable = StructPollfd().apply { fd = pipe[0].fileDescriptor; events = POLLIN.toShort() }
+                    var lastRead = System.nanoTime()
                     while (!stopped) {
                         readable.revents = 0
                         val ready = try { Os.poll(arrayOf(readable), POLL_MILLIS) } catch (error: ErrnoException) {
                             if (error.errno == EINTR) continue
                             throw error
                         }
-                        if (ready == 0) continue
+                        if (ready == 0) {
+                            if (System.nanoTime() - lastRead >= TimeUnit.SECONDS.toNanos(IDLE_SECONDS)) {
+                                synchronized(this) { abortLocked() }
+                            }
+                            continue
+                        }
                         val count = input.read(buffer)
                         if (count < 0) break
+                        lastRead = System.nanoTime()
                         output.write(buffer, 0, count)
                     }
                 }
@@ -141,7 +148,12 @@ internal class ServiceWrite(
             state = State.COMMITTING
         }
         // Wait outside the lock so abort() can still end a stuck write.
-        val complete = awaitQuietly(drained)
+        val complete = try {
+            awaitQuietly(drained)
+        } catch (error: IllegalStateException) {
+            synchronized(this) { abortLocked() }
+            throw error
+        }
         synchronized(this) {
             try {
                 if (state == State.ABORTED) throw IllegalStateException("Write was cancelled")

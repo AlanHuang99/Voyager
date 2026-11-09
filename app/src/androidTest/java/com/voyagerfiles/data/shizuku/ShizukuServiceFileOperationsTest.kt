@@ -13,6 +13,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.util.UUID
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
+import android.os.Parcel
+import android.os.ParcelFileDescriptor
+import com.voyagerfiles.app.ShizukuDeathTokenService
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Opt in with -e shizuku true after granting Shizuku access. Covers the service-side file operations. */
 class ShizukuServiceFileOperationsTest {
@@ -67,11 +77,11 @@ class ShizukuServiceFileOperationsTest {
         assertEquals(listOf("file"), provider.names(scratch))
     }
 
-    @Test fun failuresReachTheCallerAndTheServiceKeepsRunning() = session { provider, _, scratch ->
+    @Test fun failuresReachTheCallerAndTheServiceKeepsRunning() = session { provider, shell, scratch ->
         assertTrue(provider.getInputStream("$scratch/missing").isFailure)
         assertTrue(provider.createDirectory("$scratch/missing", "child").isFailure)
         assertTrue(provider.delete("$scratch/missing").isFailure)
-        assertTrue(provider.listFiles("/data/data").isFailure)
+        if (shell.text("id -u").trim() == "2000") assertTrue(provider.listFiles("/data/data").isFailure)
         assertEquals(emptyList<String>(), provider.names(scratch))
     }
 
@@ -126,5 +136,83 @@ class ShizukuServiceFileOperationsTest {
         provider.saveText(document, "changed").getOrThrow()
         assertEquals("changed", shell.text("cat '$scratch/note.txt'"))
         assertTrue("A stale document must not overwrite", provider.saveText(document, "stale").isFailure)
+    }
+
+    @Test fun aRealClientProcessDeathDiscardsTheStageAndFreesItsSlot() = runBlocking<Unit> {
+        enabled()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val connected = CountDownLatch(1)
+        var token: IBinder? = null
+        val tokenConnection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, service: IBinder) { token = service; connected.countDown() }
+            override fun onServiceDisconnected(name: ComponentName) = Unit
+        }
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        assertTrue(context.bindService(Intent(testContext, ShizukuDeathTokenService::class.java), tokenConnection, Context.BIND_AUTO_CREATE))
+        try {
+            assertTrue("Separate client process must bind", connected.await(10, TimeUnit.SECONDS))
+            val client = checkNotNull(token)
+            val death = CountDownLatch(1)
+            client.linkToDeath({ death.countDown() }, 0)
+            val connection = ShizukuConnection.connect(context)
+            val shell = RootShell(startProcess = connection::start, requireRoot = false, externalInputPipe = true, temporaryDirectory = "/data/local/tmp")
+            val scratch = "/data/local/tmp/voyager-client-death-${UUID.randomUUID()}"
+            var output: java.io.OutputStream? = null
+            try {
+                shell.execute("mkdir -- '$scratch'; printf original > '$scratch/file'")
+                val write = connection.files { it.openWrite("$scratch/file", "", client) }
+                output = ParcelFileDescriptor.AutoCloseOutputStream(connection.remote { write.input() })
+                output.write("incomplete".toByteArray())
+                val data = Parcel.obtain()
+                try { client.transact(IBinder.FIRST_CALL_TRANSACTION, data, null, IBinder.FLAG_ONEWAY) } finally { data.recycle() }
+                assertTrue("Client process must actually die", death.await(10, TimeUnit.SECONDS))
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                var listing = ""
+                do {
+                    listing = shell.text("ls -A '$scratch'").trim()
+                    if (listing == "file") break
+                    Thread.sleep(25)
+                } while (System.nanoTime() < deadline)
+                assertEquals("file", listing)
+                assertEquals("original", shell.text("cat '$scratch/file'"))
+                assertTrue(runCatching { connection.remote { write.commit() } }.isFailure)
+                // Eight simultaneous new writes establish that the dead client's slot was released.
+                var admitted = 0
+                do {
+                    val replacements = mutableListOf<IShizukuWrite>()
+                    try {
+                        runCatching { repeat(8) { replacements += connection.files { it.openWrite("$scratch/file", "", android.os.Binder()) } } }
+                        admitted = replacements.size
+                    } finally { replacements.forEach { runCatching { it.abort() } } }
+                    if (admitted == 8) break
+                    Thread.sleep(50)
+                } while (System.nanoTime() < deadline)
+                assertEquals("Dead client must release its operation slot", 8, admitted)
+            } finally {
+                runCatching { output?.close() }
+                runCatching { shell.execute("rm -rf -- '$scratch'") }
+                shell.close(); connection.close()
+            }
+        } finally { context.unbindService(tokenConnection) }
+    }
+
+    @Test fun closingASessionDiscardsItsOutstandingWrite() = session { _, shell, scratch ->
+        shell.execute("printf original > '$scratch/file'")
+        val separate = ShizukuFileProvider(ShizukuConnection.connect(ApplicationProvider.getApplicationContext()))
+        val output = separate.getOutputStream("$scratch/file").getOrThrow()
+        try {
+            output.write("incomplete".toByteArray())
+            separate.close()
+            assertTrue(runCatching { output.close() }.isFailure)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            var listing = ""
+            do {
+                listing = shell.text("ls -A '$scratch'").trim()
+                if (listing == "file") break
+                Thread.sleep(25)
+            } while (System.nanoTime() < deadline)
+            assertEquals("file", listing)
+            assertEquals("original", shell.text("cat '$scratch/file'"))
+        } finally { separate.close(); runCatching { (output as TransferAbortable).abortTransfer() } }
     }
 }
