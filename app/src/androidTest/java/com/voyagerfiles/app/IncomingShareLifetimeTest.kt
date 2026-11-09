@@ -38,8 +38,14 @@ class IncomingShareLifetimeTest {
     private val control = Uri.parse("content://${IncomingShareControlProvider.AUTHORITY}")
     private lateinit var root: File
     private var receivingActivity: MainActivity? = null
+    private var initialSessionIds = emptySet<String>()
+    private var initialActiveSessionId: String? = null
 
     @Before fun setup() {
+        main {
+            initialSessionIds = browser.sessions.value.map { it.id }.toSet()
+            initialActiveSessionId = browser.activeSession.value?.id
+        }
         removeTasks()
         control("reset")
         root = File(app.cacheDir, "incoming-share-$session").apply { mkdirs() }
@@ -53,8 +59,12 @@ class IncomingShareLifetimeTest {
         control("release")
         main { browser.cancelOperation() }
         waitUntil { browser.operationState.value == OperationState.Idle }
-        main { browser.sessions.value.map { it.id }.forEach(browser::closeSession) }
-        waitUntil { browser.sessions.value.isEmpty() }
+        main { browser.sessions.value.map { it.id }.filterNot { it in initialSessionIds }.forEach(browser::closeSession) }
+        waitUntil { browser.sessions.value.map { it.id }.toSet() == initialSessionIds }
+        initialActiveSessionId?.let { sessionId ->
+            main { browser.activateSession(sessionId) }
+            waitUntil { browser.activeSession.value?.id == sessionId }
+        }
         removeTasks()
         control("clear")
         root.deleteRecursively()
@@ -118,14 +128,20 @@ class IncomingShareLifetimeTest {
         }
         try {
             receiveShare()
+            main { browser.openLocalRoot(root.path) }
+            waitUntil { browser.browseState.value.currentPath == root.path && !browser.browseState.value.isLoading }
+            val fallbackSessionId = checkNotNull(browser.activeSession.value).id
             main { browser.connectToRemote(RemoteConnection(
                 id = System.nanoTime(), name = "Incoming share fixture", protocol = ConnectionProtocol.WEBDAV,
                 host = "127.0.0.1", port = server.port, useTls = false, username = "share", password = "fixture",
             )) }
             waitUntil { browser.activeSession.value?.source == com.voyagerfiles.data.model.FileSource.WEBDAV && !browser.browseState.value.isLoading }
+            val destinationSessionId = checkNotNull(browser.activeSession.value).id
+            val remainingSessionIds = browser.sessions.value.map { it.id }.toSet() - destinationSessionId
             startAndRemoveTask()
-            main { browser.closeActiveSession() }
-            waitUntil { browser.activeSession.value == null }
+            main { browser.closeSession(destinationSessionId) }
+            waitUntil { browser.sessions.value.none { it.id == destinationSessionId } && browser.activeSession.value?.id == fallbackSessionId }
+            assertEquals(remainingSessionIds, browser.sessions.value.map { it.id }.toSet())
             control("release")
             try {
                 waitForCompletion(OperationOutcome.COMPLETED)
@@ -134,6 +150,7 @@ class IncomingShareLifetimeTest {
                 throw AssertionError("${error.message}\nDAV requests=$requests\n${listing(files)}", error)
             }
             sources.forEach { uri -> assertArrayEquals(IncomingShareSourceProvider.payload(uri.lastPathSegment), files["/${uri.lastPathSegment}"]) }
+            assertTrue("Upload must retain the closed remote destination", root.listFiles().orEmpty().isEmpty())
             waitForGrantRelease()
         } finally { server.shutdown() }
     }
