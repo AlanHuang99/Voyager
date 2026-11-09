@@ -172,12 +172,15 @@ class ShizukuTransferLifecycleTest {
     @Test fun undecodableNamesCannotAliasAValidReplacementCharacterName() = fixture { directory, operations, _, _, _ ->
         File(directory, "\uFFFD").writeText("valid filename")
         val quoted = com.voyagerfiles.data.repository.RootShell.quote(directory.path)
-        val process = ProcessBuilder("sh", "-c", ": > $quoted/\"\$(printf '\\377')\"").start()
+        val process = ProcessBuilder("sh", "-c", ": > $quoted/\"\$(printf '\\377')\"; ln -s \"\$(printf '\\377')\" $quoted/link").start()
         assertEquals(0, process.waitFor())
         try {
             sandboxProvider().use { provider ->
                 kotlinx.coroutines.runBlocking {
                     assertTrue("Invalid raw filenames must fail safely", provider.listFiles(directory.path).isFailure)
+                    assertTrue("A malformed symlink target must not alias a valid name", runCatching {
+                        provider.isSamePath("${directory.path}/link", "${directory.path}/\uFFFD")
+                    }.exceptionOrNull() is IOException)
                     provider.delete(directory.path).getOrThrow()
                 }
             }
