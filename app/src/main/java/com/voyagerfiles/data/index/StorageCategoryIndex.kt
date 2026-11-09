@@ -68,7 +68,7 @@ class StorageCategoryIndex(
         volumes: List<StorageVolumeInfo>,
         showHidden: Boolean,
         hasPermission: () -> Boolean,
-    ): Flow<CategoryIndexState> = scanMatching(volumes, showHidden, hasPermission, category.filter::matches)
+    ): Flow<CategoryIndexState> = scanMatching(volumes, showHidden, hasPermission, accepts = category.filter::matches)
 
     fun search(
         query: String,
@@ -78,13 +78,14 @@ class StorageCategoryIndex(
     ): Flow<CategoryIndexState> {
         val name = query.trim()
         require(name.isNotEmpty()) { "Enter a file name to search" }
-        return scanMatching(volumes, showHidden, hasPermission) { it.name.contains(name, ignoreCase = true) }
+        return scanMatching(volumes, showHidden, hasPermission, includeDirectories = true) { it.name.contains(name, ignoreCase = true) }
     }
 
     private fun scanMatching(
         volumes: List<StorageVolumeInfo>,
         showHidden: Boolean,
         hasPermission: () -> Boolean,
+        includeDirectories: Boolean = false,
         accepts: (FileItem) -> Boolean,
     ): Flow<CategoryIndexState> = flow {
         val matches = mutableListOf<FileItem>()
@@ -138,6 +139,18 @@ class StorageCategoryIndex(
                     inaccessible()
                     return
                 }
+                val file = FileItem(
+                    name = path.fileName?.toString() ?: path.toString(),
+                    path = path.toString(),
+                    isDirectory = attributes.isDirectory,
+                    size = if (attributes.isDirectory) 0 else attributes.size(),
+                    lastModified = Date(attributes.lastModifiedTime().toMillis()),
+                    isHidden = path.any { it.toString().startsWith('.') },
+                )
+                if ((!attributes.isDirectory || includeDirectories && depth > 0) && accepts(file)) {
+                    if (matches.size == maxResults) throw CategoryResultLimit()
+                    matches += file
+                }
                 if (attributes.isDirectory) {
                     if (depth >= maxDepth) {
                         skipped()
@@ -148,18 +161,6 @@ class StorageCategoryIndex(
                     }
                 } else {
                     coverage[currentVolume] = coverage[currentVolume].let { it.copy(filesExamined = it.filesExamined + 1) }
-                    val file = FileItem(
-                        name = path.fileName.toString(),
-                        path = path.toString(),
-                        isDirectory = false,
-                        size = attributes.size(),
-                        lastModified = Date(attributes.lastModifiedTime().toMillis()),
-                        isHidden = path.any { it.toString().startsWith('.') },
-                    )
-                    if (accepts(file)) {
-                        if (matches.size == maxResults) throw CategoryResultLimit()
-                        matches += file
-                    }
                 }
             } catch (_: IOException) {
                 inaccessible()
@@ -232,7 +233,9 @@ class StorageCategoryIndex(
                 }.getOrDefault(false)
             }
             val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
-            inScope && attributes.isRegularFile && attributes.size() == file.size &&
+            val sameTypeAndSize = if (file.isDirectory) attributes.isDirectory
+                else attributes.isRegularFile && attributes.size() == file.size
+            inScope && sameTypeAndSize &&
                 attributes.lastModifiedTime().toMillis() == file.lastModified.time && hasPermission()
         } catch (_: IOException) {
             false

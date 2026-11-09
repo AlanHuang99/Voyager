@@ -47,7 +47,7 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 - Browse internal storage, SD cards, USB/OTG volumes, and folders granted through Android's folder picker.
 - Copy, move, rename, create, and delete files across local, document-tree, and remote locations, with transfer progress and cancellation. Share local and document-tree files through Android's share sheet.
 - Use list, compact list, or grid views, local and remote image thumbnails, sorting, current-folder search, and file-type filters.
-- Search filenames across accessible mounted shared storage from Home, and open a result's containing folder.
+- Search file and folder names across accessible mounted shared storage from Home or the browser menu. Open a matching folder or a file's containing folder.
 - Open per-file action menus in List and Compact views.
 - Browse Home media categories with saved sorting by name, size, modification date, or type. Bookmark local folders and keep multiple browser sessions open.
 - Hide and unhide local files and folders from their menus. Use Show hidden files to reveal hidden entries.
