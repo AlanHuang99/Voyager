@@ -14,12 +14,17 @@ import java.io.OutputStream
 
 /**
  * File operations run in the Shizuku UserService ([ShizukuFileOperations]) and data moves through pipes.
- * Listing, deletion, canonical paths, copies, moves, and renames retain the supervised shell.
+ * Deletion, copies, moves, and renames retain the supervised shell; they run once per operation, while
+ * listings and canonical paths run for every file of a transfer.
  */
 class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileProvider(
     RootShell(startProcess = connection::start, requireRoot = false, accessName = "Shizuku", externalInputPipe = true, temporaryDirectory = "/data/local/tmp"),
     FileSource.SHIZUKU,
 ) {
+    override fun listing(directory: String): ByteArray = connection.files { it.list(directory) }.let { read ->
+        ShizukuInputStream(connection, read).use { it.readBytes() }
+    }
+    override fun canonicalAt(path: String): String = connection.files { it.canonical(path) }
     override fun statEntry(path: String): ByteArray = connection.files { it.stat(path) }
     override fun existsAt(path: String): Boolean = connection.files { it.exists(path) }
     override fun mkdirAt(path: String) { val pinned = primitivePath(path); connection.files { it.mkdir(pinned) } }
@@ -47,7 +52,7 @@ class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileP
     }
 
     private fun primitivePath(path: String): String {
-        val parent = super.canonicalAt(checkNotNull(getParentPath(path)))
+        val parent = canonicalAt(checkNotNull(getParentPath(path)))
         return "${parent.trimEnd('/')}/${path.substringAfterLast('/')}"
     }
 
