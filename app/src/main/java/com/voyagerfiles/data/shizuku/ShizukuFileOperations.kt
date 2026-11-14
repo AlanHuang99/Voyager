@@ -3,6 +3,9 @@ package com.voyagerfiles.data.shizuku
 import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
+import android.system.OsConstants.ENOENT
+import android.system.OsConstants.R_OK
+import android.system.OsConstants.X_OK
 import android.system.OsConstants.O_CREAT
 import android.system.OsConstants.O_EXCL
 import android.system.OsConstants.O_NOFOLLOW
@@ -16,19 +19,100 @@ import com.voyagerfiles.data.repository.RootFileProvider
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.MessageDigest
 import java.util.UUID
 
 /**
  * File operations of the Shizuku UserService, which runs as shell or root.
  *
- * Canonical parents come from the supervised shell. Every mutation and file open goes through a
+ * Names are read and resolved through java.nio.file, whose paths keep the raw filename bytes. A name
+ * that isn't valid UTF-8 can't be turned into a path string without changing it, so listings and path
+ * resolution refuse it, like the shell versions do, instead of aliasing another name. (java.io.File
+ * would decode it lossily, and its listing aborts in JNI on such names under CheckJNI.)
+ *
+ * Every mutation and file open goes through a
  * pinned directory: the parent is walked from `/` one component at a time without following
  * symbolic links, and later calls address `/proc/self/fd/N/name`. A path component swapped for a link
  * after the walk can't redirect a privileged operation. Byte formats match the shell commands in
  * [RootFileProvider], so listing parsing and fingerprints stay shared.
  */
 internal class ShizukuFileOperations(private val serviceUid: Int) {
+
+    /** The shell listing's format: `path\0<mode hex> <size> <mtime> <uid>:<gid>\n` per entry. */
+    fun list(directory: String): ByteArray {
+        requireAbsolute(directory)
+        val folder = Paths.get(directory)
+        // The shell listing's checks: [ -d ] && [ -r ] && [ -x ], following links.
+        if (!Files.isDirectory(folder) || !accessible(directory, R_OK or X_OK)) throw IOException("Folder missing or permission denied")
+        val names = mutableListOf<String>()
+        Files.newDirectoryStream(folder).use { entries ->
+            for (entry in entries) {
+                names.add(lossless(entry.fileName))
+                // Bound memory: the provider's parser rejects longer listings anyway.
+                if (names.size > LISTING_LIMIT) throw IOException("Folder exceeds the root listing limit (20,000 entries)")
+            }
+        }
+        val base = directory.trimEnd('/')
+        val output = ByteArrayOutputStream()
+        var count = 0
+        // Same order as the shell globs: plain names first, then hidden ones.
+        for (name in names.sortedWith(compareBy<String>({ it.startsWith('.') }, { it }))) {
+            val path = "$base/$name"
+            val stat = try { Os.lstat(path) } catch (error: ErrnoException) {
+                if (error.errno == ENOENT) continue // Removed meanwhile, as the shell's [ -e ] || [ -L ] skip.
+                throw error // Any other metadata failure fails the listing, like the shell's stat || exit 1.
+            }
+            writeEntry(output, path, stat)
+            // One entry beyond the provider's limit lets its parser report the limit.
+            if (++count > LISTING_LIMIT) break
+        }
+        return output.toByteArray()
+    }
+
+    /**
+     * `readlink -f`: every component but the last must exist and be searchable; links are resolved,
+     * including a dangling link in the last position, whose target's parent must then exist.
+     */
+    fun canonical(path: String): String {
+        requireAbsolute(path)
+        // Lexical normalization of the input matches RootFileProvider.path(), which runs before readlink -f too.
+        return lossless(canonicalPath(Paths.get(path).normalize(), 0)).let { if (it.isEmpty()) "/" else it }
+    }
+
+    private fun canonicalPath(path: Path, depth: Int): Path {
+        if (depth > MAX_LINKS) throw IOException("Too many levels of symbolic links")
+        try { return path.toRealPath() } catch (_: NoSuchFileException) {}
+        val name = path.fileName ?: throw IOException("Cannot resolve root path")
+        // Only reached when the path is missing; a missing "." or ".." means its parent is missing too.
+        if (name.toString() == "." || name.toString() == "..") throw IOException("No such file or directory")
+        val parent = (path.parent ?: path.root).toRealPath()
+        if (!Files.isDirectory(parent)) throw IOException("Not a directory")
+        val candidate = parent.resolve(name)
+        if (!Files.isSymbolicLink(candidate)) return candidate
+        // A dangling link: readlink -f resolves its target, whose last component may be missing. The target
+        // isn't normalized lexically: ".." after a link must go to the link target's parent, which the
+        // recursion's toRealPath() of the parent does physically.
+        return canonicalPath(parent.resolve(Files.readSymbolicLink(candidate)), depth + 1)
+    }
+
+    /** The path as a string, or a failure when its bytes aren't valid UTF-8 and the string would name another file. */
+    private fun lossless(path: Path): String {
+        val text = path.toString()
+        val same = try { Paths.get(text) == path } catch (_: java.nio.file.InvalidPathException) { false }
+        if (!same) throw IOException(NOT_UTF8)
+        return text
+    }
+
+    private fun requireAbsolute(path: String) {
+        require(path.startsWith('/') && '\u0000' !in path) { "Root paths must be absolute and contain no NUL" }
+    }
+
+    private fun accessible(path: String, mode: Int) = try { Os.access(path, mode) } catch (_: ErrnoException) { false }
 
     fun stat(path: String): ByteArray = ByteArrayOutputStream().also { writeEntry(it, path, Os.lstat(path)) }.toByteArray()
 
@@ -268,6 +352,9 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         private val MODE_2700 = "2700".toInt(8)
         private const val PAYLOAD = "payload"
         private const val SELINUX_XATTR = "security.selinux"
+        private const val LISTING_LIMIT = 20_000
+        private const val MAX_LINKS = 40
+        private const val NOT_UTF8 = "Only valid UTF-8 text and filenames are supported in root sessions"
         private const val CHANGED = "File changed since opening. Original preserved; reopen before saving."
         private const val REGULAR_ONLY = "Only regular files can be read or edited; symbolic links and special files are unsupported"
     }

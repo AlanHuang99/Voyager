@@ -57,6 +57,11 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         }
     }
 
+    override fun list(directory: String): IShizukuRead = guard {
+        val bytes = operations.list(directory)
+        read { it.write(bytes) }
+    }
+    override fun canonical(path: String): String = guard { operations.canonical(path) }
     override fun stat(path: String): ByteArray = guard { operations.stat(path) }
     override fun exists(path: String): Boolean = guard { operations.exists(path) }
     override fun fingerprint(path: String): String = guard { operations.fingerprint(path) }
@@ -141,9 +146,16 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         }
     }
 
-    private fun describe(error: Throwable): String {
+    private fun describe(failure: Throwable): String {
+        // A failing directory iteration wraps the real cause.
+        val error = (failure as? java.nio.file.DirectoryIteratorException)?.cause ?: failure
         val message = when (error) {
             is ErrnoException -> if (error.errno == android.system.OsConstants.ELOOP) "Folder changed or is a symbolic link" else Os.strerror(error.errno)
+            // java.nio.file failures carry the path as their message; the reason is what helps.
+            is java.nio.file.NoSuchFileException -> "No such file or directory"
+            is java.nio.file.AccessDeniedException -> "Permission denied"
+            is java.nio.file.NotDirectoryException -> "Not a directory"
+            is java.nio.file.FileSystemException -> error.reason ?: "File system error"
             else -> error.message ?: error.javaClass.simpleName
         }
         // Descriptor paths mean nothing to the user.
