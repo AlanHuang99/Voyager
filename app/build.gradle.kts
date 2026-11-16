@@ -177,6 +177,9 @@ dependencies {
 
     // Archive formats - Apache Commons Compress (Apache 2.0)
     implementation("org.apache.commons:commons-compress:1.28.0")
+    // Optional compressors for commons-compress (Apache 2.0 / Public Domain)
+    implementation("org.tukaani:xz:1.10")
+    implementation("com.github.luben:zstd-jni:1.5.7-4@aar")
 
     // Splash screen
     implementation("androidx.core:core-splashscreen:1.0.1")

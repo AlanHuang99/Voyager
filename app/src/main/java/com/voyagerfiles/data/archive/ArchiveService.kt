@@ -26,6 +26,9 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -435,6 +438,21 @@ object ArchiveService {
                 tree.totalEntries = 1
                 tree.writeFile(rawName = format.stem(archiveName), input = compressed)
             }
+            ArchiveFormat.TAR_XZ -> xzInput(input).use { extractTar(it, tree) }
+            ArchiveFormat.TAR_ZSTD -> ZstdCompressorInputStream(input).use { extractTar(it, tree) }
+            ArchiveFormat.TAR_LZ4 -> lz4Input(input).use { extractTar(it, tree) }
+            ArchiveFormat.XZ -> xzInput(input).use { compressed ->
+                tree.totalEntries = 1
+                tree.writeFile(rawName = format.stem(archiveName), input = compressed)
+            }
+            ArchiveFormat.ZSTD -> ZstdCompressorInputStream(input).use { compressed ->
+                tree.totalEntries = 1
+                tree.writeFile(rawName = format.stem(archiveName), input = compressed)
+            }
+            ArchiveFormat.LZ4 -> lz4Input(input).use { compressed ->
+                tree.totalEntries = 1
+                tree.writeFile(rawName = format.stem(archiveName), input = compressed)
+            }
             ArchiveFormat.ZIP -> error("ZIP archives are extracted from a spooled copy")
             ArchiveFormat.RAR_UNSUPPORTED -> error("Unsupported RAR reached extraction")
         }
@@ -458,6 +476,12 @@ object ArchiveService {
             .setInputStream(input)
             .setDecompressConcatenated(true)
             .get()
+
+    private fun xzInput(input: InputStream): XZCompressorInputStream =
+        XZCompressorInputStream(input, true)
+
+    private fun lz4Input(input: InputStream): FramedLZ4CompressorInputStream =
+        FramedLZ4CompressorInputStream(input, true)
 
     private fun validateZipEntry(
         entry: ZipArchiveEntry,

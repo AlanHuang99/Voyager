@@ -11,6 +11,8 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
+import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -238,6 +240,8 @@ class ArchiveServiceTest {
             "bundle.tar.gz" to gzip(tar),
             "bundle.tbz2" to bzip2(tar),
             "bundle.tar.bz2" to bzip2(tar),
+            "bundle.tar.xz" to xz(tar),
+            "bundle.tar.lz4" to lz4(tar),
         )
 
         fixtures.forEachIndexed { index, (name, bytes) ->
@@ -265,6 +269,8 @@ class ArchiveServiceTest {
         val fixtures = listOf(
             "records.csv.gz" to gzip(contents),
             "records.csv.bz2" to bzip2(contents),
+            "records.csv.xz" to xz(contents),
+            "records.csv.lz4" to lz4(contents),
         )
 
         fixtures.forEach { (name, bytes) ->
@@ -450,6 +456,18 @@ class ArchiveServiceTest {
     private fun bzip2(contents: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
         BZip2CompressorOutputStream(output).use { it.write(contents) }
+        return output.toByteArray()
+    }
+
+    private fun xz(contents: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream()
+        XZCompressorOutputStream(output).use { it.write(contents) }
+        return output.toByteArray()
+    }
+
+    private fun lz4(contents: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream()
+        FramedLZ4CompressorOutputStream(output).use { it.write(contents) }
         return output.toByteArray()
     }
 
