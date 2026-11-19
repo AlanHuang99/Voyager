@@ -1,5 +1,5 @@
 """Purpose: preserve repository translations while preparing partial Crowdin exports.
-Inputs: English resources, indexed locales, approved exports, and optional provisional exports.
+Inputs: English resources, indexed locales, approved exports, and optional provisional exports with language metadata.
 Outputs: merged locale files with repository or English fallbacks; empty new locales are removed.
 Notes: explicit Crowdin translations take precedence, including text identical to English.
 """
@@ -7,10 +7,12 @@ Notes: explicit Crowdin translations take precedence, including text identical t
 from copy import deepcopy
 from collections import Counter
 import argparse
+import json
 from pathlib import Path
 import re
 import subprocess
 import xml.etree.ElementTree as ET
+from urllib.parse import quote
 from translation_rollout import LOCALES, is_protected
 
 
@@ -62,7 +64,7 @@ def write_locale_config(path, language):
     root = ET.Element("resources")
     ET.SubElement(root, "bool", name="translation_provisional").text = "true"
     ET.SubElement(root, "string", name="translation_crowdin_url", translatable="false").text = (
-        f"https://crowdin.com/project/voyagerandroid/{language}"
+        "https://crowdin.com/project/voyagerandroid" + (f"/{quote(language, safe='')}" if language else "")
     )
     ET.indent(root, space="    ")
     path.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding="unicode") + "\n")
@@ -97,18 +99,21 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
     ).decode().split("\0"))
     removed = []
     paths = set(resources.glob("values-*/strings.xml"))
+    locale_languages = {locale: language for language, locale in LOCALES.items()}
     if approved:
         paths.update(resources / p.parent.name / p.name for p in (approved / "app/src/main/res").glob("values-*/strings.xml"))
     if drafts:
-        paths.update(resources / f"values-{locale}" / "strings.xml" for locale in LOCALES.values()
-                     if (drafts / f"app/src/main/res/values-{locale}/strings.xml").is_file())
+        paths.update(resources / p.parent.name / p.name for p in (drafts / "app/src/main/res").glob("values-*/strings.xml"))
+        metadata = drafts / "locale_languages.json"
+        if metadata.is_file():
+            locale_languages.update(json.loads(metadata.read_text(encoding="utf-8")))
     for path in sorted(paths):
         if not path.resolve().is_relative_to(resources.resolve()) or path.is_symlink() or path.parent.is_symlink():
             raise ValueError(f"Unexpected translation path: {path}")
         relative = path.relative_to(repo)
         is_tracked = relative.as_posix() in tracked
         export_path = (approved / relative) if approved else path
-        draft_path = (drafts / relative) if drafts and path.parent.name.removeprefix("values-") in LOCALES.values() else None
+        draft_path = (drafts / relative) if drafts else None
         translated = resource_values(export_path) if export_path.is_file() else {}
         draft_values = resource_values(draft_path) if draft_path and draft_path.is_file() else {}
         translated.update({key: value for key, value in draft_values.items() if not is_protected(key[1])})
@@ -125,6 +130,7 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
         exported = {(item.tag, item.get("name")): item for item in ET.parse(export_path).getroot()} if export_path.is_file() else {}
         provisional = {(item.tag, item.get("name")): item for item in ET.parse(draft_path).getroot()} if draft_path and draft_path.is_file() else {}
         merged = ET.Element("resources")
+        used_provisional = False
         for original in source_root:
             if original.get("translatable") == "false":
                 continue
@@ -136,6 +142,7 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
             if chosen is None and key in provisional and not is_protected(key[1]):
                 if usable_draft(original, provisional[key]):
                     chosen = provisional[key]
+                    used_provisional = True
                 else:
                     print(f"Rejected invalid draft: {path.parent.name}/{key[1]}")
             if chosen is None:
@@ -151,9 +158,8 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(merged, encoding="unicode") + "\n", encoding="utf-8")
         locale = path.parent.name.removeprefix("values-")
-        if locale in LOCALES.values():
-            language = next(language for language, code in LOCALES.items() if code == locale)
-            write_locale_config(path.parent / "translation_config.xml", language)
+        if locale in LOCALES.values() or used_provisional:
+            write_locale_config(path.parent / "translation_config.xml", locale_languages.get(locale))
     return removed
 
 
