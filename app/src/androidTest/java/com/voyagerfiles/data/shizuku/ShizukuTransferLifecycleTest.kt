@@ -47,6 +47,36 @@ class ShizukuTransferLifecycleTest {
         } finally { write.abort(); output.close(); commit.join(3000) }
     }
 
+    @Test fun metadataRecoveryDiscardsAnOutstandingWriteBeforeStopping() = fixture { directory, operations, released, _, hooks ->
+        val file = File(directory, "file").apply { writeText("original") }
+        val write = ServiceWrite(hooks, operations.openWrite(file.path, null), Binder())
+        val output = ParcelFileDescriptor.AutoCloseOutputStream(write.input())
+        output.write("replacement".toByteArray())
+        val stopped = CountDownLatch(1)
+        val kept = java.util.concurrent.atomic.AtomicBoolean(false)
+        try {
+            recoverShizukuSession(listOf({ write.terminate() })) {
+                kept.set(file.readText() == "original" && directory.list()!!.toList() == listOf("file"))
+                stopped.countDown()
+            }
+            assertTrue(stopped.await(5, TimeUnit.SECONDS))
+            assertTrue(kept.get())
+            assertTrue(released.await(3, TimeUnit.SECONDS))
+        } finally { write.abort(); output.close() }
+    }
+
+    @Test fun stalledCleanupDoesNotBlockOtherCleanupOrTheHardDeadline() {
+        val allowExit = CountDownLatch(1)
+        val cleaned = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        try {
+            recoverShizukuSession(listOf({ allowExit.await() }, { cleaned.countDown() }), timeoutMillis = 100) { stopped.countDown() }
+            assertTrue(cleaned.await(3, TimeUnit.SECONDS))
+            assertTrue(stopped.await(3, TimeUnit.SECONDS))
+            assertEquals(1L, allowExit.count)
+        } finally { allowExit.countDown() }
+    }
+
     @Test fun clientDeathCancelsACommitWaitingForEof() = fixture { directory, operations, released, releases, hooks ->
         val file = File(directory, "file").apply { writeText("original") }
         val write = ServiceWrite(hooks, operations.openWrite(file.path, null), Binder())

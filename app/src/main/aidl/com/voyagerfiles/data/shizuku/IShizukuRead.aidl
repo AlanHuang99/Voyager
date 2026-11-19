@@ -4,4 +4,5 @@ import android.os.ParcelFileDescriptor;
 interface IShizukuRead {
     ParcelFileDescriptor output();
     long finish();
+    void abort();
 }
