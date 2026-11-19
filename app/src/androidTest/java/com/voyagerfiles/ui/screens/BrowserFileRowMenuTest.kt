@@ -20,6 +20,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -90,6 +92,28 @@ class BrowserFileRowMenuTest {
         runBlocking {
             preferences.setViewMode(originalViewMode)
             preferences.setUseTrash(originalUseTrash)
+        }
+    }
+
+    @Test
+    fun lastRowRemainsAboveCreateButtonInEveryLayout() {
+        repeat(100) { root.resolve("item-${it.toString().padStart(3, '0')}.txt").writeText("fixture") }
+        root.resolve("zzz-last.txt").writeText("last")
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+        for (mode in listOf(ViewMode.LIST, ViewMode.COMPACT, ViewMode.GRID)) {
+            runBlocking { preferences.setViewMode(mode) }
+            composeTestRule.waitUntil(5000) { viewModel.browseState.value.viewMode == mode }
+            composeTestRule.onNodeWithTag("browser-files").performScrollToIndex(viewModel.browseState.value.visibleFiles.lastIndex)
+            composeTestRule.waitForIdle()
+            val last = composeTestRule.onNodeWithText("zzz-last.txt").fetchSemanticsNode().boundsInRoot
+            val create = composeTestRule.onNodeWithContentDescription("Create").fetchSemanticsNode().boundsInRoot
+            assertTrue("$mode final row must clear the create button", last.bottom < create.top)
+            if (mode != ViewMode.GRID) {
+                composeTestRule.onNodeWithContentDescription("More options for zzz-last.txt").performTouchInput { click() }
+                composeTestRule.onNodeWithText("Details").assertIsDisplayed()
+                androidx.test.espresso.Espresso.pressBack()
+            }
         }
     }
 
