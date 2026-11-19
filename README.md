@@ -59,11 +59,11 @@ Settings lets you choose the search position, theme, Home sections, and remote d
 - Browse Home media categories with saved sorting by name, size, modification date, or type. Bookmark local folders and keep multiple browser sessions open.
 - Hide and unhide local files and folders from their menus. Use Show hidden files to reveal hidden entries.
 - Restore direct-local files from Trash and find duplicate files by content, with configurable folder exclusions.
-- Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, GZ, and BZ2 archives with progress and cancellation.
+- Create ZIP archives and extract ZIP, TAR, TGZ, TBZ2, TXZ, TAR.LZ4, TZST, GZ, BZ2, XZ, LZ4, and Zstandard archives with progress and cancellation.
 - Connect to SFTP, FTP, SMB, and WebDAV. SFTP supports passwords, private keys, and generated key pairs; SMB can discover disk shares.
 - Open files with Android's registered apps, including direct WebDAV playback when the server supports seeking.
 - Choose among 20 included color schemes, custom themes, and Material You dynamic colors on Android 12 or later.
-- Navigate with Android TV remote controls, use an explicitly authorized root session on a compatible rooted device, or open an optional Shizuku session.
+- Launch from Android TV home screens and navigate with remote controls, use an explicitly authorized root session on a compatible rooted device, or open an optional Shizuku session.
 
 ## Privacy and access
 
