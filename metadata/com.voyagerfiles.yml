@@ -226,6 +226,7 @@ Builds:
     output: build/outputs/apk/release/app-universal-release-unsigned.apk
     gradleprops:
       - voyager.enableAbiSplits=true
+
   - versionName: 1.16.0
     versionCode: 25
     commit: 7ee8ad20faf8fbbe3917b57bd3b4dac7e2375e62
