@@ -11,6 +11,7 @@ import com.voyagerfiles.data.repository.TransferCancellation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -478,7 +479,7 @@ object ArchiveService {
             .get()
 
     private fun xzInput(input: InputStream): XZCompressorInputStream =
-        XZCompressorInputStream(input, true)
+        XZCompressorInputStream(input, true, 96 * 1024)
 
     private fun lz4Input(input: InputStream): FramedLZ4CompressorInputStream =
         FramedLZ4CompressorInputStream(input, true)
@@ -525,6 +526,13 @@ object ArchiveService {
                 } else {
                     tree.writeFile(rawName = entry.name, input = tar, declaredSize = entry.size)
                 }
+            }
+            // TAR ends before its compressor footer; read through it to validate the complete stream.
+            val buffer = ByteArray(BUFFER_SIZE)
+            while (true) {
+                TransferCancellation.check()
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (input.read(buffer) < 0) break
             }
         }
     }

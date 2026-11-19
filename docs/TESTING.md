@@ -221,3 +221,7 @@ Start Shizuku on a disposable or connected test device and grant the debug Voyag
 Run `ShizukuTransferLifecycleTest` without a Shizuku grant to exercise the same file and pipe implementation in the debug app's cache. It covers interrupted commit waits, abort/commit races, the death callback, explicit commit after EOF, idle-writer expiry, producer failures, large-file content fingerprints, metadata permission errors, and replaced staging payloads and parent directories.
 
 For comparable performance measurements, run `ShizukuIoBenchmarkTest` with `shizuku=true` and `shizukuBenchmark=true`. It alternates the original shell backend and service backend on the same connection, verifies every file's bytes, and logs raw timing records under `VoyagerShizukuBenchmark`. Defaults are three repetitions, a 128 KiB file, and three 4 KiB new files in a disposable debug-test `Android/data` directory. Instrumentation arguments `benchmarkRepetitions`, `benchmarkBytes`, and `benchmarkSmallFiles` adjust the workload. Retain the device/runtime, APK revision, raw records, failures, and skips with each comparison.
+
+## Additional archive codecs
+
+`ArchiveCodecsAndroidTest` exercises raw XZ, LZ4 and Zstandard plus their TAR variants with exact-byte output, truncated compressor footers, path traversal and cancellation cleanup. Run these on the device and repeat extraction in a minified build, including Zstandard JNI loading. JVM archive tests cover the XZ decoder memory limit and incomplete compressed TAR footers.
