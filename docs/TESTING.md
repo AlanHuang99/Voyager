@@ -225,3 +225,7 @@ For comparable performance measurements, run `ShizukuIoBenchmarkTest` with `shiz
 ## November maintenance regressions
 
 `DialogValidationTest` verifies untouched empty fields, validation after editing and disabled invalid submissions. `BrowserFileRowMenuTest.lastRowRemainsAboveCreateButtonInEveryLayout` checks the final row above the create button in List, Compact and Grid, including touch access to row menus.
+
+## TV launcher
+
+`TvLauncherTest` verifies the installed Leanback activity, banner and optional TV/touchscreen features. Check the launcher tile on an Android TV or Google TV device when available.
