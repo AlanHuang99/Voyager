@@ -20,6 +20,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -39,7 +41,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -52,7 +53,7 @@ import org.junit.Test
 class BrowserFileRowMenuTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule(effectContext = StandardTestDispatcher())
+    val composeTestRule = createComposeRule()
 
     private val viewModelStore = ViewModelStore()
     private lateinit var root: File
@@ -90,6 +91,33 @@ class BrowserFileRowMenuTest {
         runBlocking {
             preferences.setViewMode(originalViewMode)
             preferences.setUseTrash(originalUseTrash)
+        }
+    }
+
+    @Test
+    fun lastRowRemainsAboveCreateButtonInEveryLayout() {
+        repeat(100) { root.resolve("item-${it.toString().padStart(3, '0')}.txt").writeText("fixture") }
+        root.resolve("zzz-last.txt").writeText("last")
+        val viewModel = launchBrowser()
+        composeTestRule.waitUntil(10_000) {
+            viewModel.browseState.value.currentPath == root.path && !viewModel.browseState.value.isLoading &&
+                viewModel.browseState.value.files.any { it.name == "zzz-last.txt" }
+        }
+        for (mode in listOf(ViewMode.LIST, ViewMode.COMPACT, ViewMode.GRID)) {
+            runBlocking { preferences.setViewMode(mode) }
+            composeTestRule.waitUntil(5000) { viewModel.browseState.value.viewMode == mode }
+            composeTestRule.waitForIdle()
+            val lastName = viewModel.browseState.value.visibleFiles.last().name
+            composeTestRule.onNodeWithTag("browser-files").performScrollToIndex(viewModel.browseState.value.visibleFiles.lastIndex)
+            composeTestRule.waitForIdle()
+            val last = composeTestRule.onNodeWithText(lastName).fetchSemanticsNode().boundsInRoot
+            val create = composeTestRule.onNodeWithContentDescription("Create").fetchSemanticsNode().boundsInRoot
+            assertTrue("$mode final row must clear the create button", last.bottom < create.top)
+            if (mode != ViewMode.GRID) {
+                composeTestRule.onNodeWithContentDescription("More options for $lastName").performTouchInput { click() }
+                composeTestRule.onNodeWithText("Details").assertIsDisplayed()
+                androidx.test.espresso.Espresso.pressBack()
+            }
         }
     }
 
@@ -133,6 +161,28 @@ class BrowserFileRowMenuTest {
         composeTestRule.onNodeWithText("Copy").assertIsDisplayed()
         composeTestRule.runOnIdle {
             assertEquals(root.absolutePath, viewModel.browseState.value.currentPath)
+        }
+    }
+
+    @Test
+    fun createButtonMovesDuringClipboardDismissal() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+        composeTestRule.runOnIdle { viewModel.copyToClipboard(listOf(root.resolve("notes.txt").path)) }
+        composeTestRule.waitUntil(5000) { composeTestRule.onAllNodesWithText("Cancel").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitForIdle()
+        fun createTop() = composeTestRule.onNodeWithContentDescription("Create").fetchSemanticsNode().boundsInRoot.top
+        val before = createTop()
+        composeTestRule.mainClock.autoAdvance = false
+        try {
+            composeTestRule.onNodeWithText("Cancel").performClick()
+            composeTestRule.mainClock.advanceTimeBy(112)
+            val during = createTop()
+            composeTestRule.mainClock.advanceTimeBy(1000)
+            val after = createTop()
+            assertTrue("Create button must move while the clipboard bar closes", during > before && during < after)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
         }
     }
 
@@ -383,6 +433,7 @@ class BrowserFileRowMenuTest {
 
     @Test
     fun remoteRightThenCenterOpensTheMenuOnTv() {
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
         val viewModel = launchBrowser(isTelevision = true)
         waitForRoot(viewModel)
         val firstRow = viewModel.browseState.value.visibleFiles.first().name

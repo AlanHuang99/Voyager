@@ -56,8 +56,10 @@ fun CreateItemDialog(
     onCreate: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var nameEdited by remember { mutableStateOf(false) }
     val validation = FileNameValidator.validate(name)
     val validationErrorRes = (validation as? FileNameValidationResult.Invalid)?.messageRes
+        ?.takeIf { nameEdited || name.isNotEmpty() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -67,7 +69,7 @@ fun CreateItemDialog(
         text = {
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { name = it; nameEdited = true },
                 label = { Text(stringResource(R.string.dialog_name)) },
                 isError = validationErrorRes != null,
                 supportingText = validationErrorRes?.let { messageRes ->
@@ -98,9 +100,11 @@ fun RenameDialog(
     onRename: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf(currentName) }
+    var nameEdited by remember { mutableStateOf(false) }
     val validation = FileNameValidator.validate(name)
     val validatedName = (validation as? FileNameValidationResult.Valid)?.name
     val validationErrorRes = (validation as? FileNameValidationResult.Invalid)?.messageRes
+        ?.takeIf { nameEdited || name.isNotEmpty() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -108,7 +112,7 @@ fun RenameDialog(
         text = {
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { name = it; nameEdited = true },
                 label = { Text(stringResource(R.string.dialog_new_name)) },
                 isError = validationErrorRes != null,
                 supportingText = validationErrorRes?.let { messageRes ->
@@ -175,7 +179,13 @@ fun ConnectionDialog(
     var domain by remember { mutableStateOf(existingConnection?.domain ?: "") }
     var useTls by remember { mutableStateOf(existingConnection?.useTls ?: true) }
     var showCleartextConfirmation by remember { mutableStateOf(false) }
+    var hostEdited by remember { mutableStateOf(false) }
+    var portEdited by remember { mutableStateOf(false) }
+    var shareEdited by remember { mutableStateOf(false) }
     val validation = ConnectionFormValidator.validate(protocol, host, port, shareName)
+    val hostError = validation.hostErrorRes?.takeIf { hostEdited || host.isNotEmpty() }
+    val portError = validation.portErrorRes?.takeIf { portEdited || port.isNotEmpty() }
+    val shareError = validation.shareNameErrorRes?.takeIf { shareEdited || shareName.isNotEmpty() }
     val transportWarning = connectionTransportWarning(protocol, useTls)
     val publicKeySaveLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -258,10 +268,10 @@ fun ConnectionDialog(
 
                 OutlinedTextField(
                     value = host,
-                    onValueChange = { host = it },
+                    onValueChange = { host = it; hostEdited = true },
                     label = { Text(stringResource(R.string.connection_host)) },
-                    isError = validation.hostErrorRes != null,
-                    supportingText = validation.hostErrorRes?.let { messageRes ->
+                    isError = hostError != null,
+                    supportingText = hostError?.let { messageRes ->
                         { Text(stringResource(messageRes)) }
                     },
                     singleLine = true,
@@ -302,10 +312,10 @@ fun ConnectionDialog(
 
                 OutlinedTextField(
                     value = port,
-                    onValueChange = { port = it },
+                    onValueChange = { port = it; portEdited = true },
                     label = { Text(stringResource(R.string.connection_port)) },
-                    isError = validation.portErrorRes != null,
-                    supportingText = validation.portErrorRes?.let { messageRes ->
+                    isError = portError != null,
+                    supportingText = portError?.let { messageRes ->
                         { Text(stringResource(messageRes)) }
                     },
                     singleLine = true,
@@ -407,13 +417,13 @@ fun ConnectionDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = shareName,
-                        onValueChange = { shareName = it },
+                        onValueChange = { shareName = it; shareEdited = true },
                         label = { Text(stringResource(R.string.connection_share_name)) },
-                        isError = validation.shareNameErrorRes != null,
+                        isError = shareError != null,
                         supportingText = {
                             Text(
                                 stringResource(
-                                    validation.shareNameErrorRes ?: R.string.smb_share_supporting,
+                                    shareError ?: R.string.smb_share_supporting,
                                 ),
                             )
                         },

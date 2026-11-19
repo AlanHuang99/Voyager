@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
@@ -889,8 +891,8 @@ fun BrowserScreen(
                 }
                 AnimatedVisibility(
                     visible = clipboardPaths.isNotEmpty() && clipboardOp != ClipboardOperation.NONE,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it }),
+                    enter = expandVertically() + slideInVertically(initialOffsetY = { it }),
+                    exit = shrinkVertically() + slideOutVertically(targetOffsetY = { it }),
                 ) {
                     BottomAppBar(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -963,6 +965,7 @@ fun BrowserScreen(
             val start = viewModel.directoryScrollPosition
             rememberLazyGridState(start.index, start.offset)
         }
+        val fileBottomPadding = if (!isSelectionMode && runningOperation == null) 88.dp else 8.dp
         val scrollSessionId = activeSession?.id
         val scrollPath = state.currentPath
         LaunchedEffect(listState, gridState, state.viewMode, scrollSessionId, scrollPath) {
@@ -1072,6 +1075,7 @@ fun BrowserScreen(
                     state.viewMode == ViewMode.LIST || state.viewMode == ViewMode.COMPACT -> {
                         LazyColumn(
                             state = listState,
+                            contentPadding = PaddingValues(bottom = fileBottomPadding),
                             modifier = Modifier.fillMaxSize().testTag("browser-files")
                                 .dragFileSelection(state.visibleFiles.map { it.path }, state.selectedFiles,
                                     enabled = !isTelevision && runningOperation == null, listState = listState,
@@ -1142,7 +1146,7 @@ fun BrowserScreen(
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Adaptive(100.dp),
-                            contentPadding = PaddingValues(8.dp),
+                            contentPadding = PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = fileBottomPadding),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize().testTag("browser-files")
