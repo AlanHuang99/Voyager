@@ -111,7 +111,11 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
 
     private fun read(timeoutMillis: Long? = null, produce: (java.io.OutputStream) -> Unit): IShizukuRead {
         val slot = admit()
-        return try { ServiceRead(slot, timeoutMillis, produce) } catch (error: Throwable) { slot.release(); throw error }
+        return try { ServiceRead(slot, timeoutMillis, onTimeout = {
+            // Each connection has its own UserService process. A stuck native filesystem call cannot
+            // be interrupted safely, so terminate this session without affecting the Shizuku server.
+            Process.killProcess(Process.myPid())
+        }, produce = produce) } catch (error: Throwable) { slot.release(); throw error }
     }
 
     /** Reserves an operation slot; the returned hooks release it once. */

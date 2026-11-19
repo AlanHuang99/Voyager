@@ -25,6 +25,7 @@ internal class TransferHooks(val check: () -> Unit, val describe: (Throwable) ->
 internal class ServiceRead(
     private val hooks: TransferHooks,
     timeoutMillis: Long? = null,
+    onTimeout: () -> Unit = {},
     private val produce: (OutputStream) -> Unit,
 ) : IShizukuRead.Stub() {
     private val pipe = ParcelFileDescriptor.createPipe()
@@ -52,7 +53,14 @@ internal class ServiceRead(
 
     init {
         worker.start()
-        timeoutMillis?.let { timer.schedule(Runnable { worker.interrupt() }, it, TimeUnit.MILLISECONDS) }
+        timeoutMillis?.let { timeout ->
+            timer.schedule(Runnable {
+                if (done.count > 0) {
+                    worker.interrupt()
+                    onTimeout()
+                }
+            }, timeout, TimeUnit.MILLISECONDS)
+        }
         // A client that never takes its end would leave the producer blocked on a full pipe.
         timer.schedule(Runnable { synchronized(this) { if (!taken) { taken = true; runCatching { pipe[0].close() } } } }, IDLE_SECONDS, TimeUnit.SECONDS)
     }

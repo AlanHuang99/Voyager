@@ -146,14 +146,20 @@ internal fun readShizukuMetadata(
                 if (error.errno == android.system.OsConstants.EINTR) continue
                 throw error
             }
+            TransferCancellation.check()
             if (ready == 0) continue
             val count = input.read(buffer)
             if (count < 0) break
             if (output.size() + count > ShizukuFileOperations.METADATA_BYTES) throw IOException("Root command output exceeds the allowed limit")
             output.write(buffer, 0, count)
         }
+        TransferCancellation.check()
         if (remote { read.finish() } != output.size().toLong()) throw IOException("Shizuku read ended early")
+        TransferCancellation.check()
         return output.toByteArray()
+    } catch (error: Throwable) {
+        TransferCancellation.check()
+        throw error
     } finally {
         abort.close()
         runCatching { read.abort() }

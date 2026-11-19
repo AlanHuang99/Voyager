@@ -59,6 +59,26 @@ class ShizukuServiceMetadataTest {
         assertTrue(runCatching { readShizukuMetadata(overflow) }.exceptionOrNull()?.message.orEmpty().contains("allowed limit"))
     }
 
+    @Test fun uninterruptibleMetadataInvokesSessionRecoveryWithoutReusingItsSlot() {
+        val allowExit = java.util.concurrent.CountDownLatch(1)
+        val recovered = java.util.concurrent.CountDownLatch(1)
+        val released = java.util.concurrent.CountDownLatch(1)
+        val read = ServiceRead(TransferHooks({}, { it.message.orEmpty() }, { released.countDown() }), timeoutMillis = 100,
+            onTimeout = { recovered.countDown() }) {
+            while (allowExit.count > 0) {
+                try { allowExit.await() } catch (_: InterruptedException) {}
+            }
+        }
+        try {
+            assertTrue(recovered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(1L, released.count)
+        } finally {
+            allowExit.countDown()
+            read.abort()
+            assertTrue(released.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        }
+    }
+
     @Test fun metadataDeadlineAppliesWithoutAReader() {
         val released = java.util.concurrent.CountDownLatch(1)
         ServiceRead(TransferHooks({}, { it.message.orEmpty() }, { released.countDown() }), timeoutMillis = 100) {
