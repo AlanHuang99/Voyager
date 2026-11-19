@@ -24,6 +24,8 @@ internal class TransferHooks(val check: () -> Unit, val describe: (Throwable) ->
  */
 internal class ServiceRead(
     private val hooks: TransferHooks,
+    timeoutMillis: Long? = null,
+    onTimeout: () -> Unit = {},
     private val produce: (OutputStream) -> Unit,
 ) : IShizukuRead.Stub() {
     private val pipe = ParcelFileDescriptor.createPipe()
@@ -32,8 +34,7 @@ internal class ServiceRead(
     @Volatile private var written = 0L
     @Volatile private var failure: Throwable? = null
 
-    init {
-        thread(name = "shizuku-read", isDaemon = true) {
+    private val worker = thread(name = "shizuku-read", isDaemon = true, start = false) {
             try {
                 FileOutputStream(pipe[1].fileDescriptor).let { raw ->
                     produce(object : OutputStream() {
@@ -48,6 +49,17 @@ internal class ServiceRead(
                 done.countDown()
                 hooks.release()
             }
+    }
+
+    init {
+        worker.start()
+        timeoutMillis?.let { timeout ->
+            metadataTimer.schedule(Runnable {
+                if (done.count > 0) {
+                    worker.interrupt()
+                    onTimeout()
+                }
+            }, timeout, TimeUnit.MILLISECONDS)
         }
         // A client that never takes its end would leave the producer blocked on a full pipe.
         timer.schedule(Runnable { synchronized(this) { if (!taken) { taken = true; runCatching { pipe[0].close() } } } }, IDLE_SECONDS, TimeUnit.SECONDS)
@@ -58,6 +70,12 @@ internal class ServiceRead(
         check(!taken) { "Read already taken" }
         taken = true
         return handOver(pipe[0])
+    }
+
+    override fun abort() {
+        hooks.check()
+        worker.interrupt()
+        synchronized(this) { if (!taken) { taken = true; runCatching { pipe[0].close() } } }
     }
 
     override fun finish(): Long {
@@ -224,3 +242,25 @@ private fun awaitQuietly(latch: CountDownLatch): Boolean = try {
 
 private const val IDLE_SECONDS = 30L
 private val timer = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "shizuku-transfer-timeout").apply { isDaemon = true } }
+
+/** Closes independent operations before terminating one session, with a separate hard deadline. */
+internal fun recoverShizukuSession(
+    cleanup: List<() -> Unit>,
+    timeoutMillis: Long = 5_000,
+    terminate: () -> Unit,
+) {
+    val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
+    val stop = { if (stopped.compareAndSet(false, true)) terminate() }
+    val deadline = metadataTimer.schedule(Runnable { stop() }, timeoutMillis, TimeUnit.MILLISECONDS)
+    val remaining = java.util.concurrent.atomic.AtomicInteger(cleanup.size)
+    if (cleanup.isEmpty()) { deadline.cancel(false); stop() }
+    cleanup.forEach { close ->
+        thread(name = "shizuku-session-cleanup", isDaemon = true) {
+            try { runCatching { close() } } finally {
+                if (remaining.decrementAndGet() == 0) { deadline.cancel(false); stop() }
+            }
+        }
+    }
+}
+
+private val metadataTimer = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "shizuku-metadata-timeout").apply { isDaemon = true } }

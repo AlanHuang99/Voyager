@@ -14,12 +14,17 @@ import java.io.OutputStream
 
 /**
  * File operations run in the Shizuku UserService ([ShizukuFileOperations]) and data moves through pipes.
- * Listing, deletion, canonical paths, copies, moves, and renames retain the supervised shell.
+ * Deletion, copies, moves, and renames retain the supervised shell; they run once per operation, while
+ * listings and canonical paths run for every file of a transfer.
  */
 class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileProvider(
     RootShell(startProcess = connection::start, requireRoot = false, accessName = "Shizuku", externalInputPipe = true, temporaryDirectory = "/data/local/tmp"),
     FileSource.SHIZUKU,
 ) {
+    override fun listing(directory: String): ByteArray = metadata(connection.files { it.list(directory) })
+    override fun canonicalAt(path: String): String = metadata(connection.files { it.canonical(path) }).toString(Charsets.UTF_8)
+
+    private fun metadata(read: IShizukuRead): ByteArray = readShizukuMetadata(read) { connection.remote(it) }
     override fun statEntry(path: String): ByteArray = connection.files { it.stat(path) }
     override fun existsAt(path: String): Boolean = connection.files { it.exists(path) }
     override fun mkdirAt(path: String) { val pinned = primitivePath(path); connection.files { it.mkdir(pinned) } }
@@ -47,7 +52,7 @@ class ShizukuFileProvider(private val connection: ShizukuConnection) : RootFileP
     }
 
     private fun primitivePath(path: String): String {
-        val parent = super.canonicalAt(checkNotNull(getParentPath(path)))
+        val parent = canonicalAt(checkNotNull(getParentPath(path)))
         return "${parent.trimEnd('/')}/${path.substringAfterLast('/')}"
     }
 
@@ -114,5 +119,50 @@ private class ShizukuOutputStream(
     private fun discard() {
         runCatching { output.close() }
         runCatching { write.abort() }
+    }
+}
+
+/** Metadata work has a deadline even if the service's filesystem call stalls. */
+internal fun readShizukuMetadata(
+    read: IShizukuRead,
+    timeoutMillis: Long = 30_000,
+    remote: (() -> Long) -> Long = { it() },
+): ByteArray {
+    val descriptor = try { read.output() } catch (error: Throwable) { runCatching { read.abort() }; throw error }
+    val input = ParcelFileDescriptor.AutoCloseInputStream(descriptor)
+    val abort = TransferCancellation.registerAbort { read.abort() }
+    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+    try {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        val poll = android.system.StructPollfd().apply { fd = descriptor.fileDescriptor; events = android.system.OsConstants.POLLIN.toShort() }
+        while (true) {
+            TransferCancellation.check()
+            val remaining = deadline - System.nanoTime()
+            if (remaining <= 0) throw IOException("Shizuku metadata timed out")
+            val waitMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(remaining).coerceIn(1, 250).toInt()
+            poll.revents = 0
+            val ready = try { android.system.Os.poll(arrayOf(poll), waitMillis) } catch (error: android.system.ErrnoException) {
+                if (error.errno == android.system.OsConstants.EINTR) continue
+                throw error
+            }
+            TransferCancellation.check()
+            if (ready == 0) continue
+            val count = input.read(buffer)
+            if (count < 0) break
+            if (output.size() + count > ShizukuFileOperations.METADATA_BYTES) throw IOException("Root command output exceeds the allowed limit")
+            output.write(buffer, 0, count)
+        }
+        TransferCancellation.check()
+        if (remote { read.finish() } != output.size().toLong()) throw IOException("Shizuku read ended early")
+        TransferCancellation.check()
+        return output.toByteArray()
+    } catch (error: Throwable) {
+        TransferCancellation.check()
+        throw error
+    } finally {
+        abort.close()
+        runCatching { read.abort() }
+        input.close()
     }
 }
