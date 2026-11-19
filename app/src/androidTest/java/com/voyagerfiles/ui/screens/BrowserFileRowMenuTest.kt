@@ -41,7 +41,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -54,7 +53,7 @@ import org.junit.Test
 class BrowserFileRowMenuTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule(effectContext = StandardTestDispatcher())
+    val composeTestRule = createComposeRule()
 
     private val viewModelStore = ViewModelStore()
     private lateinit var root: File
@@ -162,6 +161,28 @@ class BrowserFileRowMenuTest {
         composeTestRule.onNodeWithText("Copy").assertIsDisplayed()
         composeTestRule.runOnIdle {
             assertEquals(root.absolutePath, viewModel.browseState.value.currentPath)
+        }
+    }
+
+    @Test
+    fun createButtonMovesDuringClipboardDismissal() {
+        val viewModel = launchBrowser()
+        waitForRoot(viewModel)
+        composeTestRule.runOnIdle { viewModel.copyToClipboard(listOf(root.resolve("notes.txt").path)) }
+        composeTestRule.waitUntil(5000) { composeTestRule.onAllNodesWithText("Cancel").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitForIdle()
+        fun createTop() = composeTestRule.onNodeWithContentDescription("Create").fetchSemanticsNode().boundsInRoot.top
+        val before = createTop()
+        composeTestRule.mainClock.autoAdvance = false
+        try {
+            composeTestRule.onNodeWithText("Cancel").performClick()
+            composeTestRule.mainClock.advanceTimeBy(112)
+            val during = createTop()
+            composeTestRule.mainClock.advanceTimeBy(1000)
+            val after = createTop()
+            assertTrue("Create button must move while the clipboard bar closes", during > before && during < after)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
         }
     }
 
