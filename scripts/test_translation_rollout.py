@@ -138,6 +138,29 @@ class RolloutTest(unittest.TestCase):
                 prepare_export(repo, drafts=drafts)
             self.assertEqual(ET.parse(config_path).getroot().find("bool").text, "true")
 
+    def test_new_approved_locales_have_their_own_link_and_no_provisional_notice(self):
+        for locale, language in [("ru-rRU", "ru"), ("b+sr+Latn", "sr-CS")]:
+            with self.subTest(locale=locale), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                repo, approved, drafts = root / "repo", root / "approved", root / "drafts"
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", str(repo)], check=True)
+                source = repo / "app/src/main/res/values/strings.xml"
+                source.parent.mkdir(parents=True)
+                source.write_text('<resources><string name="hello">Hello</string></resources>')
+                relative = f"app/src/main/res/values-{locale}/strings.xml"
+                for base in [approved, drafts]:
+                    target = base / relative
+                    target.parent.mkdir(parents=True)
+                    target.write_text('<resources><string name="hello">Translated greeting</string></resources>')
+                (drafts / "locale_languages.json").write_text(json.dumps({locale: language}))
+                prepare_export(repo, approved=approved, drafts=drafts)
+                config_path = (repo / relative).with_name("translation_config.xml")
+                self.assertTrue(config_path.is_file(), "Approved locales need explicit locale configuration")
+                config = ET.parse(config_path).getroot()
+                self.assertEqual(config.find("bool").text, "false")
+                self.assertEqual(config.find("string").text, f"https://crowdin.com/project/voyagerandroid/{language}")
+
     def test_archive_traversal_is_rejected(self):
         content = BytesIO()
         with ZipFile(content, "w") as archive:

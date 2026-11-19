@@ -60,9 +60,9 @@ def usable_draft(source, translated):
                placeholders("".join(candidate.itertext())) for original, candidate in pairs)
 
 
-def write_locale_config(path, language):
+def write_locale_config(path, language, *, provisional=True):
     root = ET.Element("resources")
-    ET.SubElement(root, "bool", name="translation_provisional").text = "true"
+    ET.SubElement(root, "bool", name="translation_provisional").text = "true" if provisional else "false"
     ET.SubElement(root, "string", name="translation_crowdin_url", translatable="false").text = (
         "https://crowdin.com/project/voyagerandroid" + (f"/{quote(language, safe='')}" if language else "")
     )
@@ -158,8 +158,11 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(merged, encoding="unicode") + "\n", encoding="utf-8")
         locale = path.parent.name.removeprefix("values-")
-        if locale in LOCALES.values() or used_provisional:
-            write_locale_config(path.parent / "translation_config.xml", locale_languages.get(locale))
+        if locale in locale_languages or used_provisional:
+            config_path = path.parent / "translation_config.xml"
+            was_provisional = config_path.is_file() and ET.parse(config_path).findtext("bool[@name='translation_provisional']") == "true"
+            write_locale_config(config_path, locale_languages.get(locale),
+                                provisional=used_provisional or was_provisional or locale in LOCALES.values())
     return removed
 
 
