@@ -7,9 +7,11 @@ Notes: validates the complete plan before writing; fails on changed sources or u
 import argparse
 import json
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 from crowdin_drafts import PROJECT_ID, request
+from export_translation_drafts import ANDROID_LOCALE
 from prepare_translation_export import placeholders
 from translation_rollout import LOCALES
 
@@ -39,8 +41,8 @@ def check_mapping(entries, source_path):
     seen = set()
     for entry in entries:
         key = (entry["language"], entry["identifier"], entry.get("quantity"))
-        if key in seen or entry["language"] not in LOCALES:
-            raise ValueError("Duplicate correction or unsupported language")
+        if key in seen or not re.fullmatch(r"[a-z]{2,3}(?:-[A-Za-z0-9]+)*", entry["language"]):
+            raise ValueError("Duplicate correction or invalid language")
         seen.add(key)
         original = source[entry["identifier"]]
         text = {item.get("quantity"): item.text for item in original} if original.tag == "plurals" else original.text
@@ -111,8 +113,17 @@ def apply(api, pending):
 
 
 def verify_export(entries, directory):
+    locales = dict(LOCALES)
+    metadata = directory.parent / "drafts/locale_languages.json"
+    if metadata.is_file():
+        for locale, language in json.loads(metadata.read_text(encoding="utf-8")).items():
+            if not ANDROID_LOCALE.fullmatch(locale):
+                raise ValueError(f"Invalid exported locale: {locale}")
+            locales[language] = locale
     for entry in entries:
-        resource = directory / f"app/src/main/res/values-{LOCALES[entry['language']]}/strings.xml"
+        if entry["language"] not in locales:
+            raise ValueError(f"Missing exported locale for language: {entry['language']}")
+        resource = directory / f"app/src/main/res/values-{locales[entry['language']]}/strings.xml"
         matches = [item for item in ET.parse(resource).getroot() if item.get("name") == entry["identifier"]]
         if len(matches) != 1:
             raise ValueError(f"Missing exported correction: {entry['identifier']}")

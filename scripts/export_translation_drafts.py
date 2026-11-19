@@ -1,6 +1,6 @@
 """Purpose: download approved translations and provisional drafts separately.
 Inputs: Crowdin token, enabled project languages, and existing Android locale aliases.
-Outputs: two resource trees and provisional locale-to-Crowdin language metadata.
+Outputs: two resource trees, locale-to-Crowdin language IDs, and required plural forms.
 Notes: never changes approval state; archive entries are filtered before writing.
 """
 
@@ -53,12 +53,14 @@ def extract_resources(content, output, *, approved):
 def export(api, output, *, approved, sleep=time.sleep):
     body = {"exportApprovedOnly": approved, "skipUntranslatedStrings": True, "skipUntranslatedFiles": False}
     locale_languages = {}
+    locale_plurals = {}
     if not approved:
         project = api("GET", f"/projects/{PROJECT_ID}")["data"]
         for language in project["targetLanguages"]:
             locale = LOCALES.get(language["id"], language["androidCode"])
             locale = POLICY["android_aliases"].get(locale, locale)
             locale_languages[locale] = language["id"]
+            locale_plurals[locale] = language["pluralCategoryNames"]
     base = f"/projects/{PROJECT_ID}/translations/builds"
     build = api("POST", base, body)["data"]
     build_path = f"{base}/{int(build['id'])}"
@@ -77,6 +79,7 @@ def export(api, output, *, approved, sleep=time.sleep):
             extract_resources(content, output, approved=approved)
             if not approved:
                 (output / "locale_languages.json").write_text(json.dumps(locale_languages, indent=2) + "\n", encoding="utf-8")
+                (output / "locale_plurals.json").write_text(json.dumps(locale_plurals, indent=2) + "\n", encoding="utf-8")
             return
         if status in {"failed", "canceled"}:
             raise RuntimeError(f"Translation export {status}")

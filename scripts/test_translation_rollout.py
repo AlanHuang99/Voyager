@@ -89,8 +89,8 @@ class RolloutTest(unittest.TestCase):
         def api(method, path, body=None):
             if method == "GET" and path == "/projects/927407":
                 return {"data": {"targetLanguages": [
-                    {"id": "fr", "androidCode": "fr-rFR"},
-                    {"id": "ru", "androidCode": "ru-rRU"},
+                    {"id": "fr", "androidCode": "fr-rFR", "pluralCategoryNames": ["one", "other"]},
+                    {"id": "ru", "androidCode": "ru-rRU", "pluralCategoryNames": ["one", "few", "many", "other"]},
                 ]}}
             if method == "POST" and path == "/projects/927407/translations/builds":
                 self.assertEqual(body, {
@@ -109,6 +109,9 @@ class RolloutTest(unittest.TestCase):
                 export(api, output, approved=False)
             self.assertTrue((output / "app/src/main/res/values-ru-rRU/strings.xml").is_file())
             self.assertEqual(json.loads((output / "locale_languages.json").read_text()), {"fr": "fr", "ru-rRU": "ru"})
+            self.assertEqual(json.loads((output / "locale_plurals.json").read_text()), {
+                "fr": ["one", "other"], "ru-rRU": ["one", "few", "many", "other"],
+            })
 
     def test_new_russian_locale_imports_valid_contributions_with_fallbacks_and_notice(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -161,6 +164,58 @@ class RolloutTest(unittest.TestCase):
                 self.assertEqual(config.find("bool").text, "false")
                 self.assertEqual(config.find("string").text, f"https://crowdin.com/project/voyagerandroid/{language}")
 
+    def test_missing_russian_plural_forms_use_english_and_survive_later_source_updates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, drafts = root / "repo", root / "drafts"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            source = repo / "app/src/main/res/values/strings.xml"
+            source.parent.mkdir(parents=True)
+            source.write_text('<resources><string name="hello">Hello</string><plurals name="count"><item quantity="one">%d file</item><item quantity="other">%d files</item></plurals></resources>')
+            relative = "app/src/main/res/values-ru-rRU/strings.xml"
+            target = drafts / relative
+            target.parent.mkdir(parents=True)
+            target.write_text('<resources><string name="hello">Привет</string><plurals name="count"><item quantity="other">%d файла</item></plurals></resources>')
+            (drafts / "locale_languages.json").write_text(json.dumps({"ru-rRU": "ru"}))
+            (drafts / "locale_plurals.json").write_text(json.dumps({"ru-rRU": ["one", "few", "many", "other"]}))
+            prepare_export(repo, drafts=drafts)
+            plural = ET.parse(repo / relative).getroot().find("plurals")
+            self.assertEqual({e.get("quantity"): e.text for e in plural}, {
+                "one": "%d file", "other": "%d файла", "few": "%d files", "many": "%d files",
+            })
+            subprocess.run(["git", "add", "app/src/main/res"], cwd=repo, check=True)
+            source.write_text(source.read_text().replace('</resources>', '<plurals name="new"><item quantity="one">%d folder</item><item quantity="other">%d folders</item></plurals></resources>'))
+            prepare_export(repo)
+            plural = ET.parse(repo / relative).getroot().find("plurals[@name='new']")
+            self.assertEqual({e.get("quantity"): e.text for e in plural}, {
+                "one": "%d folder", "other": "%d folders", "few": "%d folders", "many": "%d folders",
+            })
+
+    def test_later_russian_plural_translation_replaces_expanded_english_fallbacks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, drafts, approved = root / "repo", root / "drafts", root / "approved"
+            repo.mkdir()
+            approved.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            source = repo / "app/src/main/res/values/strings.xml"
+            source.parent.mkdir(parents=True)
+            source.write_text('<resources><string name="hello">Hello</string><plurals name="count"><item quantity="one">%d file</item><item quantity="other">%d files</item></plurals></resources>')
+            relative = "app/src/main/res/values-ru-rRU/strings.xml"
+            target = drafts / relative
+            target.parent.mkdir(parents=True)
+            target.write_text('<resources><string name="hello">Привет</string></resources>')
+            (drafts / "locale_plurals.json").write_text(json.dumps({"ru-rRU": ["one", "few", "many", "other"]}))
+            prepare_export(repo, approved=approved, drafts=drafts)
+            subprocess.run(["git", "add", "app/src/main/res"], cwd=repo, check=True)
+            target.write_text('<resources><string name="hello">Привет</string><plurals name="count"><item quantity="one">%d файл</item><item quantity="few">%d файла</item><item quantity="many">%d файлов</item><item quantity="other">%d файла</item></plurals></resources>')
+            prepare_export(repo, approved=approved, drafts=drafts)
+            plural = ET.parse(repo / relative).getroot().find("plurals")
+            self.assertEqual({e.get("quantity"): e.text for e in plural}, {
+                "one": "%d файл", "few": "%d файла", "many": "%d файлов", "other": "%d файла",
+            })
+
     def test_archive_traversal_is_rejected(self):
         content = BytesIO()
         with ZipFile(content, "w") as archive:
@@ -176,14 +231,15 @@ class RolloutTest(unittest.TestCase):
             subprocess.run(["git", "init", "-q", str(repo)], check=True)
             source = repo / "app/src/main/res/values/strings.xml"
             source.parent.mkdir(parents=True)
-            source.write_text('<resources><string name="count">%d files</string></resources>')
-            target = drafts / "app/src/main/res/values-it/strings.xml"
+            source.write_text('<resources><string name="count">%d files</string><plurals name="items"><item quantity="one">%d item</item><item quantity="other">%d items</item></plurals></resources>')
+            target = drafts / "app/src/main/res/values-ru-rRU/strings.xml"
             target.parent.mkdir(parents=True)
             target.write_text('<resources><string name="count">file</string></resources>')
+            (drafts / "locale_plurals.json").write_text(json.dumps({"ru-rRU": ["one", "few", "many", "other"]}))
             with contextlib.redirect_stdout(StringIO()):
                 removed = prepare_export(repo, drafts=drafts)
-            self.assertEqual([Path("app/src/main/res/values-it/strings.xml")], removed)
-            self.assertFalse((repo / "app/src/main/res/values-it/strings.xml").exists())
+            self.assertEqual([Path("app/src/main/res/values-ru-rRU/strings.xml")], removed)
+            self.assertFalse((repo / "app/src/main/res/values-ru-rRU/strings.xml").exists())
 
 
 if __name__ == "__main__":

@@ -93,13 +93,13 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
     source_path = resources / "values/strings.xml"
     source = resource_values(source_path)
     source_root = ET.parse(source_path).getroot()
-    originals = {(item.tag, item.get("name")): item for item in source_root}
     tracked = set(subprocess.check_output(
         ["git", "ls-files", "-z", "--", "app/src/main/res"], cwd=repo,
     ).decode().split("\0"))
     removed = []
     paths = set(resources.glob("values-*/strings.xml"))
     locale_languages = {locale: language for language, locale in LOCALES.items()}
+    locale_plurals = {}
     if approved:
         paths.update(resources / p.parent.name / p.name for p in (approved / "app/src/main/res").glob("values-*/strings.xml"))
     if drafts:
@@ -107,6 +107,9 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
         metadata = drafts / "locale_languages.json"
         if metadata.is_file():
             locale_languages.update(json.loads(metadata.read_text(encoding="utf-8")))
+        plural_metadata = drafts / "locale_plurals.json"
+        if plural_metadata.is_file():
+            locale_plurals = json.loads(plural_metadata.read_text(encoding="utf-8"))
     for path in sorted(paths):
         if not path.resolve().is_relative_to(resources.resolve()) or path.is_symlink() or path.parent.is_symlink():
             raise ValueError(f"Unexpected translation path: {path}")
@@ -127,17 +130,23 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
             ["git", "show", f":{relative.as_posix()}"], cwd=repo,
         )) if is_tracked else ET.Element("resources")
         existing = {(item.tag, item.get("name")): item for item in baseline}
+        locale = path.parent.name.removeprefix("values-")
+        required_quantities = set(locale_plurals.get(locale, []))
+        required_quantities.update(item.get("quantity") for plural in baseline if plural.tag == "plurals" for item in plural)
+        if not required_quantities.issubset({"zero", "one", "two", "few", "many", "other"}):
+            raise ValueError(f"Invalid plural quantities for locale: {locale}")
         exported = {(item.tag, item.get("name")): item for item in ET.parse(export_path).getroot()} if export_path.is_file() else {}
         provisional = {(item.tag, item.get("name")): item for item in ET.parse(draft_path).getroot()} if draft_path and draft_path.is_file() else {}
         merged = ET.Element("resources")
         used_provisional = False
+        has_translation = False
         for original in source_root:
             if original.get("translatable") == "false":
                 continue
             key = (original.tag, original.get("name"))
             chosen = exported.get(key)
             baseline_value = existing.get(key)
-            if chosen is None and baseline_value is not None and resource_text(baseline_value) != resource_text(original):
+            if chosen is None and baseline_value is not None and has_translated_text(original, baseline_value):
                 chosen = baseline_value
             if chosen is None and key in provisional and not is_protected(key[1]):
                 if usable_draft(original, provisional[key]):
@@ -147,8 +156,19 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
                     print(f"Rejected invalid draft: {path.parent.name}/{key[1]}")
             if chosen is None:
                 chosen = baseline_value if baseline_value is not None else original
-            merged.append(deepcopy(chosen))
-        if not is_tracked and all(resource_text(item) == resource_text(originals[(item.tag, item.get("name"))]) for item in merged):
+            has_translation |= has_translated_text(original, chosen)
+            chosen = deepcopy(chosen)
+            if original.tag == "plurals":
+                quantities = {item.get("quantity") for item in chosen}
+                for quantity in sorted(required_quantities - quantities):
+                    fallback = original.find(f"item[@quantity='{quantity}']")
+                    if fallback is None:
+                        fallback = original.find("item[@quantity='other']")
+                    fallback = deepcopy(fallback)
+                    fallback.set("quantity", quantity)
+                    chosen.append(fallback)
+            merged.append(chosen)
+        if not is_tracked and not has_translation:
             path.unlink(missing_ok=True)
             if path.parent.is_dir() and not any(path.parent.iterdir()):
                 path.parent.rmdir()
@@ -157,7 +177,6 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
         ET.indent(merged, space="    ")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(merged, encoding="unicode") + "\n", encoding="utf-8")
-        locale = path.parent.name.removeprefix("values-")
         if locale in locale_languages or used_provisional:
             config_path = path.parent / "translation_config.xml"
             was_provisional = config_path.is_file() and ET.parse(config_path).findtext("bool[@name='translation_provisional']") == "true"
@@ -168,6 +187,13 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
 
 def resource_text(element):
     return [(child.tag, child.get("quantity"), "".join(child.itertext())) for child in element] if len(element) else "".join(element.itertext())
+
+
+def has_translated_text(source, candidate):
+    if source.tag == "plurals":
+        originals = {item.get("quantity"): resource_text(item) for item in source}
+        return any(resource_text(item) != originals.get(item.get("quantity"), originals["other"]) for item in candidate)
+    return resource_text(candidate) != resource_text(source)
 
 
 if __name__ == "__main__":

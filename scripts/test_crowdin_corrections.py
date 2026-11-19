@@ -1,4 +1,6 @@
 import copy
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
@@ -82,6 +84,39 @@ class CorrectionTests(unittest.TestCase):
         api = Mock(side_effect=[{"data": [{"data": {"id": n}} for n in range(100)]}, {"data": []}])
         self.assertEqual(len(list(corrections.items(api, "/path?languageId=zh-TW"))), 100)
         self.assertIn("languageId=zh-TW&limit=100&offset=100", api.call_args_list[1].args[1])
+
+    def test_new_language_corrections_use_exported_locale_metadata(self):
+        for language, locale, corrected in [("ru", "ru-rRU", "Загрузка"), ("tr", "tr-rTR", "Yükleniyor")]:
+            with self.subTest(language=language), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / "strings.xml"
+                source.write_text('<resources><string name="progress_uploading">Uploading</string></resources>')
+                entry = {"language": language, "identifier": "progress_uploading", "source": "Uploading",
+                         "previous": "Old wording", "text": corrected}
+                corrections.check_mapping([entry], source)
+                target = root / f"approved/app/src/main/res/values-{locale}/strings.xml"
+                target.parent.mkdir(parents=True)
+                target.write_text(f'<resources><string name="progress_uploading">{corrected}</string></resources>')
+                (root / "drafts").mkdir()
+                (root / "drafts/locale_languages.json").write_text(json.dumps({locale: language}))
+                corrections.verify_export([entry], root / "approved")
+
+    def test_correction_language_cannot_inject_api_query_parameters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "strings.xml"
+            source.write_text('<resources><string name="hello">Hello</string></resources>')
+            entry = {"language": "ru&languageId=de", "identifier": "hello", "source": "Hello", "text": "Привет"}
+            with self.assertRaises(ValueError):
+                corrections.check_mapping([entry], source)
+
+    def test_export_locale_metadata_cannot_escape_resource_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "drafts").mkdir()
+            (root / "drafts/locale_languages.json").write_text(json.dumps({"../../outside": "ru"}))
+            entry = {"language": "ru", "identifier": "hello", "text": "Привет"}
+            with self.assertRaisesRegex(ValueError, "locale"):
+                corrections.verify_export([entry], root / "approved")
 
 
 if __name__ == "__main__":
