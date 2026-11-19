@@ -107,13 +107,15 @@ class BrowserFileRowMenuTest {
         for (mode in listOf(ViewMode.LIST, ViewMode.COMPACT, ViewMode.GRID)) {
             runBlocking { preferences.setViewMode(mode) }
             composeTestRule.waitUntil(5000) { viewModel.browseState.value.viewMode == mode }
+            composeTestRule.waitForIdle()
+            val lastName = viewModel.browseState.value.visibleFiles.last().name
             composeTestRule.onNodeWithTag("browser-files").performScrollToIndex(viewModel.browseState.value.visibleFiles.lastIndex)
             composeTestRule.waitForIdle()
-            val last = composeTestRule.onNodeWithText("zzz-last.txt").fetchSemanticsNode().boundsInRoot
+            val last = composeTestRule.onNodeWithText(lastName).fetchSemanticsNode().boundsInRoot
             val create = composeTestRule.onNodeWithContentDescription("Create").fetchSemanticsNode().boundsInRoot
             assertTrue("$mode final row must clear the create button", last.bottom < create.top)
             if (mode != ViewMode.GRID) {
-                composeTestRule.onNodeWithContentDescription("More options for zzz-last.txt").performTouchInput { click() }
+                composeTestRule.onNodeWithContentDescription("More options for $lastName").performTouchInput { click() }
                 composeTestRule.onNodeWithText("Details").assertIsDisplayed()
                 androidx.test.espresso.Espresso.pressBack()
             }
