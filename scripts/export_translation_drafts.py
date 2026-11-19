@@ -1,11 +1,12 @@
 """Purpose: download approved translations and provisional drafts separately.
-Inputs: Crowdin token and checked-in rollout locale mapping.
-Outputs: two resource trees under the requested output directory.
+Inputs: Crowdin token, enabled project languages, and existing Android locale aliases.
+Outputs: two resource trees and provisional locale-to-Crowdin language metadata.
 Notes: never changes approval state; archive entries are filtered before writing.
 """
 
 import argparse
 from io import BytesIO
+import json
 from pathlib import Path, PurePosixPath
 import re
 import time
@@ -15,6 +16,13 @@ from zipfile import ZipFile
 
 from crowdin_drafts import PROJECT_ID, request
 from translation_rollout import LOCALES, POLICY
+
+
+ANDROID_LOCALE = re.compile(
+    r"(?:[a-z]{2,3}(?:-r[A-Z]{2}|-r[0-9]{3})?"
+    r"|b\+[a-z]{2,3}(?:\+[A-Z][a-z]{3})?(?:\+(?:[A-Z]{2}|[0-9]{3}))?"
+    r"(?:\+(?:[a-zA-Z0-9]{5,8}|[0-9][a-zA-Z0-9]{3}))?)"
+)
 
 
 def extract_resources(content, output, *, approved):
@@ -27,12 +35,10 @@ def extract_resources(content, output, *, approved):
             if len(path.parts) != 6 or path.parts[:4] != ("app", "src", "main", "res") or path.name != "strings.xml":
                 continue
             locale = path.parts[4].removeprefix("values-")
-            if path.parts[4] == "values" or not re.fullmatch(r"[a-z]{2,3}(?:-r[A-Z]{2}|-r[0-9]{3})?", locale):
+            if not path.parts[4].startswith("values-") or not ANDROID_LOCALE.fullmatch(locale):
                 continue
             locale = POLICY["android_aliases"].get(locale, locale)
             path = PurePosixPath("app/src/main/res", f"values-{locale}", "strings.xml")
-            if not approved and locale not in LOCALES.values():
-                continue
             if info.file_size > 5_000_000 or path in written:
                 raise ValueError("Oversized or duplicate resource in translation archive")
             written.add(path)
@@ -46,8 +52,13 @@ def extract_resources(content, output, *, approved):
 
 def export(api, output, *, approved, sleep=time.sleep):
     body = {"exportApprovedOnly": approved, "skipUntranslatedStrings": True, "skipUntranslatedFiles": False}
+    locale_languages = {}
     if not approved:
-        body["targetLanguageIds"] = list(LOCALES)
+        project = api("GET", f"/projects/{PROJECT_ID}")["data"]
+        for language in project["targetLanguages"]:
+            locale = LOCALES.get(language["id"], language["androidCode"])
+            locale = POLICY["android_aliases"].get(locale, locale)
+            locale_languages[locale] = language["id"]
     base = f"/projects/{PROJECT_ID}/translations/builds"
     build = api("POST", base, body)["data"]
     build_path = f"{base}/{int(build['id'])}"
@@ -64,6 +75,8 @@ def export(api, output, *, approved, sleep=time.sleep):
             if len(content) > 25_000_000:
                 raise ValueError("Translation download is unexpectedly large")
             extract_resources(content, output, approved=approved)
+            if not approved:
+                (output / "locale_languages.json").write_text(json.dumps(locale_languages, indent=2) + "\n", encoding="utf-8")
             return
         if status in {"failed", "canceled"}:
             raise RuntimeError(f"Translation export {status}")
