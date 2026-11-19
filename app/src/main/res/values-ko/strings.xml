@@ -32,6 +32,7 @@
     <string name="error_item_unavailable">해당 항목은 더 이상 사용할 수 없습니다. 폴더를 새로 고친 후 다시 시도해 주세요.</string>
     <plurals name="partial_operation_failed">
         <item quantity="other">%1$d 개의 %2$d 개 항목을 %3$s으로 만들 수 없습니다. %4$s</item>
+        <item quantity="one">%1$d of %2$d item could not be %3$s. %4$s</item>
     </plurals>
     <string name="progress_creating_folder">폴더 생성 중</string>
     <string name="progress_creating_file">파일 생성 중</string>
@@ -108,27 +109,35 @@
     <string name="trash_action_failed">%1$s: %2$s를 할 수 없습니다.</string>
     <plurals name="files_uploaded">
         <item quantity="other">업로드된 파일 %d 개</item>
+        <item quantity="one">Uploaded %d file</item>
     </plurals>
     <plurals name="items_trashed">
         <item quantity="other">%d 항목이 휴지통으로 이동되었습니다</item>
+        <item quantity="one">%d item moved to Trash</item>
     </plurals>
     <plurals name="items_deleted">
         <item quantity="other">%d 항목이 영구적으로 삭제되었습니다</item>
+        <item quantity="one">%d item permanently deleted</item>
     </plurals>
     <plurals name="items_copied">
         <item quantity="other">%d 항목이 복사되었습니다</item>
+        <item quantity="one">%d item copied</item>
     </plurals>
     <plurals name="items_cut">
         <item quantity="other">%d 항목 잘라내기</item>
+        <item quantity="one">%d item cut</item>
     </plurals>
     <plurals name="items_downloading">
         <item quantity="other">%d 개 항목… 다운로드 중</item>
+        <item quantity="one">Downloading %d item…</item>
     </plurals>
     <plurals name="items_downloaded">
         <item quantity="other">%1$d 개의 항목을 %2$s에 다운로드했습니다.</item>
+        <item quantity="one">Downloaded %1$d item to %2$s</item>
     </plurals>
     <plurals name="items_restored">
         <item quantity="other">%d 항목 복원됨</item>
+        <item quantity="one">%d item restored</item>
     </plurals>
     <string name="view_mode_list">목록</string>
     <string name="view_mode_compact_list">간략한 목록</string>
@@ -400,6 +409,7 @@
     <string name="browser_locations_show_all">모두 표시 (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="other">%1$d 항목 (%2$s)</item>
+        <item quantity="one">%1$d item (%2$s)</item>
     </plurals>
     <string name="content_desc_sessions">세션</string>
     <string name="content_desc_refresh">새로 고치다</string>
@@ -419,9 +429,11 @@
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
         <item quantity="other">%d 선택됨</item>
+        <item quantity="one">%d selected</item>
     </plurals>
     <plurals name="items_count">
         <item quantity="other">%d 항목</item>
+        <item quantity="one">%d item</item>
     </plurals>
     <string name="storage_internal">내부 저장소</string>
     <string name="storage_external_numbered">외부 저장소 %1$d</string>

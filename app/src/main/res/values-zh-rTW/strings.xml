@@ -32,6 +32,7 @@
     <string name="error_item_unavailable">該項目已下架。請刷新資料夾後重試。</string>
     <plurals name="partial_operation_failed">
         <item quantity="other">共 %2$d 個項目，其中 %1$d 個無法%3$s。%4$s</item>
+        <item quantity="one">%1$d of %2$d item could not be %3$s. %4$s</item>
     </plurals>
     <string name="progress_creating_folder">建立資料夾</string>
     <string name="progress_creating_file">建立文件</string>
@@ -74,9 +75,11 @@
     <string name="archive_extracted_to_with_notes">已解壓縮至 %1$s · %2$s · %3$s</string>
     <plurals name="archive_entries_renamed">
         <item quantity="other">已重新命名 %d 個項目</item>
+        <item quantity="one">%d item renamed</item>
     </plurals>
     <plurals name="archive_entries_not_extracted">
         <item quantity="other">無法解壓縮 %d 個項目</item>
+        <item quantity="one">%d item could not be extracted</item>
     </plurals>
     <string name="archive_details">詳情</string>
     <string name="archive_details_title">解壓縮詳細資料</string>
@@ -84,6 +87,7 @@
     <string name="archive_details_renamed">已重新命名，因為此位置不區分大小寫</string>
     <plurals name="archive_details_more">
         <item quantity="other">另有 %d 個項目</item>
+        <item quantity="one">and %d more</item>
     </plurals>
     <string name="archive_remove_extracted">移除已解壓縮的檔案</string>
     <string name="progress_removing_extracted">正在移除已解壓縮的檔案</string>
@@ -105,27 +109,35 @@
     <string name="trash_action_failed">無法 %1$s: %2$s</string>
     <plurals name="files_uploaded">
         <item quantity="other">已上傳 %d 文件</item>
+        <item quantity="one">Uploaded %d file</item>
     </plurals>
     <plurals name="items_trashed">
         <item quantity="other">%d 項已移至回收站</item>
+        <item quantity="one">%d item moved to Trash</item>
     </plurals>
     <plurals name="items_deleted">
         <item quantity="other">%d 項目已永久刪除</item>
+        <item quantity="one">%d item permanently deleted</item>
     </plurals>
     <plurals name="items_copied">
         <item quantity="other">%d 項已複製</item>
+        <item quantity="one">%d item copied</item>
     </plurals>
     <plurals name="items_cut">
         <item quantity="other">已剪下 %d 個項目</item>
+        <item quantity="one">%d item cut</item>
     </plurals>
     <plurals name="items_downloading">
         <item quantity="other">正在下載 %d 項目…</item>
+        <item quantity="one">Downloading %d item…</item>
     </plurals>
     <plurals name="items_downloaded">
         <item quantity="other">已下載 %1$d 個項目到 %2$s</item>
+        <item quantity="one">Downloaded %1$d item to %2$s</item>
     </plurals>
     <plurals name="items_restored">
         <item quantity="other">%d 物品已恢復</item>
+        <item quantity="one">%d item restored</item>
     </plurals>
     <string name="view_mode_list">清單</string>
     <string name="view_mode_compact_list">精簡列表</string>
@@ -397,6 +409,7 @@
     <string name="browser_locations_show_all">顯示全部 (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="other">%1$d 個項目 (%2$s)</item>
+        <item quantity="one">%1$d item (%2$s)</item>
     </plurals>
     <string name="content_desc_sessions">工作階段</string>
     <string name="content_desc_refresh">重新整理</string>
@@ -416,9 +429,11 @@
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
         <item quantity="other">%d 已選擇</item>
+        <item quantity="one">%d selected</item>
     </plurals>
     <plurals name="items_count">
         <item quantity="other">%d 項目</item>
+        <item quantity="one">%d item</item>
     </plurals>
     <string name="storage_internal">內部儲存</string>
     <string name="storage_external_numbered">外部儲存 %1$d</string>
@@ -531,6 +546,7 @@
     <string name="content_desc_open_location_named">開啟 %1$s 所在的資料夾</string>
     <plurals name="search_result_count">
         <item quantity="other">%d 個結果</item>
+        <item quantity="one">%d result</item>
     </plurals>
     <string name="action_hide">隱藏</string>
     <string name="action_unhide">取消隱藏</string>
