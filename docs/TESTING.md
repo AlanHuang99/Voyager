@@ -225,3 +225,7 @@ For comparable performance measurements, run `ShizukuIoBenchmarkTest` with `shiz
 ## Additional archive codecs
 
 `ArchiveCodecsAndroidTest` exercises raw XZ, LZ4 and Zstandard plus their TAR variants with exact-byte output, truncated compressor footers, path traversal and cancellation cleanup. Run these on the device and repeat extraction in a minified build, including Zstandard JNI loading. JVM archive tests cover the XZ decoder memory limit and incomplete compressed TAR footers.
+
+## TV launcher
+
+`TvLauncherTest` verifies the installed Leanback activity, banner and optional TV/touchscreen features. Check the launcher tile on an Android TV or Google TV device when available.
