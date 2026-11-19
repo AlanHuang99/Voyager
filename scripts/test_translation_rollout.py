@@ -192,6 +192,30 @@ class RolloutTest(unittest.TestCase):
                 "one": "%d folder", "other": "%d folders", "few": "%d folders", "many": "%d folders",
             })
 
+    def test_later_russian_plural_translation_replaces_expanded_english_fallbacks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, drafts, approved = root / "repo", root / "drafts", root / "approved"
+            repo.mkdir()
+            approved.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            source = repo / "app/src/main/res/values/strings.xml"
+            source.parent.mkdir(parents=True)
+            source.write_text('<resources><string name="hello">Hello</string><plurals name="count"><item quantity="one">%d file</item><item quantity="other">%d files</item></plurals></resources>')
+            relative = "app/src/main/res/values-ru-rRU/strings.xml"
+            target = drafts / relative
+            target.parent.mkdir(parents=True)
+            target.write_text('<resources><string name="hello">Привет</string></resources>')
+            (drafts / "locale_plurals.json").write_text(json.dumps({"ru-rRU": ["one", "few", "many", "other"]}))
+            prepare_export(repo, approved=approved, drafts=drafts)
+            subprocess.run(["git", "add", "app/src/main/res"], cwd=repo, check=True)
+            target.write_text('<resources><string name="hello">Привет</string><plurals name="count"><item quantity="one">%d файл</item><item quantity="few">%d файла</item><item quantity="many">%d файлов</item><item quantity="other">%d файла</item></plurals></resources>')
+            prepare_export(repo, approved=approved, drafts=drafts)
+            plural = ET.parse(repo / relative).getroot().find("plurals")
+            self.assertEqual({e.get("quantity"): e.text for e in plural}, {
+                "one": "%d файл", "few": "%d файла", "many": "%d файлов", "other": "%d файла",
+            })
+
     def test_archive_traversal_is_rejected(self):
         content = BytesIO()
         with ZipFile(content, "w") as archive:

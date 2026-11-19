@@ -146,7 +146,7 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
             key = (original.tag, original.get("name"))
             chosen = exported.get(key)
             baseline_value = existing.get(key)
-            if chosen is None and baseline_value is not None and resource_text(baseline_value) != resource_text(original):
+            if chosen is None and baseline_value is not None and has_translated_text(original, baseline_value):
                 chosen = baseline_value
             if chosen is None and key in provisional and not is_protected(key[1]):
                 if usable_draft(original, provisional[key]):
@@ -156,7 +156,7 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
                     print(f"Rejected invalid draft: {path.parent.name}/{key[1]}")
             if chosen is None:
                 chosen = baseline_value if baseline_value is not None else original
-            has_translation |= resource_text(chosen) != resource_text(original)
+            has_translation |= has_translated_text(original, chosen)
             chosen = deepcopy(chosen)
             if original.tag == "plurals":
                 quantities = {item.get("quantity") for item in chosen}
@@ -187,6 +187,13 @@ def prepare_export(repo: Path, *, approved: Path | None = None, drafts: Path | N
 
 def resource_text(element):
     return [(child.tag, child.get("quantity"), "".join(child.itertext())) for child in element] if len(element) else "".join(element.itertext())
+
+
+def has_translated_text(source, candidate):
+    if source.tag == "plurals":
+        originals = {item.get("quantity"): resource_text(item) for item in source}
+        return any(resource_text(item) != originals.get(item.get("quantity"), originals["other"]) for item in candidate)
+    return resource_text(candidate) != resource_text(source)
 
 
 if __name__ == "__main__":
