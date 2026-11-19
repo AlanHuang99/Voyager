@@ -23,6 +23,7 @@ import kotlin.concurrent.thread
  */
 @Keep
 class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stub() {
+    private val stopping = java.util.concurrent.atomic.AtomicBoolean(false)
     private val clientUid = context.applicationInfo.uid
     private val commands = ConcurrentHashMap.newKeySet<Command>()
     /** Lists, reads and writes in flight; they share the operation limit with commands. */
@@ -40,6 +41,7 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         checkCaller()
         require(script.length <= 256 * 1024) { "Command exceeds the allowed limit" }
         synchronized(commands) {
+            check(!stopping.get()) { "Shizuku session is closing" }
             check(commands.size + transfers.size < MAX_OPERATIONS) { "Too many active Shizuku operations" }
             val commandPipe = ParcelFileDescriptor.createPipe()
             try {
@@ -104,24 +106,27 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
 
     override fun destroy() {
         checkCaller()
-        commands.toList().forEach { it.terminateProcess() }
-        writes.toList().forEach { it.terminate() }
-        kotlin.system.exitProcess(0)
+        shutdown()
+    }
+
+    private fun shutdown() {
+        val cleanup = synchronized(commands) {
+            if (!stopping.compareAndSet(false, true)) return
+            commands.map { command -> { command.terminateProcess() } } + writes.map { write -> { write.terminate() } }
+        }
+        recoverShizukuSession(cleanup) { Process.killProcess(Process.myPid()) }
     }
 
     private fun read(timeoutMillis: Long? = null, produce: (java.io.OutputStream) -> Unit): IShizukuRead {
         val slot = admit()
-        return try { ServiceRead(slot, timeoutMillis, onTimeout = {
-            // Each connection has its own UserService process. A stuck native filesystem call cannot
-            // be interrupted safely, so terminate this session without affecting the Shizuku server.
-            Process.killProcess(Process.myPid())
-        }, produce = produce) } catch (error: Throwable) { slot.release(); throw error }
+        return try { ServiceRead(slot, timeoutMillis, onTimeout = ::shutdown, produce = produce) } catch (error: Throwable) { slot.release(); throw error }
     }
 
     /** Reserves an operation slot; the returned hooks release it once. */
     private fun admit(onRelease: () -> Unit = {}): TransferHooks {
         val key = Any()
         synchronized(commands) {
+            check(!stopping.get()) { "Shizuku session is closing" }
             check(commands.size + transfers.size < MAX_OPERATIONS) { "Too many active Shizuku operations" }
             transfers.add(key)
         }

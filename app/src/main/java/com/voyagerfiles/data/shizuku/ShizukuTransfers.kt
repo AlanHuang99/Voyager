@@ -54,7 +54,7 @@ internal class ServiceRead(
     init {
         worker.start()
         timeoutMillis?.let { timeout ->
-            timer.schedule(Runnable {
+            metadataTimer.schedule(Runnable {
                 if (done.count > 0) {
                     worker.interrupt()
                     onTimeout()
@@ -242,3 +242,25 @@ private fun awaitQuietly(latch: CountDownLatch): Boolean = try {
 
 private const val IDLE_SECONDS = 30L
 private val timer = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "shizuku-transfer-timeout").apply { isDaemon = true } }
+
+/** Closes independent operations before terminating one session, with a separate hard deadline. */
+internal fun recoverShizukuSession(
+    cleanup: List<() -> Unit>,
+    timeoutMillis: Long = 5_000,
+    terminate: () -> Unit,
+) {
+    val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
+    val stop = { if (stopped.compareAndSet(false, true)) terminate() }
+    val deadline = metadataTimer.schedule(Runnable { stop() }, timeoutMillis, TimeUnit.MILLISECONDS)
+    val remaining = java.util.concurrent.atomic.AtomicInteger(cleanup.size)
+    if (cleanup.isEmpty()) { deadline.cancel(false); stop() }
+    cleanup.forEach { close ->
+        thread(name = "shizuku-session-cleanup", isDaemon = true) {
+            try { runCatching { close() } } finally {
+                if (remaining.decrementAndGet() == 0) { deadline.cancel(false); stop() }
+            }
+        }
+    }
+}
+
+private val metadataTimer = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "shizuku-metadata-timeout").apply { isDaemon = true } }
