@@ -32,6 +32,7 @@
     <string name="error_item_unavailable">Sản phẩm hiện không còn. Vui lòng làm mới thư mục và thử lại.</string>
     <plurals name="partial_operation_failed">
         <item quantity="other">%1$d trong số %2$d mục không thể là %3$s. %4$s</item>
+        <item quantity="one">%1$d of %2$d item could not be %3$s. %4$s</item>
     </plurals>
     <string name="progress_creating_folder">Tạo thư mục</string>
     <string name="progress_creating_file">Tạo tệp</string>
@@ -108,27 +109,35 @@
     <string name="trash_action_failed">Không thể %1$s: %2$s</string>
     <plurals name="files_uploaded">
         <item quantity="other">Đã tải lên %d tập tin</item>
+        <item quantity="one">Uploaded %d file</item>
     </plurals>
     <plurals name="items_trashed">
         <item quantity="other">%d mục đã được chuyển vào Thùng rác</item>
+        <item quantity="one">%d item moved to Trash</item>
     </plurals>
     <plurals name="items_deleted">
         <item quantity="other">%d mục đã bị xóa vĩnh viễn</item>
+        <item quantity="one">%d item permanently deleted</item>
     </plurals>
     <plurals name="items_copied">
         <item quantity="other">%d mục đã sao chép</item>
+        <item quantity="one">%d item copied</item>
     </plurals>
     <plurals name="items_cut">
         <item quantity="other">%d các mục bị cắt</item>
+        <item quantity="one">%d item cut</item>
     </plurals>
     <plurals name="items_downloading">
         <item quantity="other">Đang tải xuống %d mục…</item>
+        <item quantity="one">Downloading %d item…</item>
     </plurals>
     <plurals name="items_downloaded">
         <item quantity="other">Đã tải xuống %1$d mục vào %2$s</item>
+        <item quantity="one">Downloaded %1$d item to %2$s</item>
     </plurals>
     <plurals name="items_restored">
         <item quantity="other">%d các mục đã được khôi phục</item>
+        <item quantity="one">%d item restored</item>
     </plurals>
     <string name="view_mode_list">Danh sách</string>
     <string name="view_mode_compact_list">Danh sách rút gọn</string>
@@ -400,6 +409,7 @@
     <string name="browser_locations_show_all">Hiển thị tất cả (%1$d)</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="other">%1$d mục (%2$s)</item>
+        <item quantity="one">%1$d item (%2$s)</item>
     </plurals>
     <string name="content_desc_sessions">Phiên họp</string>
     <string name="content_desc_refresh">Làm cho khỏe lại</string>
@@ -419,9 +429,11 @@
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
         <item quantity="other">%d đã chọn</item>
+        <item quantity="one">%d selected</item>
     </plurals>
     <plurals name="items_count">
         <item quantity="other">%d mục</item>
+        <item quantity="one">%d item</item>
     </plurals>
     <string name="storage_internal">Bộ nhớ trong</string>
     <string name="storage_external_numbered">Bộ nhớ ngoài %1$d</string>

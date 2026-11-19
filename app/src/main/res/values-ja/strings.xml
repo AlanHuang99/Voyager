@@ -32,6 +32,7 @@
     <string name="error_item_unavailable">この商品は現在入手できません。フォルダを更新してもう一度お試しください。</string>
     <plurals name="partial_operation_failed">
         <item quantity="other">%1$d 個のうち %2$d 個は %3$sできませんでした。 %4$s</item>
+        <item quantity="one">%1$d of %2$d item could not be %3$s. %4$s</item>
     </plurals>
     <string name="progress_creating_folder">フォルダーを作成しています</string>
     <string name="progress_creating_file">ファイルを作成しています</string>
@@ -108,27 +109,35 @@
     <string name="trash_action_failed">%1$s: %2$s できませんでした</string>
     <plurals name="files_uploaded">
         <item quantity="other">%d 個のファイルをアップロードしました。</item>
+        <item quantity="one">Uploaded %d file</item>
     </plurals>
     <plurals name="items_trashed">
         <item quantity="other">%d 個のアイテムがゴミ箱に移動されました</item>
+        <item quantity="one">%d item moved to Trash</item>
     </plurals>
     <plurals name="items_deleted">
         <item quantity="other">%d 個のアイテムが完全に削除されました</item>
+        <item quantity="one">%d item permanently deleted</item>
     </plurals>
     <plurals name="items_copied">
         <item quantity="other">%d 個のアイテムがコピーされました</item>
+        <item quantity="one">%d item copied</item>
     </plurals>
     <plurals name="items_cut">
         <item quantity="other">%d カットされたアイテム</item>
+        <item quantity="one">%d item cut</item>
     </plurals>
     <plurals name="items_downloading">
         <item quantity="other">%d 個のアイテムをダウンロードしています…</item>
+        <item quantity="one">Downloading %d item…</item>
     </plurals>
     <plurals name="items_downloaded">
         <item quantity="other">%1$d 個のアイテムを %2$sにダウンロードしました。</item>
+        <item quantity="one">Downloaded %1$d item to %2$s</item>
     </plurals>
     <plurals name="items_restored">
         <item quantity="other">%d アイテムが復元されました</item>
+        <item quantity="one">%d item restored</item>
     </plurals>
     <string name="view_mode_list">リスト</string>
     <string name="view_mode_compact_list">コンパクトリスト</string>
@@ -400,6 +409,7 @@
     <string name="browser_locations_show_all">すべて表示（%1$d）</string>
     <plurals name="browser_clipboard_summary">
         <item quantity="other">%1$d アイテム (%2$s)</item>
+        <item quantity="one">%1$d item (%2$s)</item>
     </plurals>
     <string name="content_desc_sessions">セッション</string>
     <string name="content_desc_refresh">更新</string>
@@ -419,9 +429,11 @@
     <string name="localized_percentage">%1$.1f%%</string>
     <plurals name="items_selected">
         <item quantity="other">%d 選択済み</item>
+        <item quantity="one">%d selected</item>
     </plurals>
     <plurals name="items_count">
         <item quantity="other">%d アイテム</item>
+        <item quantity="one">%d item</item>
     </plurals>
     <string name="storage_internal">内部ストレージ</string>
     <string name="storage_external_numbered">外部ストレージ %1$d</string>
