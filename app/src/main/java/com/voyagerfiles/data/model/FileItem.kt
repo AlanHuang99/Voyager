@@ -64,7 +64,8 @@ data class FileItem(
         )
 
         private val archiveExtensions = setOf(
-            "zip", "tar", "tgz", "gz", "tbz2", "bz2", "xz", "7z", "rar", "zst",
+            "zip", "tar", "tgz", "gz", "tbz2", "bz2", "xz", "txz", "7z", "rar",
+            "zst", "zstd", "tzst", "lz4",
         )
 
         private val mimeTypeOverrides = mapOf(

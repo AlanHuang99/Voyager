@@ -8,8 +8,14 @@ enum class ArchiveFormat(
     TAR(listOf(".tar")),
     TAR_GZIP(listOf(".tar.gz", ".tgz")),
     TAR_BZIP2(listOf(".tar.bz2", ".tbz2")),
+    TAR_XZ(listOf(".tar.xz", ".txz")),
+    TAR_ZSTD(listOf(".tar.zst", ".tar.zstd", ".tzst")),
+    TAR_LZ4(listOf(".tar.lz4")),
     GZIP(listOf(".gz")),
     BZIP2(listOf(".bz2")),
+    XZ(listOf(".xz")),
+    ZSTD(listOf(".zst", ".zstd")),
+    LZ4(listOf(".lz4")),
     RAR_UNSUPPORTED(listOf(".rar"), canExtract = false),
     ;
 

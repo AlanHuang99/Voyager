@@ -66,5 +66,8 @@ class FileItemTest {
 
         assertTrue(tgz.isArchive)
         assertTrue(tbz2.isArchive)
+        assertTrue(FileItem(name = "backup.tar.xz", path = "/backup.tar.xz", isDirectory = false).isArchive)
+        assertTrue(FileItem(name = "backup.tar.zst", path = "/backup.tar.zst", isDirectory = false).isArchive)
+        assertTrue(FileItem(name = "backup.tar.lz4", path = "/backup.tar.lz4", isDirectory = false).isArchive)
     }
 }
