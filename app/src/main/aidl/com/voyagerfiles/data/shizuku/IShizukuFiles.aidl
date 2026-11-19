@@ -13,6 +13,6 @@ interface IShizukuFiles {
     IShizukuRead openRead(String path) = 12;
     IShizukuWrite openWrite(String path, String expectedFingerprint, IBinder client) = 13;
     IShizukuRead list(String directory) = 14;
-    String canonical(String path) = 15;
+    IShizukuRead canonical(String path) = 15;
     void destroy() = 16777114;
 }

@@ -58,10 +58,11 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
     }
 
     override fun list(directory: String): IShizukuRead = guard {
-        val bytes = operations.list(directory)
-        read { it.write(bytes) }
+        read(timeoutMillis = 30_000) { it.write(operations.list(directory)) }
     }
-    override fun canonical(path: String): String = guard { operations.canonical(path) }
+    override fun canonical(path: String): IShizukuRead = guard {
+        read(timeoutMillis = 30_000) { it.write(operations.canonical(path).toByteArray(Charsets.UTF_8)) }
+    }
     override fun stat(path: String): ByteArray = guard { operations.stat(path) }
     override fun exists(path: String): Boolean = guard { operations.exists(path) }
     override fun fingerprint(path: String): String = guard { operations.fingerprint(path) }
@@ -108,9 +109,9 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
         kotlin.system.exitProcess(0)
     }
 
-    private fun read(produce: (java.io.OutputStream) -> Unit): IShizukuRead {
+    private fun read(timeoutMillis: Long? = null, produce: (java.io.OutputStream) -> Unit): IShizukuRead {
         val slot = admit()
-        return try { ServiceRead(slot, produce) } catch (error: Throwable) { slot.release(); throw error }
+        return try { ServiceRead(slot, timeoutMillis, produce) } catch (error: Throwable) { slot.release(); throw error }
     }
 
     /** Reserves an operation slot; the returned hooks release it once. */

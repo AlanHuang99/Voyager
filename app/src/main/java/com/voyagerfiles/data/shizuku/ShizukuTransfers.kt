@@ -24,6 +24,7 @@ internal class TransferHooks(val check: () -> Unit, val describe: (Throwable) ->
  */
 internal class ServiceRead(
     private val hooks: TransferHooks,
+    timeoutMillis: Long? = null,
     private val produce: (OutputStream) -> Unit,
 ) : IShizukuRead.Stub() {
     private val pipe = ParcelFileDescriptor.createPipe()
@@ -32,8 +33,7 @@ internal class ServiceRead(
     @Volatile private var written = 0L
     @Volatile private var failure: Throwable? = null
 
-    init {
-        thread(name = "shizuku-read", isDaemon = true) {
+    private val worker = thread(name = "shizuku-read", isDaemon = true, start = false) {
             try {
                 FileOutputStream(pipe[1].fileDescriptor).let { raw ->
                     produce(object : OutputStream() {
@@ -48,7 +48,11 @@ internal class ServiceRead(
                 done.countDown()
                 hooks.release()
             }
-        }
+    }
+
+    init {
+        worker.start()
+        timeoutMillis?.let { timer.schedule(Runnable { worker.interrupt() }, it, TimeUnit.MILLISECONDS) }
         // A client that never takes its end would leave the producer blocked on a full pipe.
         timer.schedule(Runnable { synchronized(this) { if (!taken) { taken = true; runCatching { pipe[0].close() } } } }, IDLE_SECONDS, TimeUnit.SECONDS)
     }
@@ -58,6 +62,12 @@ internal class ServiceRead(
         check(!taken) { "Read already taken" }
         taken = true
         return handOver(pipe[0])
+    }
+
+    override fun abort() {
+        hooks.check()
+        worker.interrupt()
+        synchronized(this) { if (!taken) { taken = true; runCatching { pipe[0].close() } } }
     }
 
     override fun finish(): Long {

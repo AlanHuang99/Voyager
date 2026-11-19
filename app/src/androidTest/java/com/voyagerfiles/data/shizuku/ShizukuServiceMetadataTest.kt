@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Process
 import androidx.test.core.app.ApplicationProvider
 import com.voyagerfiles.data.repository.RootShell
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,6 +42,51 @@ class ShizukuServiceMetadataTest {
 
     private fun serviceCanonical(operations: ShizukuFileOperations, path: String): String? =
         try { operations.canonical(path) } catch (_: IOException) { null }
+
+    @Test fun metadataStreamEnforcesBytesAndDeadline() {
+        val released = java.util.concurrent.CountDownLatch(1)
+        val hooks = TransferHooks({}, { it.message.orEmpty() }, { released.countDown() })
+        val blocked = ServiceRead(hooks) { java.util.concurrent.CountDownLatch(1).await() }
+        val started = System.nanoTime()
+        val error = runCatching { readShizukuMetadata(blocked, timeoutMillis = 100) }.exceptionOrNull()
+        assertTrue(error?.message.orEmpty().contains("timed out"))
+        assertTrue(java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 5)
+        assertTrue(released.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        val limit = ShizukuFileOperations.METADATA_BYTES
+        val exact = ByteArray(limit) { (it * 37).toByte() }
+        assertArrayEquals(exact, readShizukuMetadata(ServiceRead(TransferHooks({}, { it.message.orEmpty() }, {})) { it.write(exact) }))
+        val overflow = ServiceRead(TransferHooks({}, { it.message.orEmpty() }, {})) { it.write(ByteArray(limit + 1)) }
+        assertTrue(runCatching { readShizukuMetadata(overflow) }.exceptionOrNull()?.message.orEmpty().contains("allowed limit"))
+    }
+
+    @Test fun metadataDeadlineAppliesWithoutAReader() {
+        val released = java.util.concurrent.CountDownLatch(1)
+        ServiceRead(TransferHooks({}, { it.message.orEmpty() }, { released.countDown() }), timeoutMillis = 100) {
+            java.util.concurrent.CountDownLatch(1).await()
+        }
+        assertTrue(released.await(5, java.util.concurrent.TimeUnit.SECONDS))
+    }
+
+    @Test fun cancelledMetadataStopsProducerAndReleasesItsSlot() = kotlinx.coroutines.runBlocking<Unit> {
+        val released = java.util.concurrent.CountDownLatch(1)
+        val started = java.util.concurrent.CountDownLatch(1)
+        val read = ServiceRead(TransferHooks({}, { it.message.orEmpty() }, { released.countDown() })) {
+            started.countDown()
+            java.util.concurrent.CountDownLatch(1).await()
+        }
+        val token = com.voyagerfiles.data.repository.TransferCancellation()
+        val cancel = Thread { started.await(); Thread.sleep(50); token.cancel() }.apply { start() }
+        val error = try {
+            kotlinx.coroutines.withContext(token.contextElement()) { runCatching { readShizukuMetadata(read) }.exceptionOrNull() }
+        } finally { cancel.join() }
+        assertTrue(error is kotlinx.coroutines.CancellationException)
+        assertTrue(released.await(5, java.util.concurrent.TimeUnit.SECONDS))
+    }
+
+    @Test fun largeListingFailsAtTheByteLimit() = fixture { directory, operations ->
+        repeat(17000) { File(directory, "entry-${it.toString().padStart(5, '0')}-${"x".repeat(230)}").createNewFile() }
+        assertTrue(runCatching { operations.list(directory.path) }.exceptionOrNull()?.message.orEmpty().contains("allowed limit"))
+    }
 
     @Test fun pathResolutionMatchesReadlinkF() = fixture { directory, operations ->
         val d = RootShell.quote(directory.path)

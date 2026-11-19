@@ -50,9 +50,14 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         // The shell listing's checks: [ -d ] && [ -r ] && [ -x ], following links.
         if (!Files.isDirectory(folder) || !accessible(directory, R_OK or X_OK)) throw IOException("Folder missing or permission denied")
         val names = mutableListOf<String>()
+        var nameBytes = 0
         Files.newDirectoryStream(folder).use { entries ->
             for (entry in entries) {
-                names.add(lossless(entry.fileName))
+                checkMetadataCancellation()
+                val name = lossless(entry.fileName)
+                nameBytes += name.toByteArray(Charsets.UTF_8).size
+                if (nameBytes > METADATA_BYTES) throw IOException("Root command output exceeds the allowed limit")
+                names.add(name)
                 // Bound memory: the provider's parser rejects longer listings anyway.
                 if (names.size > LISTING_LIMIT) throw IOException("Folder exceeds the root listing limit (20,000 entries)")
             }
@@ -62,12 +67,15 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         var count = 0
         // Same order as the shell globs: plain names first, then hidden ones.
         for (name in names.sortedWith(compareBy<String>({ it.startsWith('.') }, { it }))) {
+            checkMetadataCancellation()
             val path = "$base/$name"
             val stat = try { Os.lstat(path) } catch (error: ErrnoException) {
                 if (error.errno == ENOENT) continue // Removed meanwhile, as the shell's [ -e ] || [ -L ] skip.
                 throw error // Any other metadata failure fails the listing, like the shell's stat || exit 1.
             }
-            writeEntry(output, path, stat)
+            val entry = ByteArrayOutputStream().also { writeEntry(it, path, stat) }.toByteArray()
+            if (output.size() + entry.size > METADATA_BYTES) throw IOException("Root command output exceeds the allowed limit")
+            output.write(entry)
             // One entry beyond the provider's limit lets its parser report the limit.
             if (++count > LISTING_LIMIT) break
         }
@@ -80,11 +88,13 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
      */
     fun canonical(path: String): String {
         requireAbsolute(path)
+        checkMetadataCancellation()
         // Lexical normalization of the input matches RootFileProvider.path(), which runs before readlink -f too.
         return lossless(canonicalPath(Paths.get(path).normalize(), 0)).let { if (it.isEmpty()) "/" else it }
     }
 
     private fun canonicalPath(path: Path, depth: Int): Path {
+        checkMetadataCancellation()
         if (depth > MAX_LINKS) throw IOException("Too many levels of symbolic links")
         try { return path.toRealPath() } catch (_: NoSuchFileException) {}
         val name = path.fileName ?: throw IOException("Cannot resolve root path")
@@ -110,6 +120,10 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
 
     private fun requireAbsolute(path: String) {
         require(path.startsWith('/') && '\u0000' !in path) { "Root paths must be absolute and contain no NUL" }
+    }
+
+    private fun checkMetadataCancellation() {
+        if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Shizuku metadata cancelled")
     }
 
     private fun accessible(path: String, mode: Int) = try { Os.access(path, mode) } catch (_: ErrnoException) { false }
@@ -352,6 +366,7 @@ internal class ShizukuFileOperations(private val serviceUid: Int) {
         private val MODE_2700 = "2700".toInt(8)
         private const val PAYLOAD = "payload"
         private const val SELINUX_XATTR = "security.selinux"
+        const val METADATA_BYTES = 4 * 1024 * 1024
         private const val LISTING_LIMIT = 20_000
         private const val MAX_LINKS = 40
         private const val NOT_UTF8 = "Only valid UTF-8 text and filenames are supported in root sessions"
