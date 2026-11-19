@@ -1,6 +1,6 @@
 {
   "project_id": 927407,
-  "reviewed_pr_head": "9bc35090e430f126bc470756698019abbff4f89a",
+  "reviewed_pr_head": "1caf754e1d56812978d532e3a1b98c21a991cc77",
   "corrections": [
     {
       "language": "de",
@@ -51,6 +51,231 @@
       "source": "Open Shizuku session",
       "previous": "Shizuku Sitzung öffnen",
       "text": "Shizuku-Sitzung öffnen"
+    },
+    {
+      "language": "ru",
+      "identifier": "operation_move",
+      "source": "move",
+      "previous": "перемещение",
+      "text": "переместить"
+    },
+    {
+      "language": "ru",
+      "identifier": "operation_save_connection",
+      "source": "save connection",
+      "previous": "сохранить",
+      "text": "сохранить соединение"
+    },
+    {
+      "language": "ru",
+      "identifier": "operation_delete_connection",
+      "source": "delete the connection",
+      "previous": "удалить",
+      "text": "удалить соединение"
+    },
+    {
+      "language": "ru",
+      "identifier": "operation_bookmarks",
+      "source": "update bookmarks",
+      "previous": "обновить закладку",
+      "text": "обновить закладки"
+    },
+    {
+      "language": "ru",
+      "identifier": "operation_connect",
+      "source": "connect",
+      "previous": "соединить",
+      "text": "подключиться"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_uploaded",
+      "source": "uploaded",
+      "previous": "обновить",
+      "text": "загружено"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_moved_to_trash",
+      "source": "moved to Trash",
+      "previous": "переместить в корзину",
+      "text": "перемещено в корзину"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_deleted",
+      "source": "deleted",
+      "previous": "удалить",
+      "text": "удалено"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_pasted",
+      "source": "pasted",
+      "previous": "вставить",
+      "text": "вставлено"
+    },
+    {
+      "language": "ru",
+      "identifier": "error_conflict",
+      "source": "%1$s. Rename or remove it, then try again.",
+      "previous": "%1$s. Переименуйте или удалить его, и попробуйте заново.",
+      "text": "%1$s. Переименуйте или удалите его и попробуйте заново."
+    },
+    {
+      "language": "ru",
+      "identifier": "error_item_unavailable",
+      "source": "The item is no longer available. Refresh the folder and try again.",
+      "previous": "Данный товар больше недоступен. Обновите папку и попробуйте снова.",
+      "text": "Данный элемент больше недоступен. Обновите папку и попробуйте снова."
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_creating_folder",
+      "source": "Creating folder",
+      "previous": "Создать папку",
+      "text": "Создание папки"
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_creating_file",
+      "source": "Creating file",
+      "previous": "Создать файл",
+      "text": "Создание файла"
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_uploading",
+      "source": "Uploading",
+      "previous": "Обновить",
+      "text": "Загрузка"
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_copying",
+      "source": "Copying",
+      "previous": "Копировать",
+      "text": "Копирование"
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_moving",
+      "source": "Moving",
+      "previous": "Движение",
+      "text": "Перемещение"
+    },
+    {
+      "language": "ru",
+      "identifier": "progress_emptying_trash",
+      "source": "Emptying Trash",
+      "previous": "Очистить корзину",
+      "text": "Очистка корзины"
+    },
+    {
+      "language": "ru",
+      "identifier": "trash_direct_local_only",
+      "source": "Trash is available only for direct local storage",
+      "previous": "Мусор доступен только для непосредственного хранения в вашем районе",
+      "text": "Корзина доступна только при прямом доступе к локальному хранилищу"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_created",
+      "source": "Created %1$s",
+      "previous": "Создать %1$s",
+      "text": "Создан %1$s"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_extracted_to",
+      "source": "Extracted to %1$s",
+      "previous": "Извлечено в%1$s",
+      "text": "Извлечено в %1$s"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_extraction_cancelled",
+      "source": "Extraction cancelled",
+      "previous": "Извлечения отменено",
+      "text": "Извлечение отменено"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_extracted_to_with_note",
+      "source": "Extracted to %1$s · %2$s",
+      "previous": "Извлечено в %1$s %2$s",
+      "text": "Извлечено в %1$s · %2$s"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_extracted_to_with_notes",
+      "source": "Extracted to %1$s · %2$s · %3$s",
+      "previous": "Извлечено в %1$s %2$s %3$s",
+      "text": "Извлечено в %1$s · %2$s · %3$s"
+    },
+    {
+      "language": "ru",
+      "identifier": "archive_details_renamed",
+      "source": "Renamed, because this location does not tell upper and lower case apart",
+      "previous": "Переименовано, потому что это место не имеет отличать верхний и нижний регистр",
+      "text": "Переименовано, потому что это место не различает верхний и нижний регистр"
+    },
+    {
+      "language": "ru",
+      "identifier": "connection_updated",
+      "source": "Connection updated",
+      "previous": "Сохранение соединено",
+      "text": "Соединение обновлено"
+    },
+    {
+      "language": "ru",
+      "identifier": "theme_frappe",
+      "source": "Frappé",
+      "previous": "Ударил",
+      "text": "Фраппе"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_done",
+      "source": "Done",
+      "previous": "Сделанный",
+      "text": "Готово"
+    },
+    {
+      "language": "ru",
+      "identifier": "action_cut",
+      "source": "Cut",
+      "previous": "Резать",
+      "text": "Вырезать"
+    },
+    {
+      "language": "tr",
+      "identifier": "archive_extracted_to_with_note",
+      "source": "Extracted to %1$s · %2$s",
+      "previous": "%1$s · %2$s adresine çıkarıldı",
+      "text": "%1$s adresine çıkarıldı · %2$s"
+    },
+    {
+      "language": "tr",
+      "identifier": "archive_extracted_to_with_notes",
+      "source": "Extracted to %1$s · %2$s · %3$s",
+      "previous": "%1$s · %2$s · %3$s adresine çıkarıldı",
+      "text": "%1$s adresine çıkarıldı · %2$s · %3$s"
+    },
+    {
+      "language": "tr",
+      "identifier": "view_mode_compact_list",
+      "source": "Compact list",
+      "previous": "Kısa liste",
+      "text": "Kompakt liste"
+    },
+    {
+      "language": "tr",
+      "identifier": "theme_solarized_dark",
+      "source": "Solarized Dark",
+      "previous": "Soluk koyu",
+      "text": "Solarized Koyu"
     }
-  ]
+  ],
+  "reviewed_export_run": 44454339845
 }
