@@ -11,6 +11,8 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
+import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,6 +22,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.CRC32
 
 class ArchiveServiceTest {
 
@@ -238,6 +241,8 @@ class ArchiveServiceTest {
             "bundle.tar.gz" to gzip(tar),
             "bundle.tbz2" to bzip2(tar),
             "bundle.tar.bz2" to bzip2(tar),
+            "bundle.tar.xz" to xz(tar),
+            "bundle.tar.lz4" to lz4(tar),
         )
 
         fixtures.forEachIndexed { index, (name, bytes) ->
@@ -265,6 +270,8 @@ class ArchiveServiceTest {
         val fixtures = listOf(
             "records.csv.gz" to gzip(contents),
             "records.csv.bz2" to bzip2(contents),
+            "records.csv.xz" to xz(contents),
+            "records.csv.lz4" to lz4(contents),
         )
 
         fixtures.forEach { (name, bytes) ->
@@ -282,6 +289,38 @@ class ArchiveServiceTest {
             assertEquals("/workspace/records.csv_extracted", root.path)
             assertTrue(provider.readFile("${root.path}/records.csv").contentEquals(contents))
         }
+    }
+
+    @Test
+    fun rejectsMissingCompressedTarFootersAfterEndRecords() = runBlocking {
+        val tar = tarBytes(TarFixture("ok.txt", contents = "hello".toByteArray())) + ByteArray(32768)
+        listOf("xz" to xz(tar), "lz4" to lz4(tar), "gz" to gzip(tar), "bz2" to bzip2(tar)).forEach { (suffix, bytes) ->
+            val provider = ArchiveTestFileProvider().apply {
+                putDirectory("/workspace")
+                putFile("/workspace/bundle.tar.$suffix", bytes.copyOf(bytes.size - 4))
+            }
+            val reports = mutableListOf<ArchiveExtractionReport>()
+            val result = ArchiveService.extract(provider, provider.getFileInfo("/workspace/bundle.tar.$suffix").getOrThrow(), "/workspace", onReport = reports::add)
+            assertTrue("$suffix must reject its incomplete footer", result.isFailure)
+            assertTrue(reports.none { it.complete })
+        }
+    }
+
+    @Test
+    fun rejectsExcessiveXzDictionaryBeforeAllocation() = runBlocking {
+        val bytes = xz("hello".toByteArray())
+        val blockLength = ((bytes[12].toInt() and 255) + 1) * 4
+        assertEquals(0x21, bytes[14].toInt())
+        bytes[16] = 37
+        val crc = CRC32().apply { update(bytes, 12, blockLength - 4) }.value
+        repeat(4) { bytes[12 + blockLength - 4 + it] = (crc ushr (8 * it)).toByte() }
+        val provider = ArchiveTestFileProvider().apply {
+            putDirectory("/workspace")
+            putFile("/workspace/memory.xz", bytes)
+        }
+        val failure = ArchiveService.extract(provider, provider.getFileInfo("/workspace/memory.xz").getOrThrow(), "/workspace").exceptionOrNull()
+        assertTrue(generateSequence(failure) { it.cause }.any { it is org.apache.commons.compress.MemoryLimitException })
+        assertFalse(provider.exists("/workspace/memory_extracted"))
     }
 
     @Test
@@ -450,6 +489,18 @@ class ArchiveServiceTest {
     private fun bzip2(contents: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
         BZip2CompressorOutputStream(output).use { it.write(contents) }
+        return output.toByteArray()
+    }
+
+    private fun xz(contents: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream()
+        XZCompressorOutputStream(output).use { it.write(contents) }
+        return output.toByteArray()
+    }
+
+    private fun lz4(contents: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream()
+        FramedLZ4CompressorOutputStream(output).use { it.write(contents) }
         return output.toByteArray()
     }
 

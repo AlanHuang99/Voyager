@@ -42,7 +42,7 @@ WebDAV direct opening promotes a foreground service before handing the read-only
 
 ## Archives
 
-`ArchiveService` supports local storage, SAF document trees, SFTP, FTP, SMB, and WebDAV. It creates ZIP files and extracts ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ2, GZ, and BZ2 inputs. RAR is recognized but intentionally unsupported.
+`ArchiveService` supports local storage, SAF document trees, SFTP, FTP, SMB, and WebDAV. It creates ZIP files and extracts ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ2, TAR.XZ, TAR.LZ4, TAR.ZSTD, GZ, BZ2, XZ, LZ4, and ZSTD inputs. RAR is recognized but intentionally unsupported.
 
 Archive extraction creates a new sibling directory and never overwrites an existing item. Entry paths reject absolute paths, drive and UNC paths, blank or dot segments, traversal, and NUL characters. ZIP and TAR links, special files, unreadable or encrypted ZIP entries, duplicate normalized paths, conflicting entry types, and corrupt archives fail closed. Failed creation removes the partial archive; an extraction that fails keeps what it wrote unless the archive proved unsafe (see below). Readable local ZIPs are opened in place; other ZIP input is staged through a bounded-memory copy to an app-private temporary file. Both paths check central-directory metadata, including Unix link modes, before writing entries.
 
