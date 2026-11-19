@@ -177,6 +177,9 @@ dependencies {
 
     // Archive formats - Apache Commons Compress (Apache 2.0)
     implementation("org.apache.commons:commons-compress:1.28.0")
+    // XZ decoder (0BSD); Zstandard JNI and native decoder (BSD-2-Clause / BSD-3-Clause)
+    implementation("org.tukaani:xz:1.10")
+    implementation("com.github.luben:zstd-jni:1.5.7-4@aar")
 
     // Splash screen
     implementation("androidx.core:core-splashscreen:1.0.1")
