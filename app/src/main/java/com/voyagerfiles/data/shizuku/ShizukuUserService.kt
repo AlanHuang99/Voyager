@@ -28,6 +28,7 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
     private val commands = ConcurrentHashMap.newKeySet<Command>()
     /** Lists, reads and writes in flight; they share the operation limit with commands. */
     private val transfers = ConcurrentHashMap.newKeySet<Any>()
+    private val pendingWrites = ConcurrentHashMap.newKeySet<java.util.concurrent.CountDownLatch>()
     private val writes = ConcurrentHashMap.newKeySet<ServiceWrite>()
     private val operations = ShizukuFileOperations(Process.myUid())
 
@@ -91,16 +92,29 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
 
     override fun openWrite(path: String, expectedFingerprint: String, client: IBinder): IShizukuWrite = guard {
         var write: ServiceWrite? = null
-        val slot = admit { synchronized(writes) { write?.let(writes::remove) } }
-        val staged = try { operations.openWrite(path, expectedFingerprint.ifEmpty { null }) }
-        catch (error: Throwable) { slot.release(); throw error }
+        val pending = java.util.concurrent.CountDownLatch(1)
+        val slot = synchronized(commands) {
+            admit { synchronized(writes) { write?.let(writes::remove) } }.also { pendingWrites.add(pending) }
+        }
+        var staged: ShizukuFileOperations.StagedWrite? = null
         try {
-            synchronized(writes) {
-                ServiceWrite(slot, staged, client).also { write = it; writes.add(it) }
+            val prepared = operations.openWrite(path, expectedFingerprint.ifEmpty { null }).also { staged = it }
+            synchronized(commands) {
+                check(!stopping.get()) { "Shizuku session is closing" }
+                synchronized(writes) {
+                    ServiceWrite(slot, prepared, client).also { write = it; writes.add(it) }
+                }
             }
         } catch (error: Throwable) {
-            staged.discard(); staged.close(); slot.release()
+            staged?.let { prepared ->
+                runCatching { prepared.discard() }.exceptionOrNull()?.let(error::addSuppressed)
+                runCatching { prepared.close() }.exceptionOrNull()?.let(error::addSuppressed)
+            }
+            slot.release()
             throw error
+        } finally {
+            synchronized(commands) { pendingWrites.remove(pending) }
+            pending.countDown()
         }
     }
 
@@ -112,7 +126,9 @@ class ShizukuUserService @Keep constructor(context: Context) : IShizukuFiles.Stu
     private fun shutdown() {
         val cleanup = synchronized(commands) {
             if (!stopping.compareAndSet(false, true)) return
-            commands.map { command -> { command.terminateProcess() } } + writes.map { write -> { write.terminate() } }
+            commands.map { command -> { command.terminateProcess() } } +
+                writes.map { write -> { write.terminate() } } +
+                pendingWrites.map { pending -> { pending.await() } }
         }
         recoverShizukuSession(cleanup) { Process.killProcess(Process.myPid()) }
     }
