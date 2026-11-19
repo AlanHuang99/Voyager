@@ -100,7 +100,10 @@ class BrowserFileRowMenuTest {
         repeat(100) { root.resolve("item-${it.toString().padStart(3, '0')}.txt").writeText("fixture") }
         root.resolve("zzz-last.txt").writeText("last")
         val viewModel = launchBrowser()
-        waitForRoot(viewModel)
+        composeTestRule.waitUntil(10_000) {
+            viewModel.browseState.value.currentPath == root.path && !viewModel.browseState.value.isLoading &&
+                viewModel.browseState.value.files.any { it.name == "zzz-last.txt" }
+        }
         for (mode in listOf(ViewMode.LIST, ViewMode.COMPACT, ViewMode.GRID)) {
             runBlocking { preferences.setViewMode(mode) }
             composeTestRule.waitUntil(5000) { viewModel.browseState.value.viewMode == mode }
@@ -407,6 +410,7 @@ class BrowserFileRowMenuTest {
 
     @Test
     fun remoteRightThenCenterOpensTheMenuOnTv() {
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
         val viewModel = launchBrowser(isTelevision = true)
         waitForRoot(viewModel)
         val firstRow = viewModel.browseState.value.visibleFiles.first().name
