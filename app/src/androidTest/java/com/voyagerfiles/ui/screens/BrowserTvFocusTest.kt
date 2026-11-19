@@ -9,6 +9,10 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ApplicationProvider
+import com.voyagerfiles.data.local.PreferencesManager
+import androidx.lifecycle.ViewModelStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import com.voyagerfiles.data.model.ViewMode
 import com.voyagerfiles.viewmodel.FileBrowserViewModel
 import java.io.File
@@ -22,10 +26,15 @@ class BrowserTvFocusTest {
     val composeTestRule = createComposeRule()
 
     private lateinit var root: File
+    private lateinit var preferences: PreferencesManager
+    private lateinit var originalViewMode: ViewMode
+    private val viewModelStore = ViewModelStore()
 
     @Before
     fun setUp() {
         val application = ApplicationProvider.getApplicationContext<Application>()
+        preferences = PreferencesManager(application)
+        originalViewMode = runBlocking { preferences.viewMode.first() }
         root = File(application.cacheDir, "browser-tv-focus-test").apply {
             deleteRecursively()
             mkdirs()
@@ -36,6 +45,8 @@ class BrowserTvFocusTest {
 
     @After
     fun tearDown() {
+        composeTestRule.runOnIdle { viewModelStore.clear() }
+        runBlocking { preferences.setViewMode(originalViewMode) }
         root.deleteRecursively()
     }
 
@@ -60,6 +71,7 @@ class BrowserTvFocusTest {
     private fun launchBrowser(viewMode: ViewMode): FileBrowserViewModel {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = FileBrowserViewModel(application)
+        viewModelStore.put("browser", viewModel)
         composeTestRule.setContent {
             MaterialTheme {
                 BrowserScreen(

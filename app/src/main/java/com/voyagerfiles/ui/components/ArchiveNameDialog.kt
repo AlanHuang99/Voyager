@@ -23,9 +23,11 @@ fun ArchiveNameDialog(
     onCreate: (String) -> Unit,
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
+    var nameEdited by remember(initialName) { mutableStateOf(false) }
     val validation = validateZipArchiveName(name)
     val validatedName = (validation as? FileNameValidationResult.Valid)?.name
     val validationErrorRes = (validation as? FileNameValidationResult.Invalid)?.messageRes
+        ?.takeIf { nameEdited || name.isNotEmpty() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -33,7 +35,7 @@ fun ArchiveNameDialog(
         text = {
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { name = it; nameEdited = true },
                 label = { Text(stringResource(R.string.dialog_archive_name)) },
                 isError = validationErrorRes != null,
                 supportingText = validationErrorRes?.let { messageRes ->
